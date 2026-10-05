@@ -1,0 +1,18 @@
+{% extends "base.html" %}{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<h1>Faoliyat jurnali</h1>
+<p class="muted">Har bir xodim qachon, nima qilgani shu yerda saqlanadi. Yozuvlarni o'chirib yoki o'zgartirib bo'lmaydi. Har kuni ertalab «kecha kim nima qildi» xulosasi adminga Telegram orqali ham boradi.</p>
+<form method="get" class="card row" style="gap:10px;flex-wrap:wrap;align-items:flex-end">
+  <div><label>Xodim</label><select name="user"><option value="">Hammasi</option>{% for u in users %}<option value="{{ u.pk }}" {% if f.user == u.pk|stringformat:"s" %}selected{% endif %}>{{ u.get_full_name|default:u.username }}</option>{% endfor %}</select></div>
+  <div><label>Amal turi</label><select name="action"><option value="">Hammasi</option>{% for k,v in groups %}<option value="{{ k }}" {% if f.action == k %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></div>
+  <div><label>Dan</label><input type="date" name="from" value="{{ f.from }}"></div>
+  <div><label>Gacha</label><input type="date" name="to" value="{{ f.to }}"></div>
+  <button class="btn primary">Saralash</button><a class="btn" href="{% url 'activity_log' %}">Tozalash</a>
+</form>
+<div class="card" style="margin-top:12px;overflow:auto"><table class="tbl" style="width:100%"><thead><tr><th>Vaqt</th><th>Xodim</th><th>Nima qildi</th><th>Tafsilot</th></tr></thead><tbody>
+{% for r in rows %}<tr><td style="white-space:nowrap">{{ r.at }}</td><td><b>{{ r.who }}</b></td><td>{{ r.what }}</td><td>{% if r.link %}<a href="{{ r.link }}">{{ r.detail|default:"Ochish" }}</a>{% else %}{{ r.detail }}{% endif %}</td></tr>
+{% empty %}<tr><td colspan="4" class="muted">Yozuv topilmadi.</td></tr>{% endfor %}</tbody></table></div>
+<div class="row" style="margin-top:12px">{% if page.has_previous %}<a class="btn" href="?{% for k,v in f.items %}{% if v %}{{ k }}={{ v }}&{% endif %}{% endfor %}p={{ page.previous_page_number }}">← Oldingi</a>{% endif %}
+<span class="muted">{{ page.number }} / {{ page.paginator.num_pages }}</span>
+{% if page.has_next %}<a class="btn" href="?{% for k,v in f.items %}{% if v %}{{ k }}={{ v }}&{% endif %}{% endfor %}p={{ page.next_page_number }}">Keyingi →</a>{% endif %}</div>
+{% endblock %}

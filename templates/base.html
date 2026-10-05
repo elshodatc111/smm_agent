@@ -1,0 +1,50 @@
+{% load static %}<!doctype html>
+<html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="{{ brand_color }}"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="{{ system_name }}"><meta name="apple-mobile-web-app-status-bar-style" content="default"><link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+<meta name="csrf" content="{{ csrf_token }}"><title>{% block title %}{{ system_name }}{% endblock %} · {{ system_name }}</title>
+<link rel="icon" type="image/svg+xml" href="{% static 'favicon.svg' %}"><link rel="stylesheet" href="{% static 'css/app.css' %}"><link rel="stylesheet" href="{% static 'vendor/apexcharts.css' %}">
+<style>:root{--brand:{{ brand_color }}}</style>
+<script src="{% static 'vendor/htmx.min.js' %}" defer></script><script src="{% static 'vendor/alpine.min.js' %}" defer></script>
+<script src="{% static 'vendor/apexcharts.min.js' %}"></script>
+</head><body data-default-theme="{{ default_theme }}" data-user-theme="{{ request.user.theme }}">
+<script src="{% static 'js/app.js' %}"></script>
+{% if request.user.is_authenticated %}
+<div class="app" x-data="{open:false}">
+<aside class="side" :class="{open:open}">
+  <div class="logo"><i></i>{{ system_name }}</div>
+  <nav class="nav">{% for sec in nav %}<div class="sec">{{ sec.title }}</div>{% for it in sec.items %}
+    <a href="{{ it.url }}" class="{% if it.active %}active{% endif %}"><svg viewBox="0 0 24 24">{{ it.icon|safe }}</svg>{{ it.label }}</a>{% endfor %}{% endfor %}</nav>
+</aside>
+<div class="scrim" x-show="open" x-cloak @click="open=false" style="display:none"></div>
+<div class="main">
+<header class="top">
+  <button class="btn sm" style="display:none" id="burger" @click="open=!open">Menyu</button>
+  <form method="post" action="{% url 'business_select' %}" class="row" style="gap:6px">{% csrf_token %}
+    <select name="business" onchange="this.form.submit()" style="width:auto;min-width:200px">
+      <option value="">Barcha bizneslar</option>
+      {% for b in my_businesses %}<option value="{{ b.pk }}" {% if current_business.pk == b.pk %}selected{% endif %}>{{ b.name }}</option>{% endfor %}
+    </select></form>
+  <form method="get" action="{% url 'global_search' %}" class="srch"><input type="search" name="q" value="{{ request.GET.q|default:'' }}" placeholder="Qidiruv: post, fayl, g'oya…" aria-label="Qidiruv"></form>
+  <div class="sp"></div>
+  <button type="button" class="btn sm" id="pwaInstall" style="display:none">📲 O'rnatish</button>
+  <a class="bell btn sm" href="{% url 'notification_list' %}" title="Bildirishnomalar"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8">{{ icons.bell|safe }}</svg>{% if unread %}<span class="n">{{ unread }}</span>{% endif %}</a>
+  <button class="btn sm" onclick="toggleTheme()" title="Dark / Light">Dark / Light</button>
+  <span class="muted">{{ request.user.display }}</span>
+  <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn sm">Chiqish</button></form>
+</header>
+<main class="content">
+  {% for m in messages %}<div class="flash {{ m.tags }}">{{ m }}</div>{% endfor %}
+  {% block content %}{% endblock %}
+</main></div></div>
+<nav class="bnav" aria-label="Asosiy">
+  <a href="{% url 'calendar' %}" class="{% if request.resolver_match.url_name == 'calendar' %}active{% endif %}"><svg viewBox="0 0 24 24">{{ icons.cal|safe }}</svg>Kalendar</a>
+  <a href="{% url 'cloud_home' %}" class="{% if request.resolver_match.url_name|slice:':6' == 'cloud_' %}active{% endif %}"><svg viewBox="0 0 24 24">{{ icons.cloud|safe }}</svg>Cloudflare</a>
+  <a href="{% url 'content_new' %}"><span class="plus"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span></a>
+  <a href="{% url 'analytics' %}" class="{% if request.resolver_match.url_name == 'analytics' %}active{% endif %}"><svg viewBox="0 0 24 24">{{ icons.chart|safe }}</svg>Tahlil</a>
+  <button type="button" onclick="Alpine.$data(document.querySelector('.app')).open=true"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>Menyu</button>
+</nav>
+{% else %}{% block anon %}{% endblock %}{% endif %}
+{% block scripts %}{% endblock %}
+<script src="{% static 'js/pwa.js' %}" defer></script>
+</body></html>

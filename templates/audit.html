@@ -1,0 +1,5 @@
+{% extends "base.html" %}{% block title %}Audit jurnali{% endblock %}
+{% block content %}<div class="row sb"><h1>Audit jurnali</h1><form><input name="q" value="{{ q }}" placeholder="amal bo'yicha qidirish" style="width:260px"></form></div>
+<div class="card tbl"><table><tr><th>Vaqt</th><th>Foydalanuvchi</th><th>Amal</th><th>Obyekt</th><th>Tafsilot</th></tr>
+{% for a in page %}<tr><td>{{ a.at|date:"d.m.Y H:i" }}</td><td>{{ a.user|default:"tizim" }}</td><td><code>{{ a.action }}</code></td><td>{{ a.target }}</td><td class="muted">{{ a.detail }}</td></tr>{% empty %}<tr><td colspan="5" class="empty">Yozuv yo'q</td></tr>{% endfor %}</table></div>
+{% include "partials/pager.html" %}{% endblock %}

@@ -1,0 +1,16 @@
+Django>=5.1,<5.3
+djangorestframework>=3.15
+waitress>=3.0
+PyMySQL>=1.1
+cryptography>=43
+argon2-cffi>=23.1
+requests>=2.32
+reportlab>=4.2
+openpyxl>=3.1
+Pillow>=10.4
+markdown>=3.6
+boto3>=1.35
+psutil>=6.0
+# Ixtiyoriy (media tahlil, lokal STT): faster-whisper, opencv-python-headless
+telethon>=1.36
+whitenoise>=6.7

@@ -1,0 +1,13 @@
+.env
+*.session
+venv/
+__pycache__/
+media_tmp/
+media_store/
+logs/
+backups/
+.venv/
+staticfiles/
+db.sqlite3
+*.pyc
+.pytest_cache/

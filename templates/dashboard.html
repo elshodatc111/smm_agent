@@ -1,0 +1,33 @@
+{% extends "base.html" %}{% block title %}{{ b.name }}{% endblock %}
+{% block content %}
+<div class="row sb"><div><h1>{{ b.name }}</h1><div class="muted">Oxirgi 30 kun · avvalgi davr bilan solishtirish</div></div>
+<div class="row"><a class="btn primary" href="{% url 'content_new' %}">Yangi kontent</a></div></div>
+{% for j in imports %}<div class="card"><b>Tarixiy import bajarilmoqda</b> <span class="muted">({{ j.get_status_display }})</span>
+<div class="progress mt"><b style="width:{{ j.progress }}%"></b></div></div>{% endfor %}
+<div class="grid g4 mt">
+ <div class="card kpi"><div class="v">{{ kpi.followers }}</div><div class="l">Obunachilar <span class="{% if kpi.followers_delta >= 0 %}up{% else %}down{% endif %}">{{ kpi.followers_delta|stringformat:"+d" }}</span></div></div>
+ <div class="card kpi"><div class="v">{{ kpi.views }}</div><div class="l">Ko'rishlar {% if delta.views is not None %}<span class="{% if delta.views >= 0 %}up{% else %}down{% endif %}">{{ delta.views|floatformat:0 }}%</span>{% endif %}</div></div>
+ <div class="card kpi"><div class="v">{% if kpi.er %}{{ kpi.er|floatformat:3 }}{% else %}—{% endif %}</div><div class="l">O'rtacha ER</div></div>
+ <div class="card kpi"><div class="v">{{ kpi.posts }}</div><div class="l">Postlar ({{ freq.per_week|floatformat:1 }}/hafta)</div></div>
+</div>
+<div class="grid g2">
+ <div class="card"><h2>Obunachilar dinamikasi</h2>{% if series|length > 1 %}<div id="fchart"></div>{% else %}<div class="empty">Dinamika uchun kamida 2 kunlik ma'lumot kerak.</div>{% endif %}</div>
+ <div class="card"><h2>Kontent turi bo'yicha ER</h2>{% if types %}<div id="tchart"></div>{% else %}<div class="empty">Hali ma'lumot yig'ilmagan.</div>{% endif %}</div>
+</div>
+<div class="grid g2">
+ <div class="card"><h2>Eng yaxshi postlar</h2>{% for r in top %}<div class="row sb" style="padding:6px 0;border-bottom:1px solid var(--border)">
+   <a href="{% url 'post_insight' r.post.pk %}">{{ r.post.text|truncatechars:70|default:"(matnsiz)" }}</a><span class="badge ok">ER {{ r.er|floatformat:3 }}</span></div>
+   {% empty %}<div class="empty">Ma'lumot yo'q</div>{% endfor %}
+   {% if worst %}<h3 class="mt">Eng past</h3>{% for r in worst %}<div class="row sb muted" style="padding:4px 0"><span>{{ r.post.text|truncatechars:60 }}</span><span>ER {{ r.er|floatformat:3 }}</span></div>{% endfor %}{% endif %}</div>
+ <div class="card"><h2>Yaqin kontent</h2>{% for i in upcoming %}<div class="row sb" style="padding:6px 0;border-bottom:1px solid var(--border)">
+   <a href="{% url 'content_detail' i.pk %}">{{ i.title|truncatechars:50 }}</a><span class="muted">{{ i.scheduled_at|date:"d.m H:i" }} <span class="badge">{{ i.get_status_display }}</span></span></div>
+   {% empty %}<div class="empty">Rejalashtirilgan kontent yo'q. <a href="{% url 'studio_home' %}">AI bilan oylik reja tuzing</a>.</div>{% endfor %}</div>
+</div>
+<div class="card"><h2>Ulanishlar</h2><div class="tbl"><table><tr><th>Nomi</th><th>Holat</th><th>Oxirgi yig'ish</th><th>Token</th></tr>
+{% for a in accounts %}<tr><td><a href="{% url 'connection_detail' a.pk %}">{{ a }}</a></td><td><span class="badge {% if a.status == 'active' %}ok{% elif a.status == 'error' %}bad{% else %}warn{% endif %}">{{ a.get_status_display }}</span>{% if a.last_error %}<div class="help">{{ a.last_error }}</div>{% endif %}</td>
+<td>{{ a.last_collect_at|date:"d.m H:i"|default:"—" }}</td><td>{{ a.token_expires_at|date:"d.m.Y"|default:"—" }}</td></tr>
+{% empty %}<tr><td colspan="4" class="empty">Ulanish yo'q. <a href="{% url 'connection_list' %}">Ulanishlar</a> bo'limidan qo'shing.</td></tr>{% endfor %}</table></div></div>
+{% endblock %}
+{% block scripts %}{{ series|json_script:"series" }}{{ types|json_script:"types" }}
+<script>window.addEventListener('load',()=>{const s=JSON.parse(document.getElementById('series').textContent);if(s.length>1)lineChart('fchart',s.map(x=>x.date),[{name:'Obunachi',data:s.map(x=>x.followers)}]);
+const t=JSON.parse(document.getElementById('types').textContent);if(t.length)barChart('tchart',t.map(x=>x.type),[{name:'ER %',data:t.map(x=>+((x.avg_er||0)*100).toFixed(2))}]);});</script>{% endblock %}

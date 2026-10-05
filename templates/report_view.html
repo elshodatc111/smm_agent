@@ -1,0 +1,48 @@
+{% load static webtags %}<!doctype html>
+<html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+<title>{{ business.name }} · hisobot</title>
+<style>
+:root{--b:{{ brand }};--ink:#0f172a;--mut:#64748b;--line:#e2e8f0;--soft:#f8fafc}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:#eef2f7;line-height:1.5}
+.wrap{max-width:900px;margin:0 auto;padding:0 14px 40px}
+.hero{background:linear-gradient(135deg,var(--b),color-mix(in srgb,var(--b) 70%,#000));color:#fff;border-radius:0 0 28px 28px;padding:34px 28px 30px;position:relative;overflow:hidden}
+.hero:after{content:"";position:absolute;right:-60px;top:-60px;width:220px;height:220px;border-radius:50%;background:rgba(255,255,255,.12)}
+.hero h1{margin:0 0 4px;font-size:28px}.hero p{margin:2px 0;opacity:.92}.hero .sys{font-size:12px;opacity:.75;margin-top:14px}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:-22px 0 16px;position:relative;z-index:2}
+.card{background:#fff;border-radius:16px;padding:16px;box-shadow:0 2px 14px rgba(15,23,42,.07);border-left:4px solid var(--b)}
+.card .l{font-size:12px;color:var(--mut)}.card .v{font-size:26px;font-weight:800;margin:2px 0}.card .s{font-size:12px;color:var(--mut)}
+.up{color:#16a34a;font-weight:700}.down{color:#dc2626;font-weight:700}
+.sec{background:#fff;border-radius:16px;padding:18px 20px;margin:14px 0;box-shadow:0 2px 14px rgba(15,23,42,.05)}
+.sec h2{margin:0 0 10px;font-size:17px}.sum{border-left:4px solid var(--b);background:#fff7f7;padding:12px 14px;border-radius:0 12px 12px 0;white-space:pre-wrap}
+table{width:100%;border-collapse:collapse;font-size:14px}th{background:var(--b);color:#fff;text-align:left;padding:8px 10px;font-weight:600}th:first-child{border-radius:8px 0 0 8px}th:last-child{border-radius:0 8px 8px 0}
+td{padding:8px 10px;border-bottom:1px solid var(--line)}tr:nth-child(even) td{background:var(--soft)}
+.pl{display:inline-block;padding:1px 9px;border-radius:99px;color:#fff;font-size:12px}
+.rec{display:flex;gap:12px;align-items:flex-start;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:8px 0}.rec b{background:var(--b);color:#fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;flex:none}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}.muted{color:var(--mut)}
+.bar{display:flex;gap:10px;justify-content:flex-end;padding:14px 0}.btn{background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 14px;font-weight:600;color:var(--ink);text-decoration:none;cursor:pointer;font-size:14px}.btn.p{background:var(--b);color:#fff;border-color:var(--b)}
+.foot{text-align:center;color:var(--mut);font-size:12px;margin-top:22px}
+@media(max-width:700px){.cards{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr}.hero h1{font-size:22px}.card .v{font-size:22px}}
+@media print{body{background:#fff}.bar{display:none}.sec,.card{box-shadow:none;break-inside:avoid;border:1px solid var(--line)}.hero{border-radius:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}th,.rec b,.pl,.sum{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style></head><body>
+<div class="hero"><div class="wrap" style="padding:0"><h1>{{ business.name }}</h1><p>{{ report.get_kind_display }} hisobot · {{ report.period_start|date:"d.m.Y" }} – {{ report.period_end|date:"d.m.Y" }}</p><div class="sys">{{ system_name }}</div></div></div>
+<div class="wrap">
+{% if not public %}<div class="bar">{% if report.pdf %}<a class="btn" href="/hisobotlar/{{ report.pk }}/fayl/pdf/">⬇ PDF</a>{% endif %}<a class="btn" href="#" onclick="window.print();return false">🖨 Chop etish</a>
+ {% if can_share %}<form method="post" action="/hisobotlar/{{ report.pk }}/havola/" style="display:inline">{% csrf_token %}<button class="btn p">🔗 Mijoz uchun havola</button></form>{% endif %}<a class="btn" href="/hisobotlar/{{ report.pk }}/">Orqaga</a></div>
+{% if share_url %}<div class="sec"><b>Mijoz havolasi (14 kun amal qiladi):</b><br><input readonly value="{{ share_url }}" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;margin-top:6px" onclick="this.select()"></div>{% endif %}{% else %}<div style="height:12px"></div>{% endif %}
+<div class="cards">{% for c in cards %}<div class="card"><div class="l">{{ c.label }}</div><div class="v">{{ c.value }}</div><div class="s">{{ c.sub }}{% if c.delta != None %} · <span class="{% if c.delta >= 0 %}up{% else %}down{% endif %}">{% if c.delta >= 0 %}▲{% else %}▼{% endif %} {{ c.delta|floatformat:0 }}%</span>{% endif %}</div></div>{% endfor %}</div>
+{% if summary %}<div class="sec"><h2>Qisqacha xulosa</h2><div class="sum">{{ summary }}</div></div>{% endif %}
+{% if has_daily %}<div class="sec"><h2>Obunachilar dinamikasi</h2>{{ chart_followers|safe }}</div>
+<div class="grid2"><div class="sec"><h2>Kunlik ko'rishlar</h2>{{ chart_views|safe }}</div><div class="sec"><h2>Kunlik lidlar</h2>{{ chart_leads|safe }}</div></div>{% endif %}
+{% if d.per_platform %}<div class="sec"><h2>Platformalar bo'yicha</h2><div style="overflow:auto"><table><tr><th>Platforma</th><th>Obunachi</th><th>O'sish</th><th>Postlar</th><th>Ko'rish</th><th>Layk</th><th>ER</th></tr>
+{% for x in d.per_platform %}<tr><td><span class="pl" style="background:{{ plat_color|get_item:x.platform }}">{{ x.name }}</span></td><td>{{ x.kpi.followers }}</td><td>{{ x.kpi.followers_delta }}</td><td>{{ x.kpi.posts }}</td><td>{{ x.kpi.views }}</td><td>{{ x.kpi.likes }}</td><td>{{ x.kpi.er_pct }}</td></tr>{% endfor %}</table></div></div>{% endif %}
+{% if d.leads.total or d.leads.prev %}<div class="sec"><h2>Lidlar</h2><p>Davr ichida <b>{{ d.leads.total }}</b> ta lid keldi (oldingi davrda {{ d.leads.prev }} ta). Sotuv: <b>{{ d.leads.won }}</b>{% if d.leads.amount %}, jami <b>{{ d.leads.amount }} so'm</b>{% endif %}. Havola bosishlar: <b>{{ d.clicks }}</b>.</p>
+{% if d.leads.sources %}<table><tr><th>Manba</th><th>Soni</th></tr>{% for s in d.leads.sources %}<tr><td>{{ s.0 }}</td><td>{{ s.1 }}</td></tr>{% endfor %}</table>{% endif %}</div>{% endif %}
+{% if d.top %}<div class="sec"><h2>Eng yaxshi postlar</h2><div style="overflow:auto"><table><tr><th>Post</th><th>Tur</th><th>Platforma</th><th>Ko'rish</th><th>ER</th></tr>
+{% for p in d.top %}<tr><td>{{ p.text|default:"—" }}</td><td>{{ p.type_uz }}</td><td>{{ p.platform|title }}</td><td>{{ p.views }}</td><td>{{ p.er_pct }}</td></tr>{% endfor %}</table></div></div>{% endif %}
+{% if d.publications %}<div class="sec"><h2>Davrda chiqqan nashrlar ({{ d.publications|length }} ta)</h2><div style="overflow:auto"><table><tr><th>Sana</th><th>Platforma</th><th>Tur</th><th>Mazmun</th></tr>
+{% for p in d.publications %}<tr><td>{{ p.when }}</td><td><span class="pl" style="background:{{ plat_color|get_item:p.platform }}">{{ p.platform|title }}</span></td><td>{{ p.type_uz }}</td><td>{{ p.text|default:"—" }}</td></tr>{% endfor %}</table></div></div>{% endif %}
+{% if d.stories.count %}<div class="sec"><h2>Stories</h2><p>{{ d.stories.count }} ta stories joylandi, jami <b>{{ d.stories.views }}</b> ko'rish oldi.</p></div>{% endif %}
+{% if d.competitors %}<div class="sec"><h2>Raqobatchilar bilan solishtirish</h2><table><tr><th>Raqobatchi</th><th>Tarmoq</th><th>Obunachi</th><th>O'sish</th></tr>{% for c in d.competitors %}<tr><td>{{ c.name }}</td><td>{{ c.platform|title }}</td><td>{{ c.followers }}</td><td>{{ c.growth }}</td></tr>{% endfor %}</table></div>{% endif %}
+{% if recs %}<div class="sec"><h2>Keyingi davr uchun tavsiyalar</h2>{% for r in recs %}<div class="rec"><b>{{ forloop.counter }}</b><div>{{ r }}</div></div>{% endfor %}</div>{% endif %}
+<div class="foot">{{ system_name }} · avtomatik tayyorlangan hisobot · {{ report.created_at|date:"d.m.Y H:i" }}</div>
+</div></body></html>

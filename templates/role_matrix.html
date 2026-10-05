@@ -1,0 +1,9 @@
+{% extends "base.html" %}{% block title %}{{ role.name }}{% endblock %}
+{% block content %}
+<div class="row sb"><h1>Rol: {{ role.name }}</h1><a class="btn" href="{% url 'role_list' %}">Orqaga</a></div>
+<form method="post">{% csrf_token %}
+<div class="card"><div class="tbl"><table class="matrix"><tr><th>Modul</th>{% for a,l in actions.items %}<th>{{ l }}</th>{% endfor %}</tr>
+{% for m,ml in modules.items %}<tr><td>{{ ml }}</td>{% for a,l in actions.items %}<td><input type="checkbox" name="codes" value="{{ m }}.{{ a }}" {% if m|add:"."|add:a in have %}checked{% endif %} {% if not can %}disabled{% endif %}></td>{% endfor %}</tr>{% endfor %}
+</table></div>{% if can %}<div class="mt row"><button class="btn primary">Saqlash</button></div>{% endif %}</div></form>
+{% if can and not role.is_system %}<form method="post" action="{% url 'role_delete' role.pk %}" onsubmit="return confirm('Rol o\'chirilsinmi?')">{% csrf_token %}<button class="btn danger">Rolni o'chirish</button></form>{% endif %}
+{% endblock %}
