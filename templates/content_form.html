@@ -26,6 +26,13 @@
 .sg{font-size:12px;font-weight:700;margin-top:10px;color:var(--muted)}
 details.more summary{cursor:pointer;font-weight:600;margin-top:16px}
 .busy{opacity:.6;pointer-events:none}
+.rt{display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding:6px;border:1px solid var(--border);border-bottom:0;border-radius:10px 10px 0 0;background:var(--surface-2)}
+.rt button{min-width:34px;height:32px;padding:0 8px;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--fg);font:inherit;font-size:14px;cursor:pointer}
+.rt button:hover{background:var(--surface);border-color:var(--border)}.rt button:active{transform:translateY(1px)}
+.rt .sep{width:1px;height:20px;background:var(--border);margin:0 4px}
+.rt+textarea{border-radius:0 0 10px 10px;margin-top:0}
+.rt-help{font-size:12px;color:var(--muted);margin-top:4px}.rt-help code{background:var(--surface-2);padding:1px 5px;border-radius:5px;font-size:11px}
+.tg-cols{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px}.tg-cols label{margin:0}.tg-cols select{width:auto;min-width:200px}
 
 </style>
 <div class="row sb"><h1>{{ title }}</h1>{% if back %}<a class="btn" href="{{ back }}">Orqaga</a>{% endif %}</div>
@@ -50,7 +57,22 @@ details.more summary{cursor:pointer;font-weight:600;margin-top:16px}
     <div class="hint" id="typeHint"></div>
 
     <div class="stp">3 · Kontent</div>
-    <label for="id_text">{{ form.text.label }}</label>{{ form.text }}{{ form.text.errors }}
+    <label for="id_text">{{ form.text.label }}</label>
+    <div class="rt" id="rtBar" role="toolbar" aria-label="Matn formati">
+      <button type="button" data-t="b" title="Qalin (Ctrl+B)"><b>B</b></button>
+      <button type="button" data-t="i" title="Qiya (Ctrl+I)"><i>I</i></button>
+      <button type="button" data-t="u" title="Tagiga chizilgan (Ctrl+U)"><u>U</u></button>
+      <button type="button" data-t="s" title="Ustidan chizilgan"><s>S</s></button>
+      <span class="sep"></span>
+      <button type="button" data-t="a" title="Havola qo'shish (Ctrl+K)">🔗</button>
+      <button type="button" data-t="code" title="Kod (matn ichida)" style="font-family:monospace">&lt;/&gt;</button>
+      <button type="button" data-t="pre" title="Kod bloki" style="font-family:monospace">{ }</button>
+      <button type="button" data-t="blockquote" title="Iqtibos">❝</button>
+      <button type="button" data-t="tg-spoiler" title="Spoyler (bosganda ochiladi)">👁</button>
+      <span class="sep"></span>
+      <button type="button" data-t="clear" title="Tanlangan matndan (yoki hammasidan) teglarni olib tashlash">✕ Tegsiz</button>
+    </div>{{ form.text }}{{ form.text.errors }}
+    <div class="rt-help">HTML teglar yozish mumkin: <code>&lt;b&gt;</code> <code>&lt;i&gt;</code> <code>&lt;u&gt;</code> <code>&lt;s&gt;</code> <code>&lt;a href="…"&gt;</code> <code>&lt;code&gt;</code> <code>&lt;pre&gt;</code> <code>&lt;blockquote&gt;</code> <code>&lt;tg-spoiler&gt;</code>. Telegram'da format bilan chiqadi; Instagram/YouTube'ga teglarsiz yuboriladi (havola «matn (url)» bo'ladi).</div>
     <div class="box">
       <div class="aibar"><input type="text" id="aiTopic" placeholder="Mavzu yoki maqsad (ixtiyoriy): masalan, yangi kurs ochilishi">
         <button type="button" class="btn blue" id="aiTextBtn">✨ AI matn (tahlildan)</button>
@@ -80,7 +102,9 @@ details.more summary{cursor:pointer;font-weight:600;margin-top:16px}
       <label for="id_yt_privacy">{{ form.yt_privacy.label }}</label>{{ form.yt_privacy }}
       <div class="row" style="margin-top:8px"><button type="button" class="btn blue" id="ytAiBtn">✨ AI to'ldirsin (sarlavha + teglar)</button><span class="hint" id="ytAiMsg">Biznes tahlili va matn asosida avtomatik yoziladi.</span></div></div>
     <div id="tgBox" style="display:none" class="box"><b>Telegram</b>
-      <label for="id_tg_buttons">{{ form.tg_buttons.label }}</label>{{ form.tg_buttons }}{{ form.tg_buttons.errors }}</div>
+      <label for="id_tg_buttons">{{ form.tg_buttons.label }}</label>{{ form.tg_buttons }}{{ form.tg_buttons.errors }}
+      <div class="tg-cols"><label for="id_tg_cols">{{ form.tg_cols.label }}:</label>{{ form.tg_cols }}{{ form.tg_cols.errors }}</div>
+      <div class="hint">Har bir qator — bitta tugma; tizim ularni tanlangan miqdorda (sukut: 2 tadan) bir qatorga joylaydi. Aniq qator kerak bo'lsa, bir satrga <code>||</code> bilan yozing: <code>Instagram | https://… || YouTube | https://…</code></div></div>
 
     <div class="stp">4 · Qachon?</div>
     <label for="id_scheduled_at">{{ form.scheduled_at.label }}</label>{{ form.scheduled_at }}{{ form.scheduled_at.errors }}
@@ -133,10 +157,33 @@ details.more summary{cursor:pointer;font-weight:600;margin-top:16px}
     var all=localMedia.concat(cloudSel),sz=$('id_media_size').value,fit=$('id_fit_mode').value;
     return {text:($('id_text')||{}).value||'',mt:sel.value,sel:s,media:all.length?all:existing,ytTitle:($('id_yt_title')||{}).value||'',
       ratio:RATIO[sz]||0,fit:fit,crop:{x:cv('id_crop_x',.5),y:cv('id_crop_y',.5),z:cv('id_crop_zoom',1)},
-      buttons:(($('id_tg_buttons')||{}).value||'').split('\n').map(function(l){return l.split('|')[0].trim()}).filter(Boolean)}},
+      buttons:tgRows()}},
     setCrop:function(x,y,z){if(x!==null&&x!==undefined)$('id_crop_x').value=x.toFixed(4);if(y!==null&&y!==undefined)$('id_crop_y').value=y.toFixed(4);
       if(z!==null&&z!==undefined){$('id_crop_zoom').value=z.toFixed(3);$('cropZoom').value=z}}});
   if($('id_tg_buttons'))$('id_tg_buttons').addEventListener('input',function(){PV.render()});
+  if($('id_tg_cols'))$('id_tg_cols').addEventListener('change',function(){PV.render()});
+  // ---- Matn formati paneli (HTML teglar) ----
+  (function(){var ta=$('id_text'),bar=$('rtBar');if(!ta||!bar)return;
+    function put(s,a,b,selFrom,selTo){ta.focus();ta.setSelectionRange(a,b);var ok=false;try{ok=document.execCommand('insertText',false,s)}catch(e){}
+      if(!ok||ta.value.indexOf(s)<0){ta.value=ta.value.slice(0,a)+s+ta.value.slice(b)}
+      ta.setSelectionRange(a+selFrom,a+selTo);ta.dispatchEvent(new Event('input',{bubbles:true}))}
+    function wrap(tag,attrs){var a=ta.selectionStart,b=ta.selectionEnd,sel=ta.value.slice(a,b)||'matn',o='<'+tag+(attrs||'')+'>',c='</'+tag+'>';
+      if(tag==='pre'&&sel.indexOf('\n')<0&&b===a)sel='kod';put(o+sel+c,a,b,o.length,o.length+sel.length)}
+    function link(){var a=ta.selectionStart,b=ta.selectionEnd,sel=ta.value.slice(a,b),u=window.prompt('Havola (https://…):','https://');
+      if(!u||!/^(https?:\/\/|tg:\/\/|mailto:)/i.test(u.trim()))return;u=u.trim().replace(/"/g,'&quot;');
+      var t=sel||'havola',o='<a href="'+u+'">';put(o+t+'</a>',a,b,o.length,o.length+t.length)}
+    function clear(){var a=ta.selectionStart,b=ta.selectionEnd;if(a===b){a=0;b=ta.value.length}
+      var seg=ta.value.slice(a,b).replace(/<\/?(?:b|strong|i|em|u|ins|s|strike|del|code|pre|blockquote|tg-spoiler|span|a)(?:\s[^<>]*)?>/gi,'');put(seg,a,b,0,seg.length)}
+    function act(t){if(t==='clear')clear();else if(t==='a')link();else if(t==='code')wrap('code');else wrap(t)}
+    bar.addEventListener('mousedown',function(e){if(e.target.closest('button'))e.preventDefault()});
+    bar.addEventListener('click',function(e){var b=e.target.closest('button');if(b)act(b.dataset.t)});
+    ta.addEventListener('keydown',function(e){if(!(e.ctrlKey||e.metaKey)||e.altKey)return;var k=e.key.toLowerCase(),m={b:'b',i:'i',u:'u',k:'a'}[k];if(m){e.preventDefault();act(m)}})})();
+  function tgRows(){var cols=parseInt(($('id_tg_cols')||{}).value||'2',10)||2,rows=[],pack=[];
+    (($('id_tg_buttons')||{}).value||'').split('\n').forEach(function(l){if(!l.trim())return;
+      var ps=l.split('||').filter(function(p){return p.trim()}).map(function(p){return p.split('|')[0].trim()}).filter(Boolean);if(!ps.length)return;
+      if(ps.length>1){if(pack.length){rows.push(pack);pack=[]}rows.push(ps);return}
+      pack.push(ps[0]);if(pack.length>=cols){rows.push(pack);pack=[]}});
+    if(pack.length)rows.push(pack);return rows}
   $('exactBtn').addEventListener('click',function(){var pl=plats();ExactPreview.open({files:[].slice.call($('files').files),cloud:cloudSel.map(function(c){return c.id}),
     existing:(localMedia.length||cloudSel.length)?[]:existing.filter(function(e){return e.kind==='image'}).map(function(e){return e.id}),
     size:$('id_media_size').value,fit:$('id_fit_mode').value,crop:{x:cv('id_crop_x',.5),y:cv('id_crop_y',.5),z:cv('id_crop_zoom',1)},plats:pl})});

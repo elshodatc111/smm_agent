@@ -5,6 +5,45 @@ window.PostPreview = function (cfg) {
   var idx = 0;
   function esc(s) { return String(s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
   function tags(s) { return esc(s).replace(/(#[\wА-Яа-яЁёʻ'’_]+)/g, '<span class="pv-tag">$1</span>'); }
+  // ---- Telegram HTML teglari (server: apps/content/richtext.py bilan bir xil qoidalar) ----
+  var ALLOW = { b: 1, strong: 1, i: 1, em: 1, u: 1, ins: 1, s: 1, strike: 1, del: 1, code: 1, pre: 1, blockquote: 1, 'tg-spoiler': 1, a: 1 };
+  function escT(s) { return s.replace(/&(?!(?:amp|lt|gt|quot|#\d{1,7}|#x[0-9a-f]{1,6});)/gi, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function escA(s) { return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function unent(s) { var t = document.createElement('textarea'); t.innerHTML = s; return t.value; }
+  function openTag(nm, at) {
+    if (nm === 'span') return /tg-spoiler/i.test(at) ? ['tg-spoiler', '<tg-spoiler>'] : null;
+    if (!ALLOW[nm]) return null;
+    if (nm === 'a') { var h = /href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/i.exec(at), u = h ? unent(h[1] || h[2] || h[3] || '').trim() : '';
+      return /^(https?:\/\/|tg:\/\/|mailto:)/i.test(u) ? ['a', '<a href="' + escA(u) + '">'] : null; }
+    if (nm === 'code') { var l = /class\s*=\s*["']?(language-[\w+#.-]{1,30})["']?/i.exec(at); return ['code', l ? '<code class="' + l[1] + '">' : '<code>']; }
+    if (nm === 'blockquote') return ['blockquote', /\bexpandable\b/i.test(at) ? '<blockquote expandable>' : '<blockquote>'];
+    return [nm, '<' + nm + '>'];
+  }
+  function sanitizeTg(s) {
+    var re = /<(\/?)([a-zA-Z][\w-]*)((?:\s[^<>]*)?)\/?>/g, out = [], st = [], pos = 0, m;
+    while ((m = re.exec(s))) {
+      out.push(escT(s.slice(pos, m.index))); pos = re.lastIndex;
+      var cl = m[1] === '/', nm = m[2].toLowerCase(), at = m[3] || '';
+      if (cl) {
+        var c = nm === 'span' ? (st.indexOf('tg-spoiler') >= 0 ? 'tg-spoiler' : null) : nm;
+        if (!c || st.indexOf(c) < 0) continue;
+        while (st.length) { var t = st.pop(); out.push('</' + t + '>'); if (t === c) break; }
+      } else { var o = openTag(nm, at); if (!o) out.push(escT(m[0])); else { st.push(o[0]); out.push(o[1]); } }
+    }
+    out.push(escT(s.slice(pos))); while (st.length) out.push('</' + st.pop() + '>');
+    return out.join('');
+  }
+  function richHtml(s) {   // ko'rinish uchun: sanitizatsiya + hashtag + havola
+    return sanitizeTg(s).replace(/(<[^>]+>)|(&#?\w+;)|(#[\wА-Яа-яЁёʻ'’_]+)/g, function (m, tg, en, h) { return h ? '<span class="pv-tag">' + h + '</span>' : m; })
+      .replace(/<a href=/g, '<a target="_blank" rel="noopener" href=');
+  }
+  function plain(s) {      // Instagram/YouTube: teglar olib tashlanadi, havola «matn (url)»
+    if (!s || (s.indexOf('<') < 0 && s.indexOf('&') < 0)) return s || '';
+    var h = sanitizeTg(s).replace(/<a href="([^"]*)">([\s\S]*?)<\/a>/g, function (m, u, t) { var tt = t.replace(/<[^>]+>/g, ''), uu = unent(u); return (!tt.trim() || tt.trim() === uu) ? tt : tt + ' (' + u + ')'; });
+    var d = document.createElement('div'); d.innerHTML = h.replace(/<\/?[^>]+>/g, ''); return d.textContent;
+  }
+  function visLen(s) { var d = document.createElement('div'); d.innerHTML = sanitizeTg(s); return d.textContent.length; }
+  function btnRows(b) { return (b || []).map(function (r) { return Array.isArray(r) ? r : [r]; }).filter(function (r) { return r.length; }); }
   function warn(id, list) { $(id).innerHTML = list.map(function (w) { return '<div class="pv-warn' + (w[0] ? ' bad' : '') + '">' + w[1] + '</div>'; }).join(''); }
   function count(id, n, max) { $(id).innerHTML = (n > max ? '<b class="bad">' : '<b>') + n + '</b> / ' + max; }
   var dims = {};          // url -> {w,h}
@@ -86,22 +125,22 @@ window.PostPreview = function (cfg) {
   window.addEventListener('resize', layoutAll);
 
   function render() {
-    var d = cfg.get(), text = d.text || '', mt = d.mt || 'text', sel = d.sel || {}, media = d.media || [];
+    var d = cfg.get(), raw = d.text || '', text = plain(raw), mt = d.mt || 'text', sel = d.sel || {}, media = d.media || [];
     cur = d;
     var hasMedia = mt !== 'text' || media.length > 0, lbl = LBL[mt] || mt;
     document.querySelectorAll('.pv-tab').forEach(function (t) { t.querySelector('.dot').hidden = !sel[t.dataset.p]; });
     // Telegram
     var t = sel.telegram && sel.telegram[0]; $('tgName').textContent = t ? t.name : 'Kanal';
     var m = $('tgMedia'); m.hidden = !hasMedia; if (hasMedia) setMedia(m, lbl, media, 'telegram', mt, d); else m.innerHTML = '';
-    $('tgText').innerHTML = text ? tags(text) : '<span class="muted">Matn shu yerda ko\'rinadi…</span>';
-    var lim = hasMedia ? 1024 : 4096; count('tgCount', text.length, lim); $('tgNote').textContent = hasMedia ? 'Rasm/video bilan: caption' : 'Oddiy xabar';
-    warn('tgWarn', text.length > lim ? [[1, 'Matn ' + lim + ' belgidan oshdi' + (hasMedia ? ' (caption chegarasi). Qisqartiring.' : '.')]] : []);
+    $('tgText').innerHTML = raw ? richHtml(raw) : '<span class="muted">Matn shu yerda ko\'rinadi…</span>';
+    var lim = hasMedia ? 1024 : 4096, tl = visLen(raw); count('tgCount', tl, lim); $('tgNote').textContent = hasMedia ? 'Rasm/video bilan: caption' : 'Oddiy xabar';
+    warn('tgWarn', tl > lim ? [[1, 'Matn ' + lim + ' belgidan oshdi' + (hasMedia ? ' (caption chegarasi). Qisqartiring.' : '.')]] : []);
     // Instagram
     var ig = sel.instagram && sel.instagram[0], nm = ig ? (ig.handle || ig.name) : 'akkaunt'; $('igName').textContent = nm; $('igName2').textContent = nm;
     setMedia($('igMedia'), mt === 'text' ? 'Media kerak' : lbl, media, 'instagram', mt, d);
     var gr = $('igGrid'); if (gr) { gr.style.display = media.length && mt !== 'story' ? 'block' : 'none'; if (media.length) setMedia(gr, '', media, 'instagram', mt, d, 3 / 4); gr.style.width = '96px'; gr.style.margin = '0'; }
     overlays($('igMedia'), mt, media, 'instagram'); overlays($('tgMedia'), mt, media, 'telegram');
-    var tb = $('tgBtns'); if (tb) tb.innerHTML = (d.buttons || []).map(function (b) { return '<span>' + esc(b) + '</span>'; }).join('');
+    var tb = $('tgBtns'); if (tb) tb.innerHTML = btnRows(d.buttons).map(function (r) { return '<div class="r">' + r.map(function (b) { return '<span>' + esc(b) + '</span>'; }).join('') + '</div>'; }).join('');
     var cut = text.length > 125 ? text.slice(0, 125) : text;
     $('igText').innerHTML = text ? (text.length > 125 ? tags(cut) + '… <span class="muted">ko\'proq</span>' : tags(text)) : '<span class="muted">Caption shu yerda…</span>';
     count('igCount', text.length, 2200); $('igNote').textContent = 'Birinchi 125 belgi ko\'rinadi';

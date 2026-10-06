@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from .base import (AccountInfo, AccountStats, AuthError, Capability, Credentials, DryRunReport,
                    HealthResult, LimitProfile, MediaType, Page, PermissionMissingError, Platform, PostMetrics, PublishRequest, PublishResult, RuleProblem)
 from .http import request
+from apps.content import richtext
 from .public_tme import PublicChannelScraper
 
 API = "https://api.telegram.org"
@@ -104,8 +105,8 @@ class TelegramChannelConnector:
     def dry_run(self, req: PublishRequest) -> DryRunReport:
         probs = []
         limit = 1024 if req.media_paths else 4096
-        if req.text and len(req.text) > limit:
-            probs.append(RuleProblem("tg.text_length", "block", f"Matn {limit} belgidan oshmasligi kerak.", "text"))
+        if req.text and richtext.visible_len(req.text) > limit:
+            probs.append(RuleProblem("tg.text_length", "block", f"Matn {limit} belgidan oshmasligi kerak (teglar hisobga olinmaydi).", "text"))
         if not req.text and not req.media_paths:
             probs.append(RuleProblem("tg.empty", "block", "Matn yoki media kerak."))
         try:
@@ -115,9 +116,9 @@ class TelegramChannelConnector:
         return DryRunReport(not any(p.severity == "block" for p in probs), probs)
 
     def publish(self, req: PublishRequest) -> PublishResult:
-        text = req.text or ""
-        markup = req.options.get("buttons")
         extra = {"parse_mode": req.options.get("parse_mode", "HTML")}
+        text = richtext.sanitize_tg(req.text) if extra["parse_mode"] == "HTML" else (req.text or "")
+        markup = req.options.get("buttons")
         if markup:
             extra["reply_markup"] = json.dumps({"inline_keyboard": markup})
         paths = req.media_paths

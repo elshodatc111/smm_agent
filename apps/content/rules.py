@@ -72,7 +72,8 @@ def platform_text_length(item, ctx):
     lim_text, lim_cap = LIMITS.get(ctx.platform, (5000, 5000))
     has_media = bool(ctx.assets)
     lim = lim_cap if has_media else lim_text
-    n = len(item.text or "")
+    from . import richtext
+    n = richtext.plain_len(item.text, ctx.platform)   # teglar hisobga olinmaydi
     out = []
     if n > lim:
         out.append(_p("platform.text_length", BLOCK, f"Matn {n} belgi; {ctx.platform} uchun chegara {lim}.", "text", f"{n - lim} belgiga qisqartiring."))

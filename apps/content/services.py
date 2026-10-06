@@ -16,7 +16,7 @@ from apps.core.notify import notify
 from apps.core.settings_store import get_setting
 from apps.jobs.queue import enqueue
 
-from . import mediafit, temphost
+from . import mediafit, richtext, temphost
 from .models import ContentItem, PublishAttempt, RuleCheckResult
 from .rules import run_rules
 from .state import transition
@@ -116,7 +116,7 @@ def _prepare_request(item, target, conn) -> PublishRequest:
     opts = dict(item.options or {})
     if thumb:
         opts["thumbnail"] = thumb
-    return PublishRequest(idempotency_key=_idem_key(item, target), media_type=_media_type(item), text=item.text,
+    return PublishRequest(idempotency_key=_idem_key(item, target), media_type=_media_type(item), text=richtext.for_platform(item.text, plat),
                           media_paths=paths, scheduled_at=item.scheduled_at, options=opts)
 
 

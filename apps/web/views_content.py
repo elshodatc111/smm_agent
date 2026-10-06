@@ -516,7 +516,7 @@ def content_detail(request, pk):
                "first": next(iter(sel), "telegram"),
                "ratio": {"ig_4x5": 0.8, "ig_1x1": 1, "ig_191": 1.91, "v_9x16": 9 / 16, "h_16x9": 16 / 9}.get((item.options or {}).get("media_size", ""), 0),
                "fit": (item.options or {}).get("fit_mode", ""), "crop": (item.options or {}).get("crop") or {"x": .5, "y": .5, "z": 1},
-               "size": (item.options or {}).get("media_size", "orig"), "buttons": [b.get("text", "") for row in ((item.options or {}).get("buttons") or []) for b in row]},
+               "size": (item.options or {}).get("media_size", "orig"), "buttons": [[b.get("text", "") for b in row] for row in ((item.options or {}).get("buttons") or [])]},
         "title": item.title or "Kontent", "asset_form": AssetForm(),
         "history": history_for_item(item) if perms.can(u, "calendar.view", item.business) else [],
     }
