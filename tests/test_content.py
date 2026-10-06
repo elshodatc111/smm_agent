@@ -8,7 +8,7 @@ from apps.connections.base import TransientError
 from apps.content import services, temphost
 from apps.content.models import ContentItem, ContentTarget, PublishAttempt
 from apps.content.rules import run_rules, similarity
-from apps.content.state import InvalidTransition, NotAllowed, transition, on_item_edited
+from apps.content.state import transition
 from apps.core.settings_store import set_setting
 
 GOOD = "Yangi kurs boshlandi! Narxi 500000 so'm, chegirma 20%. Aloqa: +998 90 123 45 67. Ro'yxatdan o'ting."

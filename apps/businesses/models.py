@@ -13,7 +13,7 @@ class BusinessTemplate(models.Model):
 
 
 class Business(models.Model):
-    GOALS = [("followers", "Obuna"), ("lead", "Lead"), ("sales", "Sotuv"), ("views", "Ko'rish")]
+    GOALS = [("followers", "Obuna"), ("lead", "Murojaat"), ("sales", "Sotuv"), ("views", "Ko'rish")]
     name = models.CharField(max_length=120)
     logo = models.ImageField(upload_to="logos/", null=True, blank=True)
     template = models.ForeignKey(BusinessTemplate, null=True, blank=True, on_delete=models.SET_NULL)

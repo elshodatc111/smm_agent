@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from django.shortcuts import render
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -46,7 +45,7 @@ def business_new(request):
         audit("business.create", user=request.user, business_id=b.pk, target=b.name)
         messages.success(request, "Biznes yaratildi. Endi brend xotirasini tayyorlang.")
         return redirect("business_detail", pk=b.pk)
-    return render(request, "form.html", {"title": "Yangi biznes", "form": form, "back": "/bizneslar/"})
+    return ui.form_page(request, "Yangi biznes", form, back="/bizneslar/")
 
 
 @login_required
@@ -60,7 +59,7 @@ def business_edit(request, pk):
         audit("business.edit", user=request.user, business_id=b.pk)
         messages.success(request, "Saqlandi.")
         return redirect("business_detail", pk=b.pk)
-    return render(request, "form.html", {"title": f"Tahrirlash: {b.name}", "form": form, "back": f"/bizneslar/{b.pk}/"})
+    return ui.form_page(request, f"Tahrirlash: {b.name}", form, back=f"/bizneslar/{b.pk}/")
 
 
 def _biz_or_404(request, pk, code):

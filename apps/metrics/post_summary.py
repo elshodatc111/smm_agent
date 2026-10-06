@@ -55,11 +55,11 @@ def run(post_id: int, window: str) -> dict:
     s = build(post, window)
     if s["code"] == "none":
         return {"skipped": "statistika yo'q"}
-    ai_text, data = "", None
+    ai_text = ""
     try:
         from apps.studio import services
         ins = services.why_worked(post)
-        ai_text, data = ins.text, ins.data
+        ai_text = ins.text
         ins.numbers = {**(ins.numbers or {}), **s.get("numbers", {}), "summary_window": window}
         ins.verdict = s["code"] if s["code"] in ("winner", "average", "weak") else ("winner" if s["code"] == "winner" else "average")
         ins.text = s["text"] + (("\n\n" + ai_text) if ai_text else "")

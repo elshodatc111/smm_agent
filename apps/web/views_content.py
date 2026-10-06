@@ -8,7 +8,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.http import JsonResponse
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
@@ -22,9 +22,9 @@ from apps.core.audit import audit
 from apps.web.views_activity import history_for_item
 from apps.metrics import analytics as an
 from apps.metrics.models import Post
-from . import ui
+from . import spa, ui
 from .common import get_obj
-from .forms import AssetForm, ContentForm
+from .forms import ALLOWED_TYPES, AssetForm, ContentForm
 
 
 def _items(request, code="calendar.view"):
@@ -54,106 +54,34 @@ def calendar(request):
     prev = (first - timedelta(days=1)).replace(day=1)
     scheduled = qs.filter(scheduled_at__date__gte=first, scheduled_at__date__lt=nxt).order_by("scheduled_at").prefetch_related("targets__account", "assets")
     scheduled = list(scheduled)
-    unsched = qs.filter(scheduled_at__isnull=True).exclude(status="published")[:30]
-    row = lambda i: [ui.dt(i.scheduled_at), ui.link(i.title or "(nomsiz)", f"/kalendar/{i.pk}/"), i.business.name, i.get_media_type_display(),
-                     ui.badge(i.get_status_display(), i.status), (i.rule_status or "—"),
-                     ui.btn("🗑", f"/kalendar/{i.pk}/ochir/", "sm danger", f"«{i.title}» savatga o'tkazilsinmi?") if i.status != "publishing" else ""]
-    base = f"m={first:%Y-%m}"
-    q = lambda **kw: "?" + "&".join(f"{k}={v}" for k, v in {"m": f"{first:%Y-%m}", "status": st, "p": pf, "f": ff, **kw}.items() if v)
-    chips = "".join(f'<a class="pill" href="{q(status=k)}">{v}</a> ' for k, v in STATUSES if k not in ("pending_approval", "approved")) + f'<a class="pill" href="{q(status="")}">Hammasi</a>'
-    plat_chips = "".join(f'<a class="pill" style="{"background:#2563eb;color:#fff" if pf == k else ""}" href="{q(p=k, f="")}">{v}</a> ' for k, v in (("telegram", "Telegram"), ("instagram", "Instagram"), ("youtube", "YouTube"))) + f'<a class="pill" href="{q(p="", f="")}">Barcha platforma</a>'
+    unsched = list(qs.filter(scheduled_at__isnull=True).exclude(status="published")[:30])
+    from apps.core.utils import tz as _tz
+    days: dict = {}
+    for i in scheduled:
+        th = next((a.pk for a in i.assets.all() if a.kind == "image"), None)
+        days.setdefault(i.scheduled_at.astimezone(_tz()).date().isoformat(), []).append(_cal_item(i, th))
+    can_move = bool(request.business) and perms.can(request.user, "calendar.edit", request.business)
     fmts = {"telegram": ["text", "image", "video", "album"], "instagram": ["image", "carousel", "reel", "story"], "youtube": ["video", "short"]}.get(pf, [])
-    names = {"text": "Matn", "image": "Rasm", "video": "Video", "album": "Albom", "carousel": "Karusel", "reel": "Reels", "story": "Stories", "short": "Shorts"}
-    fmt_chips = "".join(f'<a class="pill" style="{"background:#0ea5e9;color:#fff" if ff == t else ""}" href="{q(f=t)}">{names[t]}</a> ' for t in fmts)
-    grid = _month_grid(request, first, scheduled)
-    prev_q, nxt_q = q(m=prev.strftime("%Y-%m")), q(m=nxt.strftime("%Y-%m"))
-    fmt_row = '<div class="mt">' + fmt_chips + "</div>" if fmt_chips else ""
-    head = ('<div class="row sb"><a class="btn sm" href="' + prev_q + '">‹ ' + prev.strftime("%m.%Y") + '</a><b>' + first.strftime("%m.%Y") + '</b><a class="btn sm" href="' + nxt_q + '">' + nxt.strftime("%m.%Y") + ' ›</a></div>'
-            '<div class="mt">' + plat_chips + "</div>" + fmt_row + '<div class="mt">' + chips + "</div>")
-    blocks = [{"type": "html", "html": head},
-              {"type": "html", "html": grid},
-              ui.table("Ro'yxat ko'rinishi", ["Vaqt", "Sarlavha", "Biznes", "Tur", "Holat", "Qoida", ""], [row(i) for i in scheduled], "Bu oyda reja yo'q."),
-              {"type": "actions", "title": "Vaqti belgilanmagan qoralamalar", "buttons": [ui.btn("⚡ Hammasini eng yaxshi bo'sh vaqtlarga qo'yish", "/kalendar/avto-vaqt/", "primary",
-                                                                                             "Vaqti yo'q qoralamalar statistika asosida eng yaxshi bo'sh vaqtlarga rejalashtiriladi. Davom etasizmi?")] if unsched and request.business else []},
-              ui.table(None, ["Vaqt", "Sarlavha", "Biznes", "Tur", "Holat", "Qoida", ""], [row(i) for i in unsched])]
-    tb = [{"label": "Yangi kontent", "url": "/kalendar/yangi/", "cls": "primary"}] if request.business else []
-    return ui.page(request, "Kontent kalendar", blocks, toolbar=tb)
+    return spa.respond(request, {
+        "kind": "calendar", "month": f"{first:%Y-%m}", "prev": f"{prev:%Y-%m}", "next": f"{nxt:%Y-%m}", "today": timezone.localdate().isoformat(),
+        "f": {"status": st or "", "p": pf, "f": ff}, "statuses": [[k, v] for k, v in STATUSES if k not in ("pending_approval", "approved")],
+        "formats": fmts, "days": days, "can_create": bool(request.business), "can_move": can_move,
+        "unscheduled": [_cal_item(i, None, with_biz=True) for i in unsched], "can_autotime": bool(unsched and request.business),
+        "list": [_cal_item(i, None, with_biz=True) for i in scheduled]})
+
+
+def _cal_item(i, th, with_biz=False):
+    from apps.core.utils import tz as _tz
+    d = {"id": i.pk, "title": i.title or "(nomsiz)", "status": i.status, "status_label": i.get_status_display(), "format": i.get_media_type_display(), "type": i.media_type,
+         "platforms": sorted({PLAT_ICON.get(t.account.platform, "?") for t in i.targets.all()}), "rule": i.rule_status or "",
+         "time": i.scheduled_at.astimezone(_tz()).strftime("%H:%M") if i.scheduled_at else "", "when": ui.dt(i.scheduled_at),
+         "thumb": f"/kalendar/{i.pk}/media/{th}/" if th else ""}
+    if with_biz:
+        d["business"] = i.business.name
+    return d
 
 
 PLAT_ICON = {"telegram": "TG", "instagram": "IG", "youtube": "YT"}
-STATUS_COLOR = {"draft": "#94a3b8", "scheduled": "#3b82f6", "publishing": "#f59e0b", "published": "#22c55e", "failed": "#ef4444"}
-WEEKDAYS = ["Du", "Se", "Chor", "Pay", "Ju", "Sha", "Yak"]
-
-
-def _month_grid(request, first, items) -> str:
-    """Oylik vizual setka: har kunda rangli post kartochkalari, bo'sh kunda «+»."""
-    from calendar import monthcalendar
-    from html import escape
-    from apps.core.utils import tz as _tz
-    by_day = {}
-    for i in items:
-        by_day.setdefault(i.scheduled_at.astimezone(_tz()).date(), []).append(i)
-    today = timezone.localdate()
-    can_create = bool(request.business)
-    can_move = bool(request.business) and perms.can(request.user, "calendar.edit", request.business)
-    import json as _json
-    day_data = {}
-    for d0, lst in by_day.items():
-        arr = []
-        for i in lst:
-            th = next((a.pk for a in i.assets.all() if a.kind == "image"), None)
-            arr.append({"id": i.pk, "t": i.scheduled_at.astimezone(_tz()).strftime("%H:%M"), "title": i.title or "(nomsiz)", "st": i.status, "stl": i.get_status_display(),
-                        "c": STATUS_COLOR.get(i.status, "#64748b"), "fmt": i.get_media_type_display(), "pl": sorted({PLAT_ICON.get(t.account.platform, "?") for t in i.targets.all()}),
-                        "rule": i.rule_status or "", "th": f"/kalendar/{i.pk}/media/{th}/" if th else ""})
-        day_data[d0.isoformat()] = arr
-    css = ("<style>.cg{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;margin-top:12px}"
-           ".cg .h{font-weight:600;text-align:center;color:var(--muted,#64748b);font-size:12px}"
-           ".cg .d{min-height:104px;border:1px solid var(--line,#e2e8f0);border-radius:10px;padding:5px;background:var(--card,#fff);position:relative;overflow:hidden}"
-           ".cg .d.o{opacity:.4}.cg .d.t{border:2px solid #3b82f6}"
-           ".cg .n{font-size:12px;font-weight:600;display:flex;justify-content:space-between}"
-           ".cg .n a{color:var(--muted,#94a3b8);text-decoration:none;font-size:15px;line-height:1}"
-           ".cg .p{display:block;margin-top:3px;padding:3px 5px;border-radius:6px;font-size:11px;color:#fff;text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
-           ".cg .m{font-size:11px;color:var(--muted,#64748b);margin-top:2px}"
-           ".cl{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;font-size:12px}.cl i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px}"
-           ".cg .d{cursor:pointer;transition:box-shadow .15s}.cg .d:hover{box-shadow:0 2px 10px rgba(0,0,0,.12)}.cg .d.sel{outline:3px solid var(--brand,#e11d2e)}"
-           ".dw-scrim{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:80;display:none}.dw-scrim.on{display:block}"
-           ".dw{position:fixed;top:0;right:0;bottom:0;width:min(420px,100%);background:var(--surface,#fff);z-index:81;box-shadow:-8px 0 30px rgba(0,0,0,.2);transform:translateX(105%);transition:transform .22s;display:flex;flex-direction:column}"
-           ".dw.on{transform:none}.dw-h{padding:16px 18px;border-bottom:1px solid var(--border,#e2e8f0);display:flex;justify-content:space-between;align-items:center;gap:10px}"
-           ".dw-b{padding:12px 14px;overflow:auto;flex:1;display:grid;gap:10px;align-content:start}"
-           ".dw-i{display:flex;gap:10px;padding:10px;border:1px solid var(--border,#e2e8f0);border-radius:12px;color:inherit;text-decoration:none;background:var(--surface,#fff)}.dw-i:hover{border-color:var(--brand,#e11d2e)}"
-           ".dw-i .th{width:56px;height:56px;border-radius:8px;object-fit:cover;background:var(--surface-2,#f1f5f9);flex:none}.dw-i .tt{font-weight:600;font-size:14px;line-height:1.3}.dw-i .mm{font-size:12px;color:var(--muted,#64748b);margin-top:3px}"
-           ".dw-i .bd{display:inline-block;padding:1px 8px;border-radius:99px;font-size:11px;color:#fff}"
-           ".dw-f{padding:12px 14px;border-top:1px solid var(--border,#e2e8f0)}"
-           ".cg .p[draggable=true]{cursor:grab}.cg .p.dragging{opacity:.4}.cg .d.over{outline:3px dashed var(--brand,#e11d2e);background:color-mix(in srgb,var(--brand,#e11d2e) 8%,transparent)}"
-           ".dd-toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#0f172a;color:#fff;padding:10px 16px;border-radius:10px;z-index:99;font-size:14px;max-width:90%}.dd-toast.bad{background:#b91c1c}"
-           ".cg .wd{display:none;color:var(--muted,#64748b);font-weight:500;margin-left:6px}"
-           "@media(max-width:700px){.cg{grid-template-columns:1fr}.cg .h{display:none}.cg .d.e:not(.t){display:none}.cg .d{min-height:0;padding:8px}.cg .wd{display:inline}.cg .p{font-size:13px;padding:7px 9px}}</style>")
-    cells = "".join(f'<div class="h">{w}</div>' for w in WEEKDAYS)
-    for week in monthcalendar(first.year, first.month):
-        for dn in week:
-            if not dn:
-                cells += '<div class="d o e"></div>'
-                continue
-            d = date(first.year, first.month, dn)
-            its = by_day.get(d, [])
-            plus = f'<a href="/kalendar/yangi/?date={d:%Y-%m-%d}" title="Shu kunga post qo\'shish">+</a>' if can_create else ""
-            chips = ""
-            for i in its[:4]:
-                plats = "/".join(sorted({PLAT_ICON.get(t.account.platform, "?") for t in i.targets.all()})) or "—"
-                title = escape((i.title or "(nomsiz)")[:28])
-                drag = f' draggable="true" data-id="{i.pk}"' if can_move and i.status not in ("published", "publishing") else ""
-                chips += (f'<a class="p" style="background:{STATUS_COLOR.get(i.status, "#64748b")}"{drag} href="/kalendar/{i.pk}/" '
-                          f'title="{escape(i.title or "")} · {escape(i.get_status_display())}">{i.scheduled_at.astimezone(_tz()):%H:%M} {plats} {title}</a>')
-            if len(its) > 4:
-                chips += f'<div class="m">+ yana {len(its) - 4} ta</div>'
-            cls = "d" + (" t" if d == today else "") + ("" if its else " e")
-            cells += f'<div class="{cls}" data-day="{d:%Y-%m-%d}" tabindex="0" role="button"><div class="n"><span>{dn}<span class="wd">{WEEKDAYS[d.weekday()]}</span></span>{plus}</div>{chips}</div>'
-    legend = "".join(f'<span><i style="background:{c}"></i>{escape(dict(STATUSES).get(k, k))}</span>' for k, c in STATUS_COLOR.items())
-    drawer = ('<div class="dw-scrim" id="dwScrim"></div><aside class="dw" id="dw" aria-hidden="true"><div class="dw-h"><div><b id="dwTitle"></b><div class="muted" id="dwSub" style="font-size:13px"></div></div>'
-              '<button type="button" class="btn sm" id="dwClose">✕</button></div><div class="dw-b" id="dwBody"></div>'
-              + ('<div class="dw-f"><a class="btn primary" id="dwAdd" href="#">+ Shu kunga post qo\'shish</a></div>' if can_create else "") + "</aside>")
-    js = ('<script type="application/json" id="calData">' + _json.dumps(day_data).replace("</", "<\\/") + '</script><script src="/static/js/cal_drawer.js"></script>')
-    return f'{css}<div class="cg">{cells}</div><div class="cl">{legend}</div>{drawer}{js}'
 
 
 def _trashed(request, pk, code):
@@ -206,7 +134,7 @@ def trash_list(request):
         rows.append([i.title or "(nomsiz)", i.business.name, i.get_media_type_display(), i.get_status_display(), ui.dt(i.deleted_at), f"{left} kun",
                      ui.btn("Tiklash", f"/kalendar/savat/{i.pk}/tiklash/", "primary"), ui.btn("Butunlay o'chirish", f"/kalendar/savat/{i.pk}/ochir/", "danger", "Post butunlay o'chiriladi va tiklab bo'lmaydi. Davom etasizmi?")])
     blocks = [ui.table("O'chirilgan postlar", ["Sarlavha", "Biznes", "Tur", "Holat", "O'chirilgan", "Qoldi", "", ""], rows, "Savat bo'sh."),
-              {"type": "text", "title": "Eslatma", "text": "Savatdagi postlar 30 kundan keyin avtomatik butunlay o'chadi. Tiklangan post qoralama holatida qaytadi. Cloudflare'dagi fayllar alohida: «Cloudflare» menyusidan o'chiriladi."}]
+              {"type": "text", "title": "Eslatma", "text": "Savatdagi postlar 30 kundan keyin avtomatik butunlay o'chadi. Tiklangan post qoralama holatida qaytadi. Cloudflare'dagi fayllar alohida: «Fayllar (Cloudflare)» bo'limidan o'chiriladi."}]
     if rows:
         blocks.append({"type": "actions", "title": "Amallar", "buttons": [ui.btn("Savatni bo'shatish", "/kalendar/savat/bosh/", "danger", "Savatdagi hamma post butunlay o'chadi. Davom etasizmi?")]})
     return ui.page(request, "Savat", blocks, toolbar=[{"label": "Kalendarga qaytish", "url": "/kalendar/"}])
@@ -340,7 +268,7 @@ def content_new(request, platform=None):
         from urllib.parse import urlencode
         q = ("?" + urlencode(qp)) if qp else ""
         cards = [{"key": k, "q": q, "n": counts[k], **v} for k, v in PLATFORM_INFO.items()]
-        return render(request, "content_choose.html", {"title": "Yangi kontent", "cards": cards})
+        return spa.respond(request, {"kind": "content_choose", "cards": cards})
     initial = {}
     d = request.GET.get("date", "")
     try:
@@ -374,8 +302,18 @@ def content_new(request, platform=None):
         _after_save(request, item, "Kontent yaratildi.")
         return redirect("content_detail", pk=item.pk)
     title = f"Yangi {PLATFORM_INFO[platform]['name']} kontenti" if platform else "Yangi kontent"
-    return render(request, "content_form.html", {"title": title, "form": form, "back": "/kalendar/yangi/" if platform else "/kalendar/", "acc_map": _acc_map(form),
-                                                 "targets_ctx": _targets_ctx(form), "existing_media": _media_list(form.instance), "tpl_list": _tpl_list(request, platform), **_plat_ctx(request, platform)})
+    return _form_response(request, form, title, "/kalendar/yangi/" if platform else "/kalendar/", platform, tpl_list=_tpl_list(request, platform))
+
+
+def _form_response(request, form, title, back, platform, item=None, tpl_list=None):
+    """Post formasi (yaratish/tahrirlash) uchun React'ga to'liq tavsif: forma maydonlari, akkauntlar, platforma xulosasi."""
+    from apps.content.mediafit import size_choices
+    ctx = _plat_ctx(request, platform, item)
+    return spa.respond(request, {
+        "kind": "content_form", "title": title, "back": back, "form": spa.form_schema(form), "targets": _targets_ctx(form), "acc_map": _acc_map(form),
+        "existing_media": _media_list(form.instance), "fixed": ctx.get("fixed", ""), "plat_info": ctx.get("plat_info"), "plat_brief": ctx.get("plat_brief", ""),
+        "tpl_list": tpl_list or [], "item_id": item.pk if item else None, "sizes": [[k, v] for k, v in size_choices()],
+        "allowed": {k: list(v) for k, v in ALLOWED_TYPES.items()}, "bound": form.is_bound})
 
 
 def _tpl_list(request, platform):
@@ -473,7 +411,7 @@ def content_edit(request, pk):
         audit("content.edit", user=request.user, business_id=item.business_id, target=f"item:{item.pk}", detail={"title": item.title})
         _after_save(request, item, "Saqlandi.")
         return redirect("content_detail", pk=item.pk)
-    return render(request, "content_form.html", {"title": f"Tahrirlash: {item.title}", "form": form, "back": f"/kalendar/{item.pk}/", "acc_map": _acc_map(form), "targets_ctx": _targets_ctx(form), "existing_media": _media_list(form.instance), **_plat_ctx(request, platform, item)})
+    return _form_response(request, form, f"Tahrirlash: {item.title}", f"/kalendar/{item.pk}/", platform, item=item)
 
 
 @login_required
@@ -520,9 +458,29 @@ def content_detail(request, pk):
         "title": item.title or "Kontent", "asset_form": AssetForm(),
         "history": history_for_item(item) if perms.can(u, "calendar.view", item.business) else [],
     }
-    ctx.update(_task_ctx(item, u))
-    ctx["results"] = _results_ctx(item, u)
-    return render(request, "content_detail.html", ctx)
+    tctx = _task_ctx(item, u)
+    from apps.core.utils import fmt_dt
+    return spa.respond(request, {
+        "kind": "content_detail", "id": item.pk, "title": item.title or "(nomsiz)", "business": item.business.name, "text": item.text, "status": item.status,
+        "status_label": item.get_status_display(), "status_cls": ctx["status_cls"], "format": item.get_media_type_display(), "type": item.media_type,
+        "scheduled": ctx["scheduled_local"], "rule_label": ctx["rule_label"], "rule_cls": ctx["rule_cls"], "acts": [{"label": a["t"], "post": a["post"], "cls": a.get("cls", ""), "confirm": a.get("confirm")} for a in acts],
+        "can_edit": ctx["can_edit"], "can_create": tctx["can_create"], "can_comment": tctx["can_comment"], "pv": ctx["pv"], "probs": probs,
+        "info": {"author": str(item.created_by) if item.created_by else "—", "assignee": str(item.assignee) if item.assignee else "—", "goal": item.goal, "hook": item.hook_idea, "cta": item.cta, "notes": item.notes, "brief": item.brief},
+        "targets": [{"account": str(t.account), "platform": t.account.platform, "status": t.status, "status_label": t.get_status_display(), "published_at": ui.dt(t.published_at) if t.published_at else "",
+                     "url": t.url, "error": t.error} for t in targets],
+        "assets": [{"id": a.pk, "kind": a.kind, "name": a.original_name, "size": a.size, "url": f"{base}/media/{a.pk}/"} for a in ctx["assets"]],
+        "task": {**{k: v for k, v in tctx["task"].items() if k != "steps"}, "steps": [{"key": x[0], "label": x[1], "cls": x[2]} for x in tctx["task"]["steps"]]},
+        "staff": [{"id": x.pk, "name": x.get_full_name() or x.username} for x in tctx["staff"]],
+        "comments": [{"user": (c.user.get_full_name() or c.user.username) if c.user else "tizim", "at": fmt_dt(c.created_at), "text": c.text, "kind": c.kind} for c in tctx["comments"]],
+        "results": _results_ctx(item, u), "posts": _posts_ctx(item, u), "history": ctx["history"], "ai_draft": bool(item.ai_draft and not item.ai_draft_reviewed),
+        "due_local": tctx["task"]["due_local"], "brief": item.brief})
+
+
+def _posts_ctx(item, u) -> list:
+    """Nashr qilingan postlar (statistika sahifasiga havola uchun)."""
+    if not perms.can(u, "analytics.view", item.business):
+        return []
+    return [{"id": p.pk, "platform": p.platform} for p in item.posts.all().order_by("-id")[:10]]
 
 
 def _results_ctx(item, u) -> list:
@@ -611,11 +569,6 @@ def content_now(request, pk):
         messages.success(request, "Post 1 daqiqa ichida nashr qilinadi.") if res == "scheduled" else messages.error(request, f"Rejalashtirib bo'lmadi: {res or 'maqsad (platforma) tanlanmagan'}")
     audit("content.publish_now", user=request.user, business_id=item.business_id, target=f"item:{item.pk}", detail={"title": item.title})
     return redirect("content_detail", pk=item.pk)
-
-
-def _csrf(request):
-    from django.middleware.csrf import get_token
-    return get_token(request)
 
 
 @login_required
@@ -866,7 +819,7 @@ FMT_NAMES = {"text": "Matn", "image": "Rasm", "video": "Video", "album": "Albom"
 @require_permission("analytics.view")
 def analytics(request):
     from collections import defaultdict
-    from apps.metrics.models import Story, StoryMetricsHistory
+    from apps.metrics.models import Story
     b = request.business
     if not b:
         messages.info(request, "Tahlil uchun biznesni tanlang.")
@@ -881,9 +834,8 @@ def analytics(request):
     pacc = [a for a in accs if a.platform == plat]
     ids = [a.pk for a in pacc]
     nposts = {p: Post.objects.filter(business=b, platform=p).count() for p in plats}
-    tabs = "".join(f'<a class="pill{" on" if p == plat else ""}" style="{"background:#2563eb;color:#fff" if p == plat else ""}" href="?p={p}&days={days}">{PLAT_NAMES[p]} <small>({nposts[p]})</small></a> ' for p in plats)
-    rng = "".join(f'<a class="pill" href="?p={plat}&days={d}">{d} kun</a> ' for d in (7, 30, 90))
-    blocks = [{"type": "html", "html": f'<div class="row sb"><div>{tabs}</div><div>{rng}</div></div>'}]
+    blocks = [ui.tabs([(f"{PLAT_NAMES[p]} ({nposts[p]})", f"?p={p}&days={days}", p == plat) for p in plats]),
+              ui.tabs([(f"{d} kun", f"?p={plat}&days={d}", days == d) for d in (7, 30, 90)])]
     c = an.compare_periods(b, days, ids)
     k, dp = c["current"], c["delta_pct"]
     pct = lambda key: (f" ({dp[key]:+.0f}%)" if dp.get(key) is not None else "")
@@ -934,30 +886,60 @@ def analytics(request):
 
 
 @login_required
+@require_permission("analytics.view")
+def post_list(request):
+    """Barcha postlar statistikasi: platforma / ulanish / format bo'yicha saralash va tartiblash."""
+    from apps.metrics.analytics import latest_metrics_qs
+    b = request.business
+    if not b:
+        return spa.respond(request, {"kind": "need_business", "title": "Postlar statistikasi"})
+    accs = list(SocialAccount.objects.filter(business=b, archived_at__isnull=True))
+    f = {"account": request.GET.get("account", ""), "format": request.GET.get("format", ""), "sort": request.GET.get("sort", "date")}
+    qs = latest_metrics_qs(b.pk)
+    if f["account"].isdigit():
+        qs = qs.filter(post__account_id=int(f["account"]))
+    if f["format"]:
+        qs = qs.filter(post__media_type=f["format"])
+    order = {"date": "-post__published_at", "views": "-views", "er": "-er", "likes": "-likes"}.get(f["sort"], "-post__published_at")
+    page = Paginator(qs.select_related("post__account").order_by(order, "-pk"), 25).get_page(request.GET.get("p"))
+    return spa.respond(request, {
+        "kind": "post_list", "pager": spa.pager_json(page), "f": f, "accounts": [{"id": a.pk, "name": str(a)} for a in accs],
+        "formats": [[k, v] for k, v in FMT_NAMES.items()],
+        "rows": [{"id": r.post_id, "text": (r.post.text or "")[:120], "platform": r.post.platform, "account": r.post.account.name, "format": FMT_NAMES.get(r.post.media_type, r.post.media_type),
+                  "date": ui.dt(r.post.published_at), "views": r.views, "likes": r.likes, "comments": r.comments, "shares": r.shares, "saves": r.saves, "er": r.er, "url": r.post.url}
+                 for r in page.object_list]})
+
+
+@login_required
 def post_insight(request, pk):
+    """Bitta post: raqamlar, dinamika (vaqt bo'yicha), biznes o'rtachasi bilan solishtirish va AI tahlil («Nega ishladi?»)."""
     post = get_obj(request, Post, pk, "analytics.view")
     from apps.studio.models import PostInsight
     from apps.studio.services import why_worked
-    ins = post.insights.order_by("-created_at").first() if hasattr(post, "insights") else PostInsight.objects.filter(post=post).order_by("-created_at").first()
     if request.method == "POST":
         if not perms.can(request.user, "ai_studio.create", post.business):
             raise PermissionDenied
         try:
-            ins = why_worked(post, request.user)
+            why_worked(post, request.user)
+            messages.success(request, "AI tahlil tayyor.")
         except Exception as e:  # noqa: BLE001
             messages.error(request, getattr(e, "user_message_uz", None) or f"AI xatosi: {e}")
         return redirect("post_insight", pk=post.pk)
+    ins = PostInsight.objects.filter(post=post).order_by("-created_at").first()
     nums = an.numeric_basis(post)
-    blocks = [{"type": "text", "title": "Post", "text": post.text or "(matnsiz)"},
-              ui.kv("Raqamlar (AI shu raqamlarga tayanadi)", [(k, v) for k, v in nums.items()])]
-    if ins:
-        d = ins.data or {}
-        blocks.append({"type": "text", "title": f"Xulosa ({ins.verdict})", "text": ins.text})
-        for key, ttl in (("reasons", "Sabablar"), ("repeat", "Takrorlash"), ("change", "O'zgartirish")):
-            if d.get(key):
-                blocks.append({"type": "text", "title": ttl, "text": "\n".join("• " + str(x) for x in d[key])})
-    blocks.append({"type": "actions", "title": "AI tahlil", "buttons": [ui.btn("«Nega ishladi?» tahlilini yaratish", f"/tahlil/post/{post.pk}/", "primary")]})
-    return ui.page(request, "Nega ishladi?", blocks, toolbar=[{"label": "Orqaga", "url": "/tahlil/"}])
+    last = post.history.order_by("-taken_at").first()
+    base = an.median_baseline(post.business)
+    hist = [{"at": ui.dt(h.taken_at), "age_h": round(h.age_hours or 0, 1), "views": h.views, "likes": h.likes, "comments": h.comments, "er": h.er}
+            for h in post.history.order_by("taken_at")[:60]]
+    d = (ins.data or {}) if ins else {}
+    return spa.respond(request, {
+        "kind": "post_insight", "id": post.pk, "text": post.text or "", "platform": post.platform, "account": post.account.name, "format": FMT_NAMES.get(post.media_type, post.media_type),
+        "published": ui.dt(post.published_at), "url": post.url, "item_id": post.content_item_id, "hashtags": post.hashtags or [],
+        "now": {"views": last.views, "reach": last.reach, "likes": last.likes, "comments": last.comments, "shares": last.shares, "saves": last.saves, "er": last.er} if last else None,
+        "baseline": {"er": base["er"], "views": base["views"], "n": base["n"]}, "ratio": {"er": nums.get("er_nisbati"), "views": nums.get("views_nisbati")},
+        "winner": bool(last and an.is_winner(last, base)), "history": hist,
+        "insight": {"verdict": ins.verdict, "summary": ins.text, "reasons": d.get("reasons") or [], "repeat": d.get("repeat") or [], "change": d.get("change") or [], "at": ui.dt(ins.created_at)} if ins else None,
+        "can_ai": bool(perms.can(request.user, "ai_studio.create", post.business))})
 
 
 # ---------------- Forma yordamchilari: AI matn/ssenariy va muqobil vaqt (JSON) ----------------

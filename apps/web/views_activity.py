@@ -5,14 +5,13 @@ from datetime import date, datetime, timedelta
 
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.shortcuts import render
 
 from apps.accounts.decorators import require_permission
 from apps.accounts.models import User
 from apps.accounts.services import perms
 from apps.core.models import AuditLog
 from apps.core.utils import tz
-from apps.web import ui
+from apps.web import spa, ui
 
 ACTION_UZ = {
     "auth.login": "Tizimga kirdi", "auth.failed": "Kirishda xato parol", "auth.lockout": "Kirish bloklandi",
@@ -86,11 +85,11 @@ def activity_log(request):
     users = User.objects.filter(is_active=True).order_by("username")
     groups = [("content", "Kontent"), ("publish", "Nashr"), ("cloud", "Cloudflare"), ("ai", "AI"), ("connection", "Ulanishlar"), ("business", "Biznes"),
               ("report", "Hisobot"), ("link", "Havolalar"), ("user", "Foydalanuvchilar"), ("setting", "Sozlamalar"), ("auth", "Kirish")]
-    ctx = {"title": "Faoliyat jurnali", "users": users, "groups": groups, "f": {"user": uid, "action": act, "from": d1, "to": d2},
-           "rows": [{"at": ui.dt(a.at), "who": (a.user.get_full_name() or a.user.username) if a.user else "Tizim", "what": label(a.action),
-                     "detail": _detail(a), "link": _link(a), "biz": a.business_id} for a in page],
-           "page": page}
-    return render(request, "activity.html", ctx)
+    return spa.respond(request, {
+        "kind": "activity", "title": "Faoliyat jurnali", "pager": spa.pager_json(page), "f": {"user": uid, "action": act, "from": d1, "to": d2},
+        "users": [{"id": u.pk, "name": u.get_full_name() or u.username} for u in users], "groups": [{"key": k, "label": v} for k, v in groups],
+        "rows": [{"at": ui.dt(a.at), "who": (a.user.get_full_name() or a.user.username) if a.user else "Tizim", "what": label(a.action),
+                  "detail": _detail(a), "link": _link(a)} for a in page]})
 
 
 def history_for_item(item) -> list[dict]:

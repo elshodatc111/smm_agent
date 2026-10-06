@@ -11,7 +11,9 @@
 | 7 | STT: Groq Whisper → Gemini → lokal Whisper | Tezlik/bepul → sifat → oflayn zaxira |
 | 8 | ScrapeCreators: kunlik/oylik/bir-yig'ish limitlari + kesh | Byudjet aniq emas; kredit oqib ketmasin |
 | 9 | Navbat MySQL jadvalida (SKIP LOCKED), Redis yo'q | TZ: Docker/Celery/Redis yo'q; Windows |
-| 10 | Veb: server-render + HTMX; umumiy `page.html` | Tez yetkazish, bitta joyda uslub; SPA kerak emas |
+| 10 | Veb: React SPA (`/app/`) + Django JSON (`spa.respond`); mantiq/ruxsat view'larda qoladi | Zamonaviy, tez, moslashuvchan UI; formalar, preview, drag-drop. Build: `build_frontend.bat` → `static/spa` (Node faqat qurish uchun) |
 | 11 | Presetlarda settings/users/system_health yo'q | Eng kam huquq tamoyili (test orqali topildi) |
 | 12 | Fake provayderlar `USE_FAKES` da tashqi tarmoqqa chiqmaydi | Demo/test xavfsizligi |
 | 13 | `.env` nusxasi zaxira papkasida | Tiklash oson; hujjatda papkani shifrlab saqlash tavsiya etilgan |
+| 14 | Lidlar (Lead/LeadSale) olib tashlandi; hisobotda kunlik statistika | Agentlik lidlar bilan ishlamaydi |
+| 15 | Brauzer sahifa so'rovi (`Accept: text/html`) `/app/...` ga yo'naltiriladi; hisobot (`report_view`) va oflayn sahifa server-render qoladi | Mijozga havola va oflayn rejim uchun mustaqil HTML |

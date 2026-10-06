@@ -26,7 +26,6 @@ def brand() -> str:
 
 def kpi_cards(data: dict) -> list[dict]:
     k, d = data["kpi"], data["delta"]
-    lead = data.get("leads") or {}
     er = f"{(k.get('er') or 0) * 100:.1f}%"
     return [
         {"label": "Obunachilar", "value": fmt_num(k["followers"]), "sub": f"{k['followers_delta']:+d} davr ichida", "delta": k.get("followers_growth_pct")},
@@ -34,7 +33,7 @@ def kpi_cards(data: dict) -> list[dict]:
         {"label": "Qamrov", "value": fmt_num(k["reach"]), "sub": "noyob foydalanuvchilar", "delta": d.get("reach")},
         {"label": "Postlar", "value": str(k["posts"]), "sub": f"{(data.get('stories') or {}).get('count', 0)} ta stories", "delta": d.get("posts")},
         {"label": "Faollik (ER)", "value": er, "sub": f"{fmt_num(k['likes'])} layk · {fmt_num(k['comments'])} izoh", "delta": d.get("er")},
-        {"label": "Lidlar", "value": str(lead.get("total", 0)), "sub": f"{data.get('clicks', 0)} havola bosish", "delta": ((lead.get("total", 0) - lead.get("prev", 0)) / lead["prev"] * 100) if lead.get("prev") else None},
+        {"label": "Havola bosish", "value": fmt_num(data.get("clicks", 0)), "sub": "qisqa havolalar orqali", "delta": None},
     ]
 
 
@@ -83,27 +82,26 @@ def html_context(report) -> dict:
          "publications": [{**p, "type_uz": TYPE_UZ.get(p["type"], p["type"])} for p in d.get("publications", [])],
          "per_platform": [{**x, "kpi": {**x["kpi"], "er_pct": f"{(x['kpi'].get('er') or 0) * 100:.1f}%", "followers": fmt_num(x["kpi"]["followers"]), "views": fmt_num(x["kpi"]["views"]), "likes": fmt_num(x["kpi"]["likes"]),
                                          "followers_delta": f"{x['kpi']['followers_delta']:+d}"}} for x in d.get("per_platform", [])],
-         "leads": {**(d.get("leads") or {}), "amount": fmt_num((d.get("leads") or {}).get("amount"))}}
+         "daily_total": d.get("daily_total") or {}}
     return {"report": report, "business": report.business, "brand": col, "system_name": get_setting("general.system_name", "SMM Platforma"), "d": d,
             "cards": kpi_cards(d) if d.get("kpi") else [], "summary": s.get("summary") or report.summary_text, "recs": s.get("recommendations") or [],
             "chart_followers": svg_line([x["followers"] or 0 for x in daily], labels, col), "chart_views": svg_bars([x["views"] for x in daily], labels, col),
-            "chart_leads": svg_bars([x["leads"] for x in daily], labels, "#16a34a"), "chart_clicks": svg_bars([x["clicks"] for x in daily], labels, "#2563eb"),
+            "chart_clicks": svg_bars([x["clicks"] for x in daily], labels, "#2563eb"),
             "plat_color": PLAT_COLOR, "type_uz": TYPE_UZ, "has_daily": bool(daily)}
 
 
 # ------------------------------------------------------------------ PDF
 def build_pdf(report, data: dict, summary: dict) -> bytes:
     from reportlab.lib import colors
-    from reportlab.lib.enums import TA_LEFT
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import mm
     from reportlab.graphics.charts.barcharts import VerticalBarChart
     from reportlab.graphics.charts.lineplots import LinePlot
-    from reportlab.graphics.shapes import Drawing, Rect, String
+    from reportlab.graphics.shapes import Drawing
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
-    from reportlab.platypus import BaseDocTemplate, Frame, Image, KeepTogether, PageTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.platypus import BaseDocTemplate, Frame, KeepTogether, PageTemplate, Paragraph, Spacer, Table, TableStyle
     from .generator import FONT_DIR
     try:
         pdfmetrics.registerFont(TTFont("DV", str(FONT_DIR / "DejaVuSans.ttf")))
@@ -114,7 +112,6 @@ def build_pdf(report, data: dict, summary: dict) -> bytes:
         f, fb = "Helvetica", "Helvetica-Bold"
     brand_c = colors.HexColor(brand())
     ink, muted, line, soft = colors.HexColor("#0f172a"), colors.HexColor("#64748b"), colors.HexColor("#e2e8f0"), colors.HexColor("#f8fafc")
-    ok, bad = colors.HexColor("#16a34a"), colors.HexColor("#dc2626")
     sys_name = norm(get_setting("general.system_name", "SMM Platforma"))
     W, Hh = A4
     LM = 16 * mm
@@ -169,7 +166,6 @@ def build_pdf(report, data: dict, summary: dict) -> bytes:
 
     def card(c):
         dl = c["delta"]
-        dcol = ok if (dl or 0) >= 0 else bad
         dtxt = "" if dl is None else f'<font color="{"#16a34a" if dl >= 0 else "#dc2626"}">{"▲" if dl >= 0 else "▼"} {abs(dl):.0f}%</font>'
         inner = [Paragraph(norm(c["label"]), ParagraphStyle("l", fontName=f, fontSize=8, textColor=muted)),
                  Paragraph(f'<font size="18" name="{fb}">{norm(c["value"])}</font>', ParagraphStyle("v", fontName=fb, fontSize=18, leading=22, textColor=ink)),
@@ -240,20 +236,15 @@ def build_pdf(report, data: dict, summary: dict) -> bytes:
         t.setStyle(_tbl_style(f, fb, brand_c, line, soft))
         story += [Paragraph("Platformalar bo'yicha", H2), t]
 
-    # lidlar
-    ld = data.get("leads") or {}
-    if ld.get("total") or ld.get("prev"):
-        txt = f"Davr ichida <b>{ld.get('total', 0)}</b> ta lid keldi (oldingi davrda {ld.get('prev', 0)} ta). Sotuvga aylangani: <b>{ld.get('won', 0)}</b>"
-        if ld.get("amount"):
-            txt += f", jami <b>{fmt_num(ld['amount'])} so'm</b>."
-        story += [Paragraph("Lidlar", H2), Paragraph(norm(txt), P)]
-        if ld.get("sources"):
-            t = Table([["Manba", "Soni"]] + [[norm(a), str(b)] for a, b in ld["sources"]], colWidths=[CW * 0.7, CW * 0.3])
-            t.setStyle(_tbl_style(f, fb, brand_c, line, soft))
-            story += [Spacer(1, 3 * mm), t]
-        lv = [x["leads"] for x in daily]
-        if daily and any(lv):
-            story += [Spacer(1, 3 * mm), bar_chart(lv, "#16a34a")]
+    # kunlik statistika (jami)
+    dt = data.get("daily_total") or {}
+    if dt.get("days"):
+        txt = (f"{dt['days']} kun ichida: obunachi <b>{dt.get('followers_delta', 0):+d}</b>, ko'rish <b>{fmt_num(dt.get('views', 0))}</b>, "
+               f"post <b>{dt.get('posts', 0)}</b>, stories <b>{dt.get('stories', 0)}</b>, havola bosish <b>{dt.get('clicks', 0)}</b>.")
+        story += [Paragraph("Kunlik statistika", H2), Paragraph(norm(txt), P)]
+        cv = [x["clicks"] for x in daily]
+        if daily and any(cv):
+            story += [Spacer(1, 3 * mm), bar_chart(cv, "#2563eb")]
 
     # top postlar
     if data.get("top"):

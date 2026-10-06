@@ -19,7 +19,7 @@ BUSINESS_UZ = {
     "monthly_ad_budget": ("Oylik reklama byudjeti", "Bo'sh qoldirsangiz 0 bo'ladi.", "5000000"),
     "currency": ("Valyuta", "UZS yoki USD", "UZS"),
     "avg_check": ("O'rtacha chek (bir o'quvchi)", "Bir o'quvchidan oylik tushum.", "600000"),
-    "lead_to_sale": ("Lead → o'quvchi konversiyasi", "0.2 = har 5 ta murojaatdan 1 tasi yoziladi.", "0.2"),
+    "lead_to_sale": ("Murojaat → xarid konversiyasi", "0.2 = har 5 ta murojaatdan 1 tasi yoziladi.", "0.2"),
     "margin": ("Foyda marjasi", "0.35 = 35%. Bilmasangiz bo'sh qoldiring.", "0.35"),
     "contact_info": ("Aloqa ma'lumotlari", "Postlarda ishlatiladi: telefon, manzil, Telegram, ish vaqti.", "Tel: +998 90 000 00 00\nManzil: Chilonzor 7-mavze\nTelegram: @atko_admin\nIsh vaqti: 09:00–20:00"),
     "logo": ("Logotip", "PNG yoki JPG, kvadrat bo'lsa yaxshi.", ""),
@@ -169,6 +169,9 @@ class ContentForm(forms.ModelForm):
 
     def clean(self):
         d = super().clean()
+        if not (d.get("title") or "").strip() and (d.get("text") or "").strip():
+            from apps.content.richtext import to_plain
+            d["title"] = to_plain(d["text"]).strip().split("\n")[0][:80]     # nom kiritilmasa — matnning birinchi qatori
         mt = d.get("media_type")
         for pk in d.get("targets") or []:
             plat = self.account_platforms.get(str(pk))

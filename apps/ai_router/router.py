@@ -184,7 +184,6 @@ class AIRouter:
         last_err: Exception | None = None
         best_bad_lang: AIResult | None = None
         models = get_setting("ai.models", {}) or {}
-        paid_used_after_free_fail = False
         for idx, (prov, paid) in enumerate(routes):
             p = self.providers.get(prov)
             if p is None or not p.supports(req.task):

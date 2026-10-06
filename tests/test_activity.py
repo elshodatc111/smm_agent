@@ -1,5 +1,4 @@
 import pytest
-from datetime import date
 from django.core.management import call_command
 from django.test import Client
 
@@ -29,15 +28,14 @@ def test_activity_page_history_and_digest(settings):
     html = c.get("/faoliyat/").content.decode()
     assert "Yangi kontent yaratdi" in html and "actboss" in html
     assert "Yangi kontent yaratdi" not in c.get("/faoliyat/?action=cloud").content.decode()
-    d = c.get(f"/kalendar/{it.pk}/").content.decode()
-    assert "Tarix — kim nima qildi" in d and "Yangi kontent yaratdi" in d
+    d = c.get(f"/kalendar/{it.pk}/").json()
+    assert any("Yangi kontent yaratdi" in h["what"] for h in d["history"])
     from apps.web.views_activity import build_digest
     from apps.core.utils import local
     from django.utils import timezone
     txt = build_digest(local(timezone.now()).date())
     assert "actboss" in txt and "Yangi kontent yaratdi" in txt
     from apps.content.jobs import activity_digest
-    from apps.jobs.queue import JobContext
     assert activity_digest.__name__
 
 
@@ -50,8 +48,9 @@ def test_activity_forbidden_for_plain_viewer(settings):
 
 def test_bottom_nav_and_crop_fields(settings):
     c, u, b = _c(settings, "adm3")
-    h = c.get("/kalendar/yangi/telegram/").content.decode()
-    assert 'class="bnav"' in h and 'id="id_crop_zoom"' in h and "cloudPickBtn" in h and 'id="cropBox"' in h
+    j = c.get("/kalendar/yangi/telegram/").json()
+    names = {f["name"] for f in j["form"]["fields"]}
+    assert j["kind"] == "content_form" and {"crop_zoom", "crop_x", "crop_y", "media_size", "fit_mode", "tg_buttons", "tg_cols"} <= names
     r = c.get("/cloudflare/tanlash/?kind=image").json()
     assert "files" in r or "error" in r
 
@@ -107,8 +106,8 @@ def test_asset_manage_ready_studio_and_media_card(settings, tmp_path):
     # tayyor
     assert c.post(f"/kalendar/{it.pk}/tayyor/").status_code == 302
     assert AuditLog.objects.filter(action="content.ready").exists()
-    html = c.get(f"/kalendar/{it.pk}/").content.decode()
-    assert "/tayyor/" in html and "addPick" in html
+    j = c.get(f"/kalendar/{it.pk}/").json()
+    assert any("/tayyor/" in a["post"] for a in j["acts"]) and j["can_edit"] and len(j["assets"]) == 3
     # karusel soni qoidasi
     from apps.content.rules import run_rules
     for x in it.assets.all()[1:]:
@@ -128,9 +127,9 @@ def test_asset_manage_ready_studio_and_media_card(settings, tmp_path):
     m = MediaFile.objects.create(business=b, original_name="v.mp4", kind="video", sha256="x", size=5, status="done", file="x.mp4")
     MediaAnalysis.objects.create(media=m, sha256="x", ai={"hook": {"text": "Xadicha", "strength": 4}, "visual_quality": 8, "cta": {"present": False, "clarity": 0}, "brand_fit": 2,
                                                          "strengths": ["a"], "improvements": ["b"], "scenes": [{"t": "0-3s", "what": "kirish", "attention": 7}], "platform_fit": {"shorts": 8}})
-    h = c.get(f"/media/{m.pk}/").content.decode()
-    assert "an-ring" in h and "Nima tuzatish kerak" in h and "Video sahna-sahna" in h and "Shorts" in h
-    assert "Qisqa havola nima uchun kerak" in c.get("/havolalar/").content.decode()
+    j = c.get(f"/media/{m.pk}/").json()
+    assert j["kind"] == "media_detail" and j["card"]["scenes"] and j["card"]["improvements"] and j["card"]["fit"]
+    assert "Qisqa havola nima uchun kerak" in c.get("/havolalar/").content.decode()  # JSON blok matni
     assert "Dushanba" in c.get("/hisobotlar/").content.decode()
 
 
@@ -155,8 +154,8 @@ def test_autotime_calendar_drawer_and_competitor_alert(settings):
     ContentTarget.objects.create(item=d2, account=acc)
     assert c.post("/kalendar/avto-vaqt/").status_code == 302
     d2.refresh_from_db(); assert d2.scheduled_at
-    html = c.get("/kalendar/").content.decode()
-    assert 'id="calData"' in html and 'data-day=' in html and "cal_drawer.js" in html and 'id="dw"' in html
+    j = c.get("/kalendar/").json()
+    assert j["kind"] == "calendar" and j["days"] and j["can_move"] and j["can_create"]
     # raqobatchi ogohlantirishi
     from datetime import timedelta
     from django.utils import timezone

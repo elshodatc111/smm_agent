@@ -1,3 +1,0 @@
-{% extends "base.html" %}{% block title %}Yo'riqnoma{% endblock %}
-{% block content %}<h1>Yo'riqnoma</h1><p class="muted">Har bir ulanishni qanday sozlash va tizimni ishga tushirish — qadamma-qadam. Yuqoridan pastga tartib bilan bajaring.</p>
-<div class="grid g2">{% for g in guides %}<a class="card" href="{% url 'guide_view' g.slug %}" style="color:inherit;text-decoration:none"><h2 style="margin:0">{{ g.title }}</h2></a>{% endfor %}</div>{% endblock %}

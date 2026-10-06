@@ -10,7 +10,7 @@ TEMPLATES = {
         "content_types": ["reels", "natijalar", "o'qituvchi tanishuvi", "aksiya", "savol-javob"],
         "seasonality": "Sentabr va yanvarda qabul avjida; yozda pasayish",
         "defaults": {"ctr": 0.012, "click_to_lead": 0.06, "cpm": 25000},
-        "advice": "Lead va ro'yxatga olishga e'tibor; ota-onalar uchun ishonch kontenti."}},
+        "advice": "Murojaat va ro'yxatga olishga e'tibor; ota-onalar uchun ishonch kontenti."}},
     "shaxsiy_blog": {"name": "Shaxsiy blog (dizayner / SMM)", "config": {
         "key_metrics": ["obunachi_osishi", "saqlash", "ulashish", "murojaat"],
         "content_types": ["portfolio ishlar", "oldin-keyin", "jarayon (reels)", "maslahat va dars", "keys (natija bilan)", "shaxsiy hikoya", "mijoz sharhi", "narx va xizmatlar"],

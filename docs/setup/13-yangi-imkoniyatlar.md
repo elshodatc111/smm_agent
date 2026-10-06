@@ -11,7 +11,7 @@
 - **Stories** — chuqur ma'lumot (ko'rish, profilga o'tish, obuna) 20 soatdan keyin yig'iladi.
 - **Mijoz boti** — har nashr haqida mijozga avtomatik xabar: qaysi post/story, qaysi platforma, qachon. Bot sozlamalarida «Nashr xabarlari» bo'limi orqali yoqiladi/o'chiriladi.
 - **Mijozga chiroyli hisobot** — Hisobotlar → «Ko'rish» (chop etish/PDF) va «Havola» (muddatli ochiq havola; `Sozlamalar → Umumiy → Ochiq manzil` kiritilgan bo'lsin).
-- **Kunlik statistika** — lidlar, obunachilar, ko'rishlar kun-kunlab saqlanadi, grafik va CSV.
+- **Kunlik statistika** — obunachilar, ko'rishlar, postlar kun-kunlab saqlanadi, grafik va CSV.
 - **G'oyalar banki** — raqobatchi va o'z natijalaringiz asosida har kuni kamida 1 yangi g'oya, har biriga rejissyor ssenariysi; «Postga aylantirish».
 - **Aqlli ogohlantirishlar** — 22 ta detektor, sozlash: Ogohlantirishlar sahifasi.
 - **AI rejimi** — Sozlamalar → AI router → «AI rejimi»: `free_first` (bepul avval), `openai_first`, `openai_only` (faqat OpenAI; pullik Claude baribir o'chiq). OpenAI-only javob sifatini va barqarorligini oshiradi (ayniqsa o'zbekcha uzun matn/reja/ssenariy), lekin har so'rov pullik — oylik byudjet Sozlamalarda ko'rinadi.

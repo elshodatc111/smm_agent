@@ -65,7 +65,7 @@ def keyframes(path: str, outdir: str, duration: float, scene_times: list[float],
 
 def extract_audio(path: str, outdir: str) -> str | None:
     p = os.path.join(outdir, "audio.mp3")
-    r = _run(["ffmpeg", "-y", "-i", path, "-vn", "-ac", "1", "-ar", "16000", "-b:a", "48k", p], 300)
+    _run(["ffmpeg", "-y", "-i", path, "-vn", "-ac", "1", "-ar", "16000", "-b:a", "48k", p], 300)
     return p if os.path.exists(p) and os.path.getsize(p) > 1000 else None
 
 

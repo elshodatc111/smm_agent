@@ -9,7 +9,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.files.base import ContentFile
 from django.db.models import Q
 from django.http import JsonResponse
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import redirect
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
@@ -289,11 +289,6 @@ def global_search(request):
         cs = Competitor.objects.filter(business_id__in=ids).filter(Q(name__icontains=q) | Q(handle__icontains=q))[:L]
         if cs:
             blocks.append(ui.table(f"Raqobatchilar ({len(cs)})", ["Nomi", "Platforma"], [[ui.link(c.name or c.handle, f"/raqobatchilar/{c.pk}/"), c.platform.title()] for c in cs]))
-    if perms.businesses_for(u, "analytics.view").exists():
-        from apps.metrics.models import Lead
-        ls = Lead.objects.filter(business_id__in=ids).filter(Q(name__icontains=q) | Q(phone__icontains=q) | Q(note__icontains=q))[:L]
-        if ls:
-            blocks.append(ui.table(f"Lidlar ({len(ls)})", ["Ism", "Telefon", "Holat"], [[ui.link(l.name or l.phone, "/lidlar/"), l.phone, l.get_status_display()] for l in ls]))
     if not blocks:
         blocks = [{"type": "text", "text": "Hech narsa topilmadi."}]
     return ui.page(request, f"Qidiruv: {q}", blocks)

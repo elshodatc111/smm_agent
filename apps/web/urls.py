@@ -1,5 +1,6 @@
-from django.urls import path
+from django.urls import path, re_path
 
+from . import spa
 from . import views_activity as ac
 from . import views_biz as b
 from . import views_cloud as cl
@@ -14,6 +15,10 @@ from . import views_tools as t
 from . import views_work as w
 
 urlpatterns = [
+    path("app/", spa.shell, name="spa_shell"),
+    re_path(r"^app/(?P<path>.+)$", spa.shell, name="spa_shell_path"),
+    path("static/spa/<path:rel>", spa.asset, name="spa_asset"),
+    path("brend/logo/", spa.brand_logo, name="brand_logo"),
     path("manifest.webmanifest", pw.manifest, name="pwa_manifest"),
     path("sw.js", pw.service_worker, name="pwa_sw"),
     path("oflayn/", pw.offline, name="pwa_offline"),
@@ -58,6 +63,7 @@ urlpatterns = [
     path("raqobatchilar/<int:pk>/ochir/", n.competitor_delete, name="competitor_delete"),
     # tahlil / kontent
     path("tahlil/", c.analytics, name="analytics"),
+    path("tahlil/postlar/", c.post_list, name="post_list"),
     path("tahlil/post/<int:pk>/", c.post_insight, name="post_insight"),
     path("kalendar/", c.calendar, name="calendar"),
     path("kalendar/yangi/", c.content_new, name="content_new"),
@@ -101,11 +107,6 @@ urlpatterns = [
     path("goyalar/<int:pk>/holat/<str:new>/", g.idea_status, name="idea_status"),
     path("goyalar/<int:pk>/ssenariy/", g.idea_script, name="idea_script"),
     path("goyalar/<int:pk>/post/", g.idea_to_post, name="idea_to_post"),
-    path("lidlar/", g.leads_home, name="leads_home"),
-    path("lidlar/qoshish/", g.lead_add, name="lead_add"),
-    path("lidlar/import/", g.lead_import, name="lead_import"),
-    path("lidlar/eksport/", g.leads_export, name="leads_export"),
-    path("lidlar/<int:pk>/holat/<str:new>/", g.lead_status, name="lead_status"),
     path("kunlik/", g.daily_stats, name="daily_stats"),
     path("ogohlantirishlar/", g.alerts_home, name="alerts_home"),
     path("shablonlar/", w.template_list, name="template_list"),
@@ -169,7 +170,6 @@ urlpatterns = [
     path("havolalar/<int:pk>/ochir/", t.link_delete, name="link_delete"),
     # tizim
     path("tizim/", s.health, name="health"),
-    path("tizim/qism/", s.health_partial, name="health_partial"),
     path("tizim/vazifalar/", s.job_list, name="job_list"),
     path("tizim/vazifalar/<int:pk>/qayta/", s.job_retry, name="job_retry"),
     path("tizim/zaxira/", s.backup_now, name="backup_now"),
@@ -177,6 +177,7 @@ urlpatterns = [
     path("sozlamalar/ai-kalit/qoshish/", s.ai_key_add, name="ai_key_add"),
     path("sozlamalar/ai-kalit/<int:pk>/ochir/", s.ai_key_delete, name="ai_key_delete"),
     path("sozlamalar/ai-kalit/<int:pk>/tekshir/", s.ai_key_test, name="ai_key_test"),
+    path("sozlamalar/brend/", s.brand_save, name="brand_save"),
     path("sozlamalar/tekshir/<str:what>/", s.setting_test, name="setting_test"),
     path("foydalanuvchilar/", s.user_list, name="user_list"),
     path("foydalanuvchilar/yangi/", s.user_new, name="user_new"),

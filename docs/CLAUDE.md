@@ -8,8 +8,8 @@ Bu fayl loyiha ildizida turadi. Har bir sessiya boshida o'qiladi. Manba hujjatla
 Agentlik mijozlarining Telegram / Instagram / YouTube akkauntlarini kuzatish, tahlil qilish, kontentni rejalashtirib avtomatik chiqarish, AI bilan plan/ssenariy yaratish va reklama tavsiyalari beradigan ichki platforma. Windows server, lokal tarmoq, `run.bat` bilan ishga tushadi. Interfeys to'liq o'zbek (lotin).
 
 ## 2. Qat'iy stek (o'zgartirmang)
-Python 3.12 · Django 5 + DRF · Waitress · MySQL 8 (`utf8mb4`) · APScheduler (MySQL jobstore) · Django Templates + HTMX + Alpine.js + Tailwind standalone CLI (Node yo'q) · ApexCharts · aiogram 3 (bot) · Telethon · Meta Graph API · YouTube Data/Analytics/Upload (OAuth) · FFmpeg · PySceneDetect · OpenCV · faster-whisper · ReportLab · openpyxl · cryptography (Fernet) · Argon2.
-**Taqiqlangan:** Docker, Celery, Redis, Node/npm build, React/Vue, ORM'siz xom SQL (fon navbat `SKIP LOCKED` bundan mustasno), Selenium/Playwright orqali mijoz akkauntlariga kirish.
+Python 3.12 · Django 5 + DRF · Waitress · MySQL 8 (`utf8mb4`) · APScheduler (MySQL jobstore) · React 18 + TypeScript + Vite + Tailwind + TanStack Query + Recharts (SPA, `frontend/`; faqat qurishda Node kerak, ishlashda kerak emas) · aiogram 3 (bot) · Telethon · Meta Graph API · YouTube Data/Analytics/Upload (OAuth) · FFmpeg · PySceneDetect · OpenCV · faster-whisper · ReportLab · openpyxl · cryptography (Fernet) · Argon2.
+**Taqiqlangan:** Docker, Celery, Redis, Vue, ORM'siz xom SQL (fon navbat `SKIP LOCKED` bundan mustasno), Selenium/Playwright orqali mijoz akkauntlariga kirish.
 
 ## 3. Ish tartibi (har bir vazifa uchun)
 1. Vazifaga tegishli CONTRACTS bo'limini o'qing. Shartnomada yo'q narsani o'zingiz o'ylab topmang: avval shartnomaga qo'shishni taklif qiling.
@@ -71,7 +71,7 @@ Bo'laklar tartibini foydalanuvchi bilan kelishmay o'zgartirmang. Bir vaqtda bitt
 - Barcha matnlar o'zbek (lotin), `gettext` orqali `.po` fayllarda; kodda qattiq yozilgan matn yo'q.
 - Ranglar: qizil (asosiy) / ko'k / oq; Dark va Light — CSS o'zgaruvchilar (`--brand`, `--brand-2`, `--bg`, `--fg`), Sozlamalardan o'zgaradi.
 - Har bir ro'yxat sahifasida: skeleton yuklanish, bo'sh holat matni, aniq xato xabari, saralash va eksport.
-- HTMX qismlari (partial) alohida shablonlarda; Alpine faqat mayda interaktivlik uchun.
+- Frontend: `frontend/` (Vite + React + TS). Sahifa view'lari JSON qaytaradi (`apps/web/spa.py`, `ui.py`), React `/app/` da chizadi. Yangi sahifa: view → `spa.respond(kind=...)` → `frontend/src/pages/registry.tsx`. Mijozga hisobot (`report_view.html`) va `offline.html` server-render qoladi.
 - Uzoq jarayon uchun progress (job foizi) ko'rsatiladi.
 - Yangi ekran qo'shsangiz: ruxsat moduli, menyu elementi, biznes konteksti, 3 holat (yuklanish/bo'sh/xato) bo'lishi shart.
 

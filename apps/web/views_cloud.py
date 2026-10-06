@@ -10,9 +10,10 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.http import Http404, JsonResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import redirect
 from django.views.decorators.http import require_POST
 
+from . import spa
 from apps.accounts.decorators import require_permission
 from apps.accounts.services import perms
 from apps.core.audit import audit
@@ -66,7 +67,7 @@ def cloud_home(request):
     if tag:
         objs = objs.filter(tags__icontains=tag)
     all_tags = sorted({t for tg in _scope(request).exclude(tags="").values_list("tags", flat=True) for t in _split_tags(tg)})
-    page = Paginator(objs.order_by("-created_at"), 30).get_page(request.GET.get("page"))
+    page = Paginator(objs.order_by("-created_at"), 30).get_page(request.GET.get("p"))
     rows = []
     for o in page:
         label, cls = STATUS_UZ.get(o.status, (o.status, ""))
@@ -78,13 +79,15 @@ def cloud_home(request):
     used, limit = temphost.r2_used_bytes(), temphost.r2_limit_bytes()
     r2_ok = temphost.R2Host().available(0)
     kv_ok = bool(get_setting("worker.cloudflare_url"))
-    return render(request, "cloud.html", {
-        "title": "Cloudflare fayllar", "rows": rows, "page": page, "used": _mb(used), "limit": _mb(limit), "pct": min(100, int(used * 100 / limit)) if limit else 0,
-        "r2_ok": r2_ok, "kv_ok": kv_ok, "auto": get_setting("cloud.auto_upload", True), "flt": flt, "show": show, "q": q, "tag": tag, "all_tags": all_tags,
-        "can_edit": perms.can(request.user, "publish.publish", request.business) if request.business else request.user.is_admin,
-        "has_business": bool(request.business), "bucket": get_setting("r2.bucket", ""),
-        "counts": {k: _scope(request).filter(status=k).count() for k in STATUS_UZ},
-    })
+    return spa.respond(request, {
+        "kind": "cloud", "pager": spa.pager_json(page), "used": _mb(used), "limit": _mb(limit), "pct": min(100, int(used * 100 / limit)) if limit else 0,
+        "r2_ok": r2_ok, "kv_ok": kv_ok, "auto": bool(get_setting("cloud.auto_upload", True)), "f": {"status": flt or "", "show": show or "", "q": q, "tag": tag},
+        "all_tags": all_tags, "can_edit": bool(perms.can(request.user, "publish.publish", request.business) if request.business else request.user.is_admin),
+        "has_business": bool(request.business), "bucket": get_setting("r2.bucket", ""), "counts": {k: _scope(request).filter(status=k).count() for k in STATUS_UZ},
+        "rows": [{"id": r["o"].pk, "name": r["o"].filename or r["o"].key, "kind": r["kind"], "url": r["url"], "status": r["o"].status, "label": r["label"], "cls": r["cls"],
+                  "size": r["size"], "backend": r["o"].backend or "", "error": r["o"].error, "tags": r["o"].tags, "item_id": r["o"].item_id,
+                  "item_title": (r["o"].item.title or "(nomsiz)") if r["o"].item_id else "", "plats": r["plats"], "item_status": r["item_status"],
+                  "at": r["o"].created_at.isoformat()} for r in rows]})
 
 
 def _need_edit(request):

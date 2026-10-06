@@ -1,4 +1,0 @@
-{% extends "base.html" %}{% block title %}Yo'riqnoma{% endblock %}
-{% block content %}<div class="grid" style="grid-template-columns:230px 1fr;align-items:start"><div class="card" style="position:sticky;top:70px"><b>Bo'limlar</b>
-{% for g in guides %}<div style="padding:5px 0"><a href="{% url 'guide_view' g.slug %}" {% if g.slug == slug %}style="font-weight:700"{% endif %}>{{ g.title }}</a></div>{% endfor %}</div>
-<div class="card guide">{{ html|safe }}</div></div>{% endblock %}

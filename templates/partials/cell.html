@@ -1,4 +1,0 @@
-{% if c.post %}<form method="post" action="{{ c.post }}" style="display:inline" {% if c.confirm %}onsubmit="return confirm('{{ c.confirm }}')"{% endif %}>{% csrf_token %}<button class="btn sm {{ c.cls }}">{{ c.t }}</button></form>
-{% elif c.u %}<a href="{{ c.u }}">{{ c.t }}</a>{% if c.sub %}<div class="help">{{ c.sub }}</div>{% endif %}
-{% elif c.b is not None %}<span class="badge {{ c.b }}">{{ c.t }}</span>{% if c.sub %}<div class="help">{{ c.sub }}</div>{% endif %}
-{% elif c.t is not None %}{{ c.t }}{% else %}{{ c|default_if_none:"—" }}{% endif %}

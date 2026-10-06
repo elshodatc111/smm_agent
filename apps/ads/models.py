@@ -52,18 +52,3 @@ class AdResult(models.Model):
     class Meta:
         unique_together = [("campaign", "date")]
         ordering = ["date"]
-
-
-class LeadSale(models.Model):
-    """Qo'lda kiritiladigan lead va sotuvlar (CRM integratsiyasi keyinga qoldirilgan)."""
-    KIND = [("lead", "Lead"), ("sale", "Sotuv")]
-    business = models.ForeignKey("businesses.Business", on_delete=models.CASCADE, related_name="leads_sales")
-    kind = models.CharField(max_length=5, choices=KIND)
-    date = models.DateField()
-    amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
-    source = models.CharField(max_length=120, blank=True)
-    link = models.ForeignKey("links.ShortLink", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
-    campaign = models.ForeignKey(AdCampaign, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
-    promo_code = models.CharField(max_length=40, blank=True)
-    note = models.CharField(max_length=300, blank=True)
-    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")

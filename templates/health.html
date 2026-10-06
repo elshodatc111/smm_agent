@@ -1,6 +1,0 @@
-{% extends "base.html" %}{% block title %}Tizim holati{% endblock %}
-{% block content %}
-<div class="row sb"><h1>Tizim holati</h1><div class="row"><a class="btn" href="{% url 'job_list' %}">Vazifalar navbati</a>
-<form method="post" action="{% url 'backup_now' %}">{% csrf_token %}<button class="btn">Zaxira nusxa olish</button></form></div></div>
-<div id="hb" hx-get="{% url 'health_partial' %}" hx-trigger="every 10s" hx-swap="innerHTML">{% include "partials/health_body.html" %}</div>
-{% endblock %}

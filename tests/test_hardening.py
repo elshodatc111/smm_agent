@@ -28,12 +28,12 @@ def _admin_client():
     return c
 
 
-def test_actions_block_renders_label():
+def test_settings_sections_have_checks():
     c = _admin_client()
-    r = c.get("/sozlamalar/?tab=kalitlar")
+    r = c.get("/sozlamalar/?tab=xizmatlar")
     assert r.status_code == 200
-    html = r.content.decode()
-    assert ">Cloudflare Worker</button>" in html and ">Mijoz boti</button>" in html
+    posts = [s["test"]["post"] for s in r.json()["sections"] if s["test"]]
+    assert "/sozlamalar/tekshir/worker/" in posts and "/sozlamalar/tekshir/agency_bot/" in posts
 
 
 def test_key_format_hints():
@@ -113,13 +113,13 @@ def test_content_form_has_preview_and_uzbek_labels(settings):
     c = Client()
     c.force_login(u)
     c.post("/biznes-tanlash/", {"business": Business.objects.first().pk})
-    assert "Instagram" in c.get("/kalendar/yangi/").content.decode()
+    assert any(x["name"] == "Instagram" for x in c.get("/kalendar/yangi/").json()["cards"])
     for url in ("/kalendar/yangi/telegram/", "/kalendar/yangi/instagram/", "/kalendar/yangi/youtube/"):
         r = c.get(url)
         assert r.status_code == 200
-        html = r.content.decode()
-        assert "Oldindan ko'rish" in html and "pv-telegram" in html and "pv-instagram" in html and "pv-youtube" in html
-        assert "Post turi" in html and "Sarlavha (ichki nom)" in html and 'id="accMap"' in html
+        j = r.json()
+        labels = {f["label"] for f in j["form"]["fields"]}
+        assert "Post turi" in labels and "Sarlavha (ichki nom)" in labels and j["acc_map"]
     from apps.content.models import ContentItem
     it = ContentItem.objects.filter(business=Business.objects.first()).first()
     if it:
@@ -174,7 +174,6 @@ def test_time_suggest_and_ai_endpoints(settings):
 
 
 def test_suggest_avoids_busy_slots():
-    from datetime import timedelta
 
     from apps.businesses.models import Business
     from apps.connections.models import SocialAccount
