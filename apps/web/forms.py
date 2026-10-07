@@ -127,8 +127,6 @@ class ContentForm(forms.ModelForm):
     crop_x = forms.FloatField(required=False, min_value=0, max_value=1, widget=forms.HiddenInput)
     crop_y = forms.FloatField(required=False, min_value=0, max_value=1, widget=forms.HiddenInput)
     crop_zoom = forms.FloatField(required=False, min_value=1, max_value=4, widget=forms.HiddenInput)
-    music_source = forms.CharField(label="Musiqa / audio manbasi", required=False, max_length=200,
-                                   widget=forms.TextInput(attrs={"placeholder": "Masalan: CapCut bepul kutubxona, o'z ovozim, litsenziyali"}))
     tg_buttons = forms.CharField(label="Telegram tugmalari (har qatorda: Matn | https://havola)", required=False,
                                  widget=forms.Textarea(attrs={"rows": 4, "placeholder": "Ro'yxatdan o'tish | https://example.com\nBog'lanish | https://t.me/username\nInstagram | https://instagram.com/... || YouTube | https://youtube.com/..."}))
     tg_cols = forms.ChoiceField(label="Qatorda nechta tugma", required=False, initial="2",
@@ -158,7 +156,6 @@ class ContentForm(forms.ModelForm):
             self.fields["yt_privacy"].initial = o.get("privacy", "public")
             self.fields["media_size"].initial = o.get("media_size", "orig")
             self.fields["fit_mode"].initial = o.get("fit_mode", "pad")
-            self.fields["music_source"].initial = o.get("music_source", "")
             c = o.get("crop") or {}
             self.fields["crop_x"].initial, self.fields["crop_y"].initial, self.fields["crop_zoom"].initial = c.get("x", 0.5), c.get("y", 0.5), c.get("z", 1)
             self.fields["tg_buttons"].initial = buttons_to_text(o.get("buttons") or [])
@@ -201,7 +198,6 @@ class ContentForm(forms.ModelForm):
         for k, v in (("title", (d.get("yt_title") or "").strip()), ("privacy", d.get("yt_privacy") or ""),
                      ("tags", [t.strip() for t in (d.get("yt_tags") or "").split(",") if t.strip()]),
                      ("buttons", getattr(self, "_tg_rows", [])), ("btn_cols", int(d.get("tg_cols") or 2) if getattr(self, "_tg_rows", None) else 0),
-                     ("music_source", (d.get("music_source") or "").strip()),
                      ("media_size", d.get("media_size") if d.get("media_size") not in (None, "", "orig") else ""),
                      ("fit_mode", d.get("fit_mode") if d.get("media_size") not in (None, "", "orig") else "")):
             if v:

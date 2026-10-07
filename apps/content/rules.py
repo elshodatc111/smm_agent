@@ -227,12 +227,6 @@ def policy_sensitive_topic(item, ctx):
     return [_p("policy.sensitive_topic", WARN, "Sog'liq/moliya bo'yicha ehtiyotkor ibora kerak: " + ", ".join(hit), "text")] if hit else []
 
 
-def policy_copyright_media(item, ctx):
-    if item.media_type in ("video", "reel", "short", "story") and not item.options.get("music_source"):
-        return [_p("policy.copyright_media", WARN, "Musiqa/rasm manbasi belgilanmagan (mualliflik huquqi).", "options")]
-    return []
-
-
 def lang_orthography_uz(item, ctx):
     t = item.text or ""
     out = []
@@ -258,7 +252,7 @@ RULES = [
     ("platform.hashtag_count", "platform", WARN, platform_hashtag_count), ("platform.video_spec", "platform", BLOCK, platform_video_spec),
     ("platform.image_spec", "platform", BLOCK, platform_image_spec), ("platform.media_count", "platform", BLOCK, platform_media_count), ("truth.facts_match", "truth", BLOCK, truth_facts_match),
     ("truth.unverified_claim", "truth", WARN, truth_unverified_claim), ("orig.competitor_similarity", "originality", BLOCK, orig_competitor_similarity),
-    ("policy.sensitive_topic", "policy", WARN, policy_sensitive_topic), ("policy.copyright_media", "policy", WARN, policy_copyright_media),
+    ("policy.sensitive_topic", "policy", WARN, policy_sensitive_topic),
     ("lang.orthography_uz", "language", WARN, lang_orthography_uz),
 ]
 

@@ -11,7 +11,8 @@ Core (shifrlash, sozlamalar, audit, bildirishnoma) · RBAC (modul×amal, biznes 
 Instagram/YouTube/Telegram Bot API/Telethon/Groq/Gemini/OpenRouter/ScrapeCreators/Cloudflare Worker bilan haqiqiy so'rovlar **hali sinalmagan**. Birinchi ulanishda yo'riqnomadagi «Tekshirish» tugmalaridan foydalaning. Ehtimoliy farqlar: API maydon nomlari, Google'ning `workers.dev` redirect URI'ni qabul qilishi, ScrapeCreators endpointlari va javob formati, Meta App Review talablari.
 
 ## Ma'lum cheklovlar / keyingi qadam
-- MySQL'ga qarshi test o'tkazilmagan (testlar sqlite'da); `SKIP LOCKED` MySQL 8 da ishlaydi, lekin real yuklama ostida sinab ko'rish kerak.
+- MySQL: butun test to'plami MariaDB 10.11 da o'tgan (`python -m pytest --ds=config.settings_mysql_test`, DB_PASSWORD kerak). Haqiqiy MySQL 8 serverida sinab ko'rish tavsiya etiladi. MySQL'da vaqt jadvallari (CONVERT_TZ) bo'lmasligi mumkin — kodda `__date` kabi qidiruvlar ishlatilmaydi.
+- Brauzer tutun-testi: `python tools/e2e_smoke.py URL admin PAROL [--mobile]` (Playwright).
 - Frontend o'zgargach `build_frontend.bat` (Node.js 20+ kerak), keyin `restart.bat`. Backend o'zgarsa faqat `restart.bat`.
 - Telethon o'rnatish Windows'da `pip install telethon` orqali (requirements'da bor).
 - Ko'p tilli interfeys yo'q (faqat o'zbek lotin) — TZ bo'yicha.

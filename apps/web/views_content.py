@@ -52,7 +52,10 @@ def calendar(request):
     first = date(y, mo, 1)
     nxt = date(y + (mo == 12), mo % 12 + 1, 1)
     prev = (first - timedelta(days=1)).replace(day=1)
-    scheduled = qs.filter(scheduled_at__date__gte=first, scheduled_at__date__lt=nxt).order_by("scheduled_at").prefetch_related("targets__account", "assets")
+    from datetime import datetime as _dt
+    from apps.core.utils import tz as _z
+    lo, hi = _dt.combine(first, _dt.min.time(), tzinfo=_z()), _dt.combine(nxt, _dt.min.time(), tzinfo=_z())   # MySQL'da vaqt jadvallari (CONVERT_TZ) bo'lmasligi mumkin
+    scheduled = qs.filter(scheduled_at__gte=lo, scheduled_at__lt=hi).order_by("scheduled_at").prefetch_related("targets__account", "assets")
     scheduled = list(scheduled)
     unsched = list(qs.filter(scheduled_at__isnull=True).exclude(status="published")[:30])
     from apps.core.utils import tz as _tz
@@ -425,8 +428,6 @@ def content_detail(request, pk):
             acts.append({"t": label, "post": f"{base}/holat/{new}/", "cls": cls})
     if item.status in ("draft", "scheduled", "failed") and perms.can(u, "publish.publish", item.business):
         acts.append({"t": "Hozir nashr qilish", "post": f"{base}/hozir/", "cls": "blue", "confirm": "Post hoziroq nashr qilinadi. Davom etasizmi?"})
-    if perms.can(u, "calendar.edit", item.business):
-        acts.append({"t": "✅ Tayyor, ko'rib chiqing", "post": f"{base}/tayyor/", "cls": "", "confirm": "Mas'ul/SMM mutaxassisga «tayyor» bildirishnomasi yuboriladi."})
     if item.status in ("draft", "failed") and not item.scheduled_at and perms.can(u, "calendar.edit", item.business):
         acts.append({"t": "⚡ Eng yaxshi vaqtga qo'yish", "post": f"{base}/avto-vaqt/", "cls": "blue"})
     acts.append({"t": "Qoidalarni tekshirish", "post": f"{base}/tekshir/", "cls": ""})
@@ -436,9 +437,17 @@ def content_detail(request, pk):
     if item.targets.filter(status__in=["failed", "blocked"]).exists() and perms.can(u, "publish.publish", item.business):
         acts.append({"t": "Xatolarni qayta urinish", "post": f"{base}/qayta/", "cls": "primary"})
     probs = []
-    for rc in item.rule_checks.order_by("-checked_at")[:3]:
+    seen_pl, seen_msg = set(), set()
+    for rc in item.rule_checks.order_by("-checked_at")[:12]:
+        if rc.platform in seen_pl:
+            continue
+        seen_pl.add(rc.platform)
         for p in rc.problems:
-            probs.append({"platform": rc.platform, "status": rc.status, "rule": p.get("rule_id", ""), "msg": p.get("message_uz") or p.get("message", "")})
+            msg = p.get("message_uz") or p.get("message", "")
+            if (p.get("rule_id", ""), msg) in seen_msg:
+                continue
+            seen_msg.add((p.get("rule_id", ""), msg))
+            probs.append({"platform": rc.platform, "status": rc.status, "rule": p.get("rule_id", ""), "msg": msg})
     targets = list(item.targets.select_related("account"))
     sel = {}
     for t in targets:
@@ -499,16 +508,13 @@ def _task_ctx(item, u) -> dict:
     from apps.accounts.models import User
     from apps.content import workflow
     can_edit = perms.can(u, "calendar.edit", item.business)
-    can_review = perms.can(u, "calendar.create", item.business) or u.is_admin
     staff = [x for x in User.objects.filter(is_active=True).order_by("first_name", "username") if x.is_admin or perms.has_business(x, item.business_id)] if can_edit else []
     ds = item.design_status
     steps = []
     if can_edit and ds in ("todo", "revision"):
         steps.append(("doing", "▶ Boshladim", "blue"))
     if can_edit and ds in ("todo", "doing", "revision"):
-        steps.append(("ready", "✅ Tayyor, ko'rib chiqing", "primary"))
-    if can_review and ds == "ready":
-        steps += [("accepted", "👍 Qabul qilish", "primary"), ("revision", "↩ Qayta ko'rib chiqing", "danger")]
+        steps.append(("accepted", "✅ Bajarildi", "primary"))
     due_local = item.due_at.astimezone(__import__("apps.core.utils", fromlist=["tz"]).tz()).strftime("%Y-%m-%dT%H:%M") if item.due_at else ""
     late = bool(item.due_at and item.due_at < timezone.now() and ds in workflow.OPEN)
     return {"task": {"status": ds, "label": workflow.DESIGN_STATUS.get(ds, ""), "cls": workflow.DESIGN_CLASS.get(ds, ""), "steps": steps, "late": late,
@@ -771,32 +777,6 @@ def content_asset_replace(request, pk, aid):
     audit("content.media_edit", user=request.user, business_id=item.business_id, target=f"item:{item.pk}", detail={"file": a.original_name[:80]})
     state.on_item_edited(item, request.user)
     messages.success(request, "Rasm yangilandi.")
-    return redirect("content_detail", pk=item.pk)
-
-
-@login_required
-@require_POST
-def content_ready(request, pk):
-    """Dizayner «tayyor» deb belgilaydi -> mas'ul/SMM'ga bildirishnoma (tasdiqlash emas)."""
-    from apps.accounts.models import User
-    from apps.core.notify import notify
-    item = get_obj(request, ContentItem, pk, "calendar.edit")
-    who = request.user.get_full_name() or request.user.username
-    note = (request.POST.get("note") or "").strip()[:300]
-    users = [item.assignee] if item.assignee_id else []
-    if not users and item.created_by_id and item.created_by_id != request.user.pk:
-        users = [item.created_by]
-    if not users:
-        users = [u for u in User.objects.filter(is_active=True) if u.pk != request.user.pk and not u.is_admin and perms.can(u, "calendar.edit", item.business)]
-    if item.design_status != "ready":
-        from apps.content import workflow
-        item.design_status = "ready"
-        item.save(update_fields=["design_status"])
-        workflow.add_comment(item, request.user, "Holat: Tayyor — ko'rib chiqing" + (f". {note}" if note else ""), kind="status")
-    n = notify("content.ready", f"Tayyor: {item.title or 'kontent'}", f"{who} faylni tayyorladi, ko'rib chiqing." + (f"\nIzoh: {note}" if note else ""),
-               business_id=item.business_id, link=f"/kalendar/{item.pk}/", users=users)
-    audit("content.ready", user=request.user, business_id=item.business_id, target=f"item:{item.pk}", detail={"title": item.title, "note": note})
-    messages.success(request, f"«Tayyor» belgisi yuborildi ({n} kishiga)." if n else "Bildirishnoma oluvchi topilmadi (mas'ul tayinlang).")
     return redirect("content_detail", pk=item.pk)
 
 

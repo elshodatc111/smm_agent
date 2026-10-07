@@ -1,9 +1,11 @@
 import { useRef, useState } from 'react'
-import { ArrowDown, ArrowLeft, ArrowUp, BarChart3, Cloud, Copy, ExternalLink, Pencil, Replace, Trash2, Upload, Send, Bookmark } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowUp, BarChart3, Crop, Cloud, Copy, ExternalLink, Pencil, Replace, Trash2, Upload, Send, Bookmark } from 'lucide-react'
 import { ActionButton, A, Rich } from '../components/Blocks'
 import { Badge, Btn, Card, Empty, PageHeader, Segmented, useConfirm } from '../components/ui'
 import { PostPreview, PvData } from '../components/PostPreview'
 import { CloudPicker } from '../components/CloudPicker'
+import { ImageEditor } from '../components/ImageEditor'
+import { useToast } from '../lib/toast'
 import { useApp } from '../lib/app'
 import { bytes, cx, FMT, PLAT, statusTone } from '../lib/format'
 import { richHtml } from '../lib/richtext'
@@ -22,6 +24,9 @@ function Files({ d }: { d: any }) {
   const up = useRef<HTMLInputElement>(null)
   const rep = useRef<HTMLInputElement>(null)
   const [repId, setRepId] = useState<number | null>(null)
+  const [crop, setCrop] = useState<{ id: number; file: File } | null>(null)
+  const toast = useToast()
+  const openCrop = async (a: any) => { try { const r = await fetch(a.url, { credentials: 'same-origin' }); if (!r.ok) throw new Error(); const b = await r.blob(); setCrop({ id: a.id, file: new File([b], a.name || 'rasm.jpg', { type: b.type || 'image/jpeg' }) }) } catch { toast.push('error', "Rasmni ochib bo'lmadi.") } }
   const base = `/kalendar/${d.id}`
   const add = (fl: File[]) => { if (!fl.length) return; const fd = new FormData(); fl.forEach((f) => fd.append('files', f, f.name)); submit(`${base}/fayl/`, fd) }
   return (
@@ -46,6 +51,7 @@ function Files({ d }: { d: any }) {
                   <div className="flex gap-1 mt-1.5">
                     <Btn size="icon" aria-label="Yuqoriga" disabled={i === 0 || busy} onClick={() => submit(`${base}/fayl/${a.id}/surish/`, { dir: 'up' })}><ArrowUp className="w-3.5 h-3.5" /></Btn>
                     <Btn size="icon" aria-label="Pastga" disabled={i === d.assets.length - 1 || busy} onClick={() => submit(`${base}/fayl/${a.id}/surish/`, { dir: 'down' })}><ArrowDown className="w-3.5 h-3.5" /></Btn>
+                    {a.kind === 'image' && <Btn size="icon" aria-label="Kesish" title="Kesish" onClick={() => openCrop(a)}><Crop className="w-3.5 h-3.5" /></Btn>}
                     {a.kind === 'image' && <Btn size="icon" aria-label="Almashtirish" title="Tahrirlangan rasm bilan almashtirish" onClick={() => { setRepId(a.id); rep.current?.click() }}><Replace className="w-3.5 h-3.5" /></Btn>}
                     <Btn size="icon" variant="danger" aria-label="O'chirish" className="ml-auto" onClick={async () => { if (await confirm(`«${a.name}» postdan olib tashlansinmi?`, { danger: true })) submit(`${base}/fayl/${a.id}/ochir/`) }}><Trash2 className="w-3.5 h-3.5" /></Btn>
                   </div>
@@ -55,6 +61,7 @@ function Files({ d }: { d: any }) {
           ))}
         </div>
       )}
+      <ImageEditor file={crop?.file || null} ratio={d.pv.ratio || 0} onClose={() => setCrop(null)} onDone={(f) => { const fd = new FormData(); fd.append('file', f, f.name); submit(`${base}/fayl/${crop!.id}/almashtir/`, fd) }} />
       <CloudPicker open={pick} onClose={() => setPick(false)} multi onPick={(fs) => { const fd = new FormData(); fs.forEach((f) => fd.append('cloud_ids', String(f.id))); submit(`${base}/fayl/`, fd) }} />
     </div>
   )
@@ -116,15 +123,15 @@ export function ContentDetail({ d }: { d: any }) {
         title={d.title}
         subtitle={<span className="inline-flex flex-wrap items-center gap-2"><Badge tone={statusTone(d.status)}>{d.status_label}</Badge><span>{d.format}</span><span>· {d.scheduled}</span><Badge tone={d.rule_cls}>{d.rule_label}</Badge>{d.business && <span>· {d.business}</span>}</span>}
         actions={<>
+          {d.can_edit && <Btn onClick={() => setTab('files')}><Upload className="w-4 h-4" /> Fayl qo'shish</Btn>}
           {d.can_edit && <A to={`${base}/tahrir/`} className="btn"><Pencil className="w-4 h-4" /> Tahrirlash</A>}
           {d.can_create && <Btn onClick={() => submit(`${base}/nusxa/`)}><Copy className="w-4 h-4" /> Nusxa</Btn>}
           {d.can_create && <Btn onClick={() => submit(`${base}/shablon/`)} title="Shablon sifatida saqlash"><Bookmark className="w-4 h-4" /></Btn>}
         </>} />
 
-      {d.ai_draft && <div className="rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-[13px] mb-3 flex items-center justify-between gap-3">AI yozgan qoralama — nashrdan oldin ko'rib chiqing.<Btn size="sm" onClick={() => submit(`${base}/ai-korildi/`)}>Ko'rib chiqdim</Btn></div>}
       <div className="flex flex-wrap gap-2 mb-3">{d.acts.map((a: any, i: number) => <ActionButton key={i} a={{ label: a.label, post: a.post, cls: a.cls, confirm: a.confirm }} />)}</div>
       {d.probs.length > 0 && (
-        <div className="rounded-lg border border-bad/30 bg-bad/5 px-3 py-2 mb-3 text-[13px] space-y-0.5">
+        <div className="rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 mb-3 text-[13px] space-y-1">
           {d.probs.map((p: any, i: number) => <div key={i}><b>{PLAT[p.platform]?.name || p.platform}</b>: {p.msg}</div>)}
         </div>
       )}

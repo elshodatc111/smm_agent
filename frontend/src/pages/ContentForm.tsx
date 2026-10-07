@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { ArrowLeft, Cloud, Clock, FileText, ImagePlus, Sparkles, Upload, Wand2, X, ChevronLeft, ChevronRight, Eye, Pencil } from 'lucide-react'
+import { ArrowLeft, Cloud, Clock, FileText, ImagePlus, Sparkles, Upload, Wand2, X, ChevronLeft, ChevronRight, Eye, Pencil, Crop } from 'lucide-react'
 import { Btn, Card, Collapse, Modal, PageHeader, Segmented, Spinner } from '../components/ui'
 import { Field, FieldSchema, FormSchema, toFormData, useFormValues } from '../components/Fields'
 import { RichEditor } from '../components/RichEditor'
 import { CloudPicker, CloudFile } from '../components/CloudPicker'
+import { ImageEditor } from '../components/ImageEditor'
+import { clearDraftFiles, loadDraftFiles, saveDraftFiles } from '../lib/draftdb'
 import { PostPreview, PvData, PvMedia } from '../components/PostPreview'
 import { A } from '../components/Blocks'
 import { useApp } from '../lib/app'
+import { useToast } from '../lib/toast'
 import { csrfToken, getJson, request } from '../lib/api'
 import { cx, FMT, PLAT } from '../lib/format'
 import { visLen } from '../lib/richtext'
@@ -37,6 +40,7 @@ export function ContentForm({ d }: { d: any }) {
   const schema: FormSchema = d.form
   const { values, set, setValues } = useFormValues(schema)
   const { submit, busy } = useApp()
+  const toast = useToast()
   const loc = useLocation()
   const F = useMemo(() => Object.fromEntries(schema.fields.map((f) => [f.name, f])) as Record<string, FieldSchema>, [schema])
   const [locals, setLocals] = useState<Local[]>([])
@@ -46,6 +50,8 @@ export function ContentForm({ d }: { d: any }) {
   const [mobileTab, setMobileTab] = useState<'edit' | 'preview'>('edit')
   const [exact, setExact] = useState<{ url?: string; err?: string; loading?: boolean } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const [editFile, setEditFile] = useState<File | null>(null)
+  const [editTarget, setEditTarget] = useState<{ src: 'l' | 'c' | 'e'; k: string } | null>(null)
   const fixed: string = d.fixed || ''
   const existing: PvMedia[] = d.existing_media || []
 
@@ -107,6 +113,25 @@ export function ContentForm({ d }: { d: any }) {
   const remove = (it: (typeof items)[number]) => {
     if (it.src === 'l') setLocals((c) => c.filter((v) => v.key !== it.k))
     else if (it.src === 'c') setClouds((c) => c.filter((v) => 'c' + v.id !== it.k))
+  }
+  const startCrop = async (it: (typeof items)[number]) => {
+    try {
+      if (it.src === 'l') setEditFile(locals.find((l) => l.key === it.k)!.file)
+      else {
+        const r = await fetch(it.src === 'c' ? `/cloudflare/${it.k.slice(1)}/fayl/` : it.url, { credentials: 'same-origin' })
+        if (!r.ok) throw new Error()
+        const b = await r.blob()
+        setEditFile(new File([b], it.label.length > 3 && it.src === 'c' ? it.label : 'rasm.jpg', { type: b.type || 'image/jpeg' }))
+      }
+      setEditTarget({ src: it.src, k: it.k })
+    } catch { toast.push('error', 'Rasmni ochib bo\'lmadi. Qayta urinib ko\'ring.') }
+  }
+  const cropDone = (nf: File) => {
+    const t = editTarget
+    if (!t) return
+    if (t.src === 'l') setLocals((c) => c.map((l) => (l.key === t.k ? { ...l, file: nf, url: URL.createObjectURL(nf) } : l)))
+    else if (t.src === 'c') { setClouds((c) => c.filter((x) => 'c' + x.id !== t.k)); setLocals((c) => (multi ? [...c, { key: Math.random().toString(36).slice(2), file: nf, url: URL.createObjectURL(nf), kind: 'image' as const }] : [{ key: 'x', file: nf, url: URL.createObjectURL(nf), kind: 'image' as const }])) }
+    else { const fd = new FormData(); fd.append('file', nf, nf.name); submit(`/kalendar/${d.item_id}/fayl/${t.k.slice(1)}/almashtir/`, fd, { stay: true }) }
   }
   // Tur o'zgarganda ortiqcha fayllar olib tashlanadi (bitta fayl turlari)
   useEffect(() => {
@@ -184,6 +209,7 @@ export function ContentForm({ d }: { d: any }) {
   // --- qoralama (brauzerda avtomatik saqlanadi)
   const dkey = 'draft:' + loc.pathname
   const [restored, setRestored] = useState(false)
+  const draftReady = useRef(false)
   useEffect(() => {
     if (d.item_id) return
     try {
@@ -197,6 +223,12 @@ export function ContentForm({ d }: { d: any }) {
     return () => clearTimeout(t)
   }, [values.text, values.title, values.tg_buttons]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (d.item_id) return
+    loadDraftFiles(dkey).then((fs) => { draftReady.current = true; if (fs.length) { setLocals(fs.map((file) => ({ key: Math.random().toString(36).slice(2), file, url: URL.createObjectURL(file), kind: kindOf(file) }))); setRestored(true) } })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!d.item_id && draftReady.current) saveDraftFiles(dkey, locals.map((l) => l.file)) }, [locals]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // --- yuborish
   const save = async (e?: React.FormEvent) => {
     e?.preventDefault()
@@ -204,7 +236,7 @@ export function ContentForm({ d }: { d: any }) {
     locals.forEach((l) => fd.append('files', l.file, l.file.name))
     clouds.forEach((c) => fd.append('cloud_ids', String(c.id)))
     const res = await submit(loc.pathname + loc.search, fd)
-    if (res && res.data?.kind !== 'content_form') { try { localStorage.removeItem(dkey) } catch { /* ignore */ } }
+    if (res && res.data?.kind !== 'content_form') { try { localStorage.removeItem(dkey) } catch { /* ignore */ } clearDraftFiles(dkey) }
   }
   const errs = [...schema.errors, ...schema.fields.filter((f) => f.errors.length && !['text', 'media_type', 'targets', 'scheduled_at'].includes(f.name)).map((f) => `${f.label}: ${f.errors.join(' ')}`)]
   const tgLen = visLen(values.text || '')
@@ -218,7 +250,7 @@ export function ContentForm({ d }: { d: any }) {
           {errs.map((m, i) => <div key={i}>{m}</div>)}
         </div>
       )}
-      {restored && <div className="rounded-lg border border-line bg-surface2 px-3 py-1.5 text-[12.5px] flex items-center justify-between">Brauzerda saqlangan qoralama tiklandi.<button type="button" className="underline" onClick={() => { setValues((v) => ({ ...v, text: '', title: '' })); setRestored(false); try { localStorage.removeItem(dkey) } catch { /* ignore */ } }}>Tozalash</button></div>}
+      {restored && <div className="rounded-lg border border-line bg-surface2 px-3 py-1.5 text-[12.5px] flex items-center justify-between">Brauzerda saqlangan qoralama tiklandi.<button type="button" className="underline" onClick={() => { setValues((v) => ({ ...v, text: '', title: '' })); setLocals([]); setRestored(false); try { localStorage.removeItem(dkey) } catch { /* ignore */ } }}>Tozalash</button></div>}
 
       <Card pad={false}>
         <div className="p-3.5 space-y-3">
@@ -261,6 +293,7 @@ export function ContentForm({ d }: { d: any }) {
                         <div className="relative aspect-square rounded-lg overflow-hidden bg-surface border border-line">
                           {it.kind === 'video' ? <video src={it.url} muted preload="metadata" className="w-full h-full object-cover" /> : <img src={it.url} alt="" className="w-full h-full object-cover" />}
                           <span className="absolute top-1 left-1 text-[10px] px-1.5 rounded bg-black/60 text-white">{i + 1}</span>
+                          {it.kind === 'image' && <button type="button" aria-label="Kesish" title="Kesish" onClick={() => startCrop(it)} className="absolute bottom-1 left-1 h-6 px-1.5 rounded-md bg-black/65 text-white text-[11px] inline-flex items-center gap-1 hover:bg-brand"><Crop className="w-3 h-3" /> Kesish</button>}
                           {it.src !== 'e' && <button type="button" aria-label="Olib tashlash" onClick={() => remove(it)} className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white grid place-items-center hover:bg-bad"><X className="w-3 h-3" /></button>}
                         </div>
                         <div className="flex items-center justify-between mt-1 gap-1">
@@ -366,7 +399,7 @@ export function ContentForm({ d }: { d: any }) {
 
       <Collapse title="Qo'shimcha: maqsad, mas'ul, ichki izoh" hint="ixtiyoriy">
         <div className="grid sm:grid-cols-2 gap-3">
-          {['goal', 'hook_idea', 'cta', 'assignee', 'due_at', 'music_source'].filter((n) => F[n] && (n !== 'music_source' || ['video', 'reel', 'short', 'story'].includes(mt))).map((n) => <Field key={n} f={F[n]} value={values[n]} onChange={(v) => set(n, v)} />)}
+          {['goal', 'hook_idea', 'cta', 'assignee', 'due_at'].filter((n) => F[n]).map((n) => <Field key={n} f={F[n]} value={values[n]} onChange={(v) => set(n, v)} />)}
           {F.brief && <Field f={F.brief} value={values.brief} onChange={(v) => set('brief', v)} className="sm:col-span-2" />}
           {F.notes && <Field f={F.notes} value={values.notes} onChange={(v) => set('notes', v)} className="sm:col-span-2" />}
         </div>
@@ -400,6 +433,7 @@ export function ContentForm({ d }: { d: any }) {
         if (!multi) setLocals([])
         if (mt === 'text') { const g = fs.length > 1 ? 'album' : fs[0].kind === 'video' ? 'video' : 'image'; if (okTypes.includes(g)) set('media_type', g) }
       }} />
+      <ImageEditor file={editFile} ratio={ratio} onClose={() => { setEditFile(null); setEditTarget(null) }} onDone={cropDone} />
       <Modal open={!!exact} onClose={() => setExact(null)} title="Aniq natija (nashrdagi kadr)" width={520}>
         {exact?.loading && <div className="py-10 flex justify-center"><Spinner className="w-6 h-6" /></div>}
         {exact?.err && <div className="text-bad text-[13px]">{exact.err}</div>}

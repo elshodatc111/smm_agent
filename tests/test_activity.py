@@ -103,11 +103,9 @@ def test_asset_manage_ready_studio_and_media_card(settings, tmp_path):
     a2 = it.assets.first()
     c.post(f"/kalendar/{it.pk}/fayl/{a2.pk}/almashtir/", {"file": img("new.jpg")})
     a2.refresh_from_db(); assert a2.size > 0
-    # tayyor
-    assert c.post(f"/kalendar/{it.pk}/tayyor/").status_code == 302
-    assert AuditLog.objects.filter(action="content.ready").exists()
+    # tasdiqlash/«tayyor» tugmasi yo'q
     j = c.get(f"/kalendar/{it.pk}/").json()
-    assert any("/tayyor/" in a["post"] for a in j["acts"]) and j["can_edit"] and len(j["assets"]) == 3
+    assert not any("/tayyor/" in a["post"] for a in j["acts"]) and j["can_edit"] and len(j["assets"]) == 3
     # karusel soni qoidasi
     from apps.content.rules import run_rules
     for x in it.assets.all()[1:]:

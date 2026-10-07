@@ -93,7 +93,6 @@ urlpatterns = [
     path("kalendar/<int:pk>/fayl/<int:aid>/almashtir/", c.content_asset_replace, name="content_asset_replace"),
     path("kalendar/avto-vaqt/", c.content_autotime_many, name="content_autotime_many"),
     path("kalendar/<int:pk>/avto-vaqt/", c.content_autotime, name="content_autotime"),
-    path("kalendar/<int:pk>/tayyor/", c.content_ready, name="content_ready"),
     path("kalendar/<int:pk>/fayl/<int:aid>/surish/", w.content_asset_move, name="content_asset_move"),
     path("kalendar/<int:pk>/koch/", w.content_move, name="content_move"),
     path("kalendar/<int:pk>/nusxa/", w.content_duplicate, name="content_duplicate"),

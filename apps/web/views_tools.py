@@ -96,7 +96,7 @@ def studio_home(request):
     elif tab == "ssenariy":
         blocks.append(ui.form_block(mkform({"brief": forms.CharField(label="Qisqa maqsad", widget=forms.Textarea(attrs={"rows": 2})), "fmt": forms.ChoiceField(label="Format", choices=Script.FORMATS)}),
                                     "Ssenariy yozish", "Ssenariy yozish", action="/studiya/ssenariy/", intro="Rejissyor uslubida: hook, sahnalar vaqt bilan, matn, CTA."))
-        sc = {a.script_id: a.score for a in ScriptAnalysis.objects.filter(script__in=scripts[:20]).order_by("created_at")}
+        sc = {a.script_id: a.score for a in ScriptAnalysis.objects.filter(script__in=[s.pk for s in scripts[:20]]).order_by("created_at")}
         blocks.append(ui.table("Ssenariylar", ["Sarlavha", "Format", "Baho", "Sana", ""],
                                [[s.title, s.get_fmt_display(), _score_badge(sc.get(s.pk)), ui.dt(s.created_at), ui.link("Ochish", f"/studiya/ssenariy/{s.pk}/")] for s in scripts[:20]], "Hali ssenariy yo'q."))
     elif tab == "tahlil":

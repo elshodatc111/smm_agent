@@ -31,9 +31,14 @@ class TelegramChannelConnector:
     def _call(self, method: str, **params):
         token = self.bot.token() if self.bot else self.account.credentials().get("bot_token", "")
         files = params.pop("_files", None)
+        timeout = 30
+        if files:   # yuklash vaqti fayl hajmiga qarab: ~0,3 MB/s deb hisoblab, kamida 2 daqiqa
+            import os
+            mb = sum(os.path.getsize(f.name) for f in files.values() if getattr(f, "name", None) and os.path.exists(f.name)) / 1e6
+            timeout = (15, int(min(900, max(120, mb * 4))))
         resp = request("POST", f"{API}/bot{token}/{method}", key=f"tgbot:{token[:8]}",
                        min_interval=self.limits.min_interval_sec, jitter=self.limits.jitter_sec,
-                       data=params if files else None, json=None if files else params, files=files)
+                       data=params if files else None, json=None if files else params, files=files, timeout=timeout)
         j = resp.json()
         if not j.get("ok"):
             raise AuthError(str(j.get("description")))

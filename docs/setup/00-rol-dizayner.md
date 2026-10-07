@@ -39,9 +39,9 @@ Pastki menyuda **Cloudflare** — fayl yuklash va holatini ko'rish; **+** — ya
 - O'chirilgan fayl Cloudflare'dan faqat qo'lda o'chadi — keraksizini «Cloudflare» menyusidan o'chiring.
 - Har bir yuklash va tahrir Faoliyat jurnaliga yoziladi.
 
-## 6. «Tayyor, ko'rib chiqing» tugmasi
+## 6. Fayl tayyor bo'lgach
 
-Faylni biriktirib bo'lgach, kontent kartasida **✅ Tayyor, ko'rib chiqing** ni bosing. Mas'ul (yoki SMM mutaxassis) ilovada bildirishnoma oladi. Bu tasdiqlash emas — oddiy xabar.
+Faylni postga biriktiring (post kartasida «Fayl qo'shish») va Vazifa tabida **✅ Bajarildi** ni bosing. Tasdiqlash bosqichi yo'q: vaqt belgilangan post o'z vaqtida avtomatik chop etiladi.
 
 ## 7. Cloudflare kutubxonasi
 

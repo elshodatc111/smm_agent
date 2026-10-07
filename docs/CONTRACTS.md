@@ -446,7 +446,6 @@ def run_rules(item, platform) -> "RuleCheckResult":    # status = max severity
 | `truth.unverified_claim` | truth | warn | "100% kafolat", "eng arzon" kabi da'volar |
 | `orig.competitor_similarity` | originality | block ≥0.85, warn ≥0.7 | raqobatchi/hook matniga o'xshashlik (n-gram Jaccard + embedding ixtiyoriy) |
 | `policy.sensitive_topic` | policy | warn | sog'liq/moliya va'dalari |
-| `policy.copyright_media` | policy | warn | musiqa/rasm manbasi belgilanmagan |
 | `lang.orthography_uz` | language | warn | imlo/uslub (lotin, apostrof `ʻ`/`'` birligi) |
 | `ai.draft_not_reviewed` | language | block | AI qoralamasi inson ko'rmagan |
 

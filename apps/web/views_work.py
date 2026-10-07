@@ -121,7 +121,6 @@ def template_initial(tpl: PostTemplate, business, accounts, when: date | None = 
     ini = {"title": fill_vars(tpl.title, business, when), "text": fill_vars(tpl.text, business, when), "media_type": tpl.media_type,
            "brief": tpl.brief, "yt_title": fill_vars(o.get("title", ""), business, when), "yt_tags": ", ".join(o.get("tags") or []),
            "yt_privacy": o.get("privacy", "public"), "media_size": o.get("media_size", "orig"), "fit_mode": o.get("fit_mode", "pad"),
-           "music_source": o.get("music_source", ""),
            "tg_buttons": __import__("apps.web.forms", fromlist=["buttons_to_text"]).buttons_to_text(o.get("buttons") or []),
            "tg_cols": str(o.get("btn_cols") or 2)}
     if tpl.platform:

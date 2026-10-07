@@ -7,7 +7,7 @@ import { Shell } from './components/Shell'
 import { PageSkeleton } from './components/ui'
 import { Login } from './pages/Login'
 import { renderPage } from './pages/registry'
-import { ErrorPage } from './pages/Misc'
+import { ErrorPage } from './pages/Errors'
 
 function PageHost() {
   const loc = useLocation()
