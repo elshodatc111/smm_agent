@@ -44,7 +44,9 @@ export function ContentForm({ d }: { d: any }) {
   const loc = useLocation()
   const F = useMemo(() => Object.fromEntries(schema.fields.map((f) => [f.name, f])) as Record<string, FieldSchema>, [schema])
   const [locals, setLocals] = useState<Local[]>([])
-  const [clouds, setClouds] = useState<Cl[]>([])
+  const [clouds, setClouds] = useState<Cl[]>(() => (d.tpl_files || []).map((f: any) => ({ ...f, ready: true })))
+  const tplKey = JSON.stringify((d.tpl_files || []).map((f: any) => f.id))
+  useEffect(() => { setClouds((d.tpl_files || []).map((f: any) => ({ ...f, ready: true }))) }, [tplKey]) // eslint-disable-line react-hooks/exhaustive-deps
   const [pick, setPick] = useState(false)
   const [drag, setDrag] = useState(false)
   const [mobileTab, setMobileTab] = useState<'edit' | 'preview'>('edit')
@@ -67,10 +69,12 @@ export function ContentForm({ d }: { d: any }) {
   // --- post turlari: tanlangan platformalar kesishmasi
   const typeField = F.media_type
   const allTypes = (typeField?.choices || []).map(([v, l]) => [String(v), l] as [string, string]).filter(([v]) => v)
+  const routePlat = loc.pathname.match(/\/yangi\/(\w+)/)?.[1]
+  const typePlats = plats.length ? plats : routePlat ? [routePlat] : []
   const okTypes = useMemo(() => {
-    if (!plats.length) return allTypes.map(([v]) => v)
-    return allTypes.map(([v]) => v).filter((t) => plats.every((p) => (d.allowed[p] || []).includes(t)))
-  }, [plats, allTypes.length]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!typePlats.length) return allTypes.map(([v]) => v)
+    return allTypes.map(([v]) => v).filter((t) => typePlats.every((p) => (d.allowed[p] || []).includes(t)))
+  }, [typePlats.join(','), allTypes.length]) // eslint-disable-line react-hooks/exhaustive-deps
   const mt: string = values.media_type
   useEffect(() => {
     if (okTypes.length && !okTypes.includes(mt)) set('media_type', okTypes[0])
@@ -267,8 +271,7 @@ export function ContentForm({ d }: { d: any }) {
           </div>
           <div>
             <div className="label">Post turi</div>
-            <Segmented items={allTypes.map(([v, l]) => ({ key: v, label: FMT[v] || l }))} value={mt} onChange={(k) => okTypes.includes(k) && set('media_type', k)} className={cx()} />
-            {allTypes.some(([v]) => !okTypes.includes(v)) && <div className="help">{plats.length ? `Mumkin turlar: ${okTypes.map((t) => FMT[t] || t).join(', ')}` : ''}</div>}
+            <Segmented items={allTypes.filter(([v]) => okTypes.includes(v) || v === mt).map(([v, l]) => ({ key: v, label: FMT[v] || l }))} value={mt} onChange={(k) => okTypes.includes(k) && set('media_type', k)} className={cx()} />
           </div>
         </div>
       </Card>

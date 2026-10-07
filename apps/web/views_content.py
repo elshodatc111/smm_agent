@@ -102,8 +102,8 @@ def _trashed(request, pk, code):
 def content_delete(request, pk):
     item = get_obj(request, ContentItem, pk, "calendar.delete")
     if item.status == "publishing":
-        messages.error(request, "Post hozir nashr qilinmoqda — tugagach o'chiring.")
-        return redirect("content_detail", pk=item.pk)
+        _stop_publishing(item, request.user)
+        item.refresh_from_db()
     was_live = item.status == "published"
     new_status = "draft" if item.status in ("scheduled", "failed") else item.status
     ContentItem.all_objects.filter(pk=item.pk).update(deleted_at=timezone.now(), deleted_by=request.user, status=new_status)
@@ -112,14 +112,35 @@ def content_delete(request, pk):
     return redirect("calendar")
 
 
+def _stop_publishing(item, user) -> None:
+    """Qotib qolgan/qayta urinayotgan nashrni to'xtatadi: kutayotgan vazifalar bekor, maqsadlar 'Xato', post 'Xato' holatiga o'tadi."""
+    from apps.jobs.models import Job
+    Job.objects.filter(type="publish_item", status__in=["pending", "running"], dedupe_key__startswith=f"pub:{item.pk}:").update(status="cancelled")
+    item.targets.filter(status__in=["pending", "publishing", "failed_retry"]).update(status="failed", error="Qo'lda to'xtatildi")
+    ContentItem.all_objects.filter(pk=item.pk, status__in=["publishing", "scheduled"]).update(status="failed")
+    audit("content.stop", user=user, business_id=item.business_id, target=f"item:{item.pk}", detail={"title": item.title})
+
+
+@login_required
+@require_POST
+def content_stop(request, pk):
+    item = get_obj(request, ContentItem, pk, "publish.publish")
+    _stop_publishing(item, request.user)
+    messages.success(request, "Nashr to'xtatildi. Postni tahrirlab qayta rejalashtirishingiz yoki o'chirishingiz mumkin.")
+    return redirect("content_detail", pk=item.pk)
+
+
 @login_required
 @require_POST
 def content_delete_many(request):
     ids = [int(x) for x in request.POST.getlist("ids") if x.isdigit()]
     n = 0
-    for item in _items(request, "calendar.delete").filter(pk__in=ids).exclude(status="publishing"):
+    for item in _items(request, "calendar.delete").filter(pk__in=ids):
         if not perms.can(request.user, "calendar.delete", item.business):
             continue
+        if item.status == "publishing":
+            _stop_publishing(item, request.user)
+            item.refresh_from_db()
         ContentItem.all_objects.filter(pk=item.pk).update(deleted_at=timezone.now(), deleted_by=request.user, status="draft" if item.status in ("scheduled", "failed") else item.status)
         n += 1
     messages.success(request, f"{n} ta post savatga o'tkazildi.") if n else messages.info(request, "Hech narsa tanlanmadi.")
@@ -305,10 +326,12 @@ def content_new(request, platform=None):
         _after_save(request, item, "Kontent yaratildi.")
         return redirect("content_detail", pk=item.pk)
     title = f"Yangi {PLATFORM_INFO[platform]['name']} kontenti" if platform else "Yangi kontent"
-    return _form_response(request, form, title, "/kalendar/yangi/" if platform else "/kalendar/", platform, tpl_list=_tpl_list(request, platform))
+    from apps.web.views_work import template_files
+    return _form_response(request, form, title, "/kalendar/yangi/" if platform else "/kalendar/", platform, tpl_list=_tpl_list(request, platform),
+                          tpl_files=template_files(tpl) if tpl and request.method == "GET" else None)
 
 
-def _form_response(request, form, title, back, platform, item=None, tpl_list=None):
+def _form_response(request, form, title, back, platform, item=None, tpl_list=None, tpl_files=None):
     """Post formasi (yaratish/tahrirlash) uchun React'ga to'liq tavsif: forma maydonlari, akkauntlar, platforma xulosasi."""
     from apps.content.mediafit import size_choices
     ctx = _plat_ctx(request, platform, item)
@@ -316,7 +339,7 @@ def _form_response(request, form, title, back, platform, item=None, tpl_list=Non
         "kind": "content_form", "title": title, "back": back, "form": spa.form_schema(form), "targets": _targets_ctx(form), "acc_map": _acc_map(form),
         "existing_media": _media_list(form.instance), "fixed": ctx.get("fixed", ""), "plat_info": ctx.get("plat_info"), "plat_brief": ctx.get("plat_brief", ""),
         "tpl_list": tpl_list or [], "item_id": item.pk if item else None, "sizes": [[k, v] for k, v in size_choices()],
-        "allowed": {k: list(v) for k, v in ALLOWED_TYPES.items()}, "bound": form.is_bound})
+        "allowed": {k: list(v) for k, v in ALLOWED_TYPES.items()}, "bound": form.is_bound, "tpl_files": tpl_files or []})
 
 
 def _tpl_list(request, platform):
@@ -431,9 +454,11 @@ def content_detail(request, pk):
     if item.status in ("draft", "failed") and not item.scheduled_at and perms.can(u, "calendar.edit", item.business):
         acts.append({"t": "⚡ Eng yaxshi vaqtga qo'yish", "post": f"{base}/avto-vaqt/", "cls": "blue"})
     acts.append({"t": "Qoidalarni tekshirish", "post": f"{base}/tekshir/", "cls": ""})
-    if item.status != "publishing" and perms.can(u, "calendar.delete", item.business):
+    if item.status == "publishing" and perms.can(u, "publish.publish", item.business):
+        acts.append({"t": "Nashrni to'xtatish", "post": f"{base}/toxtat/", "cls": "danger", "confirm": "Nashr to'xtatiladi va post «Xato» holatiga o'tadi. Davom etasizmi?"})
+    if perms.can(u, "calendar.delete", item.business):
         acts.append({"t": "O'chirish (savatga)", "post": f"{base}/ochir/", "cls": "danger",
-                     "confirm": "Post savatga o'tadi (30 kun ichida tiklash mumkin)." + (" Platformada chiqqan post o'chmaydi." if item.status == "published" else "")})
+                     "confirm": "Post savatga o'tadi (30 kun ichida tiklash mumkin)." + (" Platformada chiqqan post o'chmaydi." if item.status == "published" else "") + (" Nashr jarayoni to'xtatiladi." if item.status == "publishing" else "")})
     if item.targets.filter(status__in=["failed", "blocked"]).exists() and perms.can(u, "publish.publish", item.business):
         acts.append({"t": "Xatolarni qayta urinish", "post": f"{base}/qayta/", "cls": "primary"})
     probs = []
@@ -737,6 +762,8 @@ def content_asset(request, pk):
         return redirect("content_detail", pk=item.pk)
     _save_uploads(request, item)
     state.on_item_edited(item, request.user)
+    if item.targets.filter(status__in=["failed", "blocked"]).exists():
+        messages.info(request, "Post avval xato bilan to'xtagan edi. Fayl qo'shildi: endi «Xatolarni qayta urinish» tugmasini bosing.")
     return redirect("content_detail", pk=item.pk)
 
 

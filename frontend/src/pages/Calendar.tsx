@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useLocation, useNavigate, Link } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { CalendarDays, ChevronLeft, ChevronRight, List, Plus, Zap, Image as Img, Video } from 'lucide-react'
-import { Badge, Btn, Card, Drawer, Empty, PageHeader, Segmented } from '../components/ui'
+import { CalendarDays, ChevronLeft, ChevronRight, List, Plus, Trash2, Zap, Image as Img, Video } from 'lucide-react'
+import { Badge, Btn, Card, Drawer, Empty, PageHeader, Segmented, useConfirm } from '../components/ui'
 import { A } from '../components/Blocks'
 import { useApp } from '../lib/app'
 import { request } from '../lib/api'
@@ -25,7 +25,13 @@ function Chip({ it, drag, onDragStart }: { it: Item; drag?: boolean; onDragStart
   )
 }
 
-function Row({ it }: { it: Item }) {
+function Row({ it, canDel }: { it: Item; canDel?: boolean }) {
+  const { submit } = useApp()
+  const confirm = useConfirm()
+  const del = async (e: React.MouseEvent) => {
+    e.preventDefault(); e.stopPropagation()
+    if (await confirm(`«${it.title}» savatga o'tkaziladi (30 kun ichida tiklash mumkin).${it.status === 'publishing' ? ' Nashr jarayoni to\'xtatiladi.' : ''}`, { danger: true })) submit(`/kalendar/${it.id}/ochir/`, undefined, { stay: true })
+  }
   return (
     <Link to={`/kalendar/${it.id}/`} className="flex items-center gap-3 p-2.5 rounded-lg border border-line bg-surface hover:border-brand/50 transition">
       <div className="w-12 h-12 rounded-lg bg-surface2 overflow-hidden shrink-0 grid place-items-center text-muted">
@@ -36,6 +42,7 @@ function Row({ it }: { it: Item }) {
         <div className="text-[12px] text-muted truncate">{it.when || 'Vaqt belgilanmagan'} · {it.format} · {it.platforms.join(' ') || '—'}{it.business ? ` · ${it.business}` : ''}</div>
       </div>
       <Badge tone={statusTone(it.status)}>{it.status_label}</Badge>
+      {canDel && <button type="button" aria-label="O'chirish" title="O'chirish" onClick={del} className="w-8 h-8 grid place-items-center rounded-md text-muted hover:text-bad hover:bg-bad/10 shrink-0"><Trash2 className="w-4 h-4" /></button>}
     </Link>
   )
 }
@@ -134,25 +141,25 @@ export function Calendar({ d }: { d: any }) {
                 {Object.keys(days).sort().map((k) => (
                   <div key={k}>
                     <div className="text-[12px] font-semibold text-muted mb-1.5 px-0.5">{new Date(k + 'T00:00').toLocaleDateString('uz-UZ', { day: 'numeric', month: 'long', weekday: 'short' })}{k === d.today ? ' · bugun' : ''}</div>
-                    <div className="space-y-1.5">{days[k].map((it) => <Row key={it.id} it={it} />)}</div>
+                    <div className="space-y-1.5">{days[k].map((it) => <Row key={it.id} it={it} canDel={d.can_create} />)}</div>
                   </div>
                 ))}
               </div>
             </>
           ) : (
-            <div className="space-y-1.5">{d.list.length ? d.list.map((it: Item) => <Row key={it.id} it={it} />) : <Card><Empty text="Bu oyda rejalashtirilgan post yo'q." /></Card>}</div>
+            <div className="space-y-1.5">{d.list.length ? d.list.map((it: Item) => <Row key={it.id} it={it} canDel={d.can_create} />) : <Card><Empty text="Bu oyda rejalashtirilgan post yo'q." /></Card>}</div>
           )}
         </div>
 
         <Card title={`Qoralamalar (${d.unscheduled.length})`} bodyClass="space-y-1.5 max-h-[calc(100vh-250px)] overflow-y-auto"
           actions={d.can_autotime ? <Btn size="sm" loading={busy} onClick={() => submit('/kalendar/avto-vaqt/')}><Zap className="w-3.5 h-3.5" /> Vaqt qo'yish</Btn> : undefined}>
-          {d.unscheduled.length ? d.unscheduled.map((it: Item) => <Row key={it.id} it={it} />) : <Empty text="Vaqti belgilanmagan post yo'q." />}
+          {d.unscheduled.length ? d.unscheduled.map((it: Item) => <Row key={it.id} it={it} canDel={d.can_create} />) : <Empty text="Vaqti belgilanmagan post yo'q." />}
         </Card>
       </div>
 
       <Drawer open={!!day} onClose={() => setDay(null)} title={day ? new Date(day + 'T00:00').toLocaleDateString('uz-UZ', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' }) : ''}
         footer={day && d.can_create ? <A to={addUrl(day)} className="btn btn-primary"><Plus className="w-4 h-4" /> Shu kunga post qo'shish</A> : undefined}>
-        <div className="space-y-2">{dayItems.length ? dayItems.map((it) => <Row key={it.id} it={it} />) : <Empty text="Bu kunda post yo'q." />}</div>
+        <div className="space-y-2">{dayItems.length ? dayItems.map((it) => <Row key={it.id} it={it} canDel={d.can_create} />) : <Empty text="Bu kunda post yo'q." />}</div>
       </Drawer>
     </div>
   )

@@ -86,6 +86,13 @@ def tick(now: datetime | None = None) -> dict:
             if enqueue("publish_item", {"content_item_id": item.pk, "target_id": t.pk}, queue="publish", priority=1,
                        dedupe_key=f"pub:{item.pk}:{t.pk}", business_id=item.business_id):
                 out["publish"] += 1
+    # qotib qolgan nashr: 30 daqiqadan ortiq "publishing" va ishlayotgan vazifasi yo'q -> "Xato" (foydalanuvchi o'chira/qayta urina oladi)
+    from apps.jobs.models import Job
+    for item in ContentItem.objects.filter(status="publishing", updated_at__lt=now - timedelta(minutes=30)):
+        if Job.objects.filter(type="publish_item", status__in=["pending", "running"], dedupe_key__startswith=f"pub:{item.pk}:").exists():
+            continue
+        item.targets.filter(status__in=["pending", "publishing", "failed_retry"]).update(status="failed", error="Nashr qotib qoldi (30 daqiqa)")
+        ContentItem.objects.filter(pk=item.pk, status="publishing").update(status="failed")
     # tizim ishlari
     hour_key = nl.strftime("%Y%m%d%H")
     enqueue("r2_cleanup", {}, dedupe_key=f"r2c:{hour_key}", dedupe_any_status=True)

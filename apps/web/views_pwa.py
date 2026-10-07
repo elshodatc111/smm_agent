@@ -9,7 +9,7 @@ from django.shortcuts import render
 
 from apps.core.settings_store import get_setting
 
-SW_VERSION = "smm-v14"
+SW_VERSION = "smm-v15"
 
 
 def manifest(request):

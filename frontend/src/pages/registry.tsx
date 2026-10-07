@@ -20,6 +20,7 @@ const Health = L(() => import('./Misc'), 'Health')
 const RoleMatrix = L(() => import('./Misc'), 'RoleMatrix')
 const MediaDetail = L(() => import('./Misc'), 'MediaDetail')
 const ContentChoose = L(() => import('./Misc'), 'ContentChoose')
+const Templates = L(() => import('./Templates'), 'Templates')
 const PostList = L(() => import('./Misc'), 'PostList')
 const PostInsight = L(() => import('./Misc'), 'PostInsight')
 
@@ -37,6 +38,7 @@ function pick(d: any) {
     case 'content_detail': return <ContentDetail d={d} />
     case 'content_choose': return <ContentChoose d={d} />
     case 'cloud': return <Cloud d={d} />
+    case 'templates': return <Templates d={d} />
     case 'settings': return <Settings d={d} />
     case 'notifications': return <Notifications d={d} />
     case 'audit': return <Audit d={d} />

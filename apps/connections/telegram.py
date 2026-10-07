@@ -112,7 +112,9 @@ class TelegramChannelConnector:
         limit = 1024 if req.media_paths else 4096
         if req.text and richtext.visible_len(req.text) > limit:
             probs.append(RuleProblem("tg.text_length", "block", f"Matn {limit} belgidan oshmasligi kerak (teglar hisobga olinmaydi).", "text"))
-        if not req.text and not req.media_paths:
+        if req.media_type in (MediaType.IMAGE, MediaType.VIDEO, MediaType.ALBUM, MediaType.REEL, MediaType.SHORT) and not req.media_paths:
+            probs.append(RuleProblem("tg.no_media", "block", "Post turi rasm/video, lekin fayl biriktirilmagan. «Fayl qo'shish» tugmasi bilan fayl qo'shing."))
+        elif not req.text and not req.media_paths:
             probs.append(RuleProblem("tg.empty", "block", "Matn yoki media kerak."))
         try:
             self._check_admin(self._call("getChat", chat_id=self.chat)["id"])

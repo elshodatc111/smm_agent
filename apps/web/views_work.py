@@ -116,8 +116,29 @@ def fill_vars(text: str, business, when: date | None) -> str:
     return (text or "").replace("{sana}", when.strftime("%d.%m.%Y")).replace("{kun}", WD[when.weekday()]).replace("{biznes}", business.name)
 
 
+def _next_weekday(wd: int) -> date:
+    t = timezone.localdate()
+    return t + timedelta(days=(wd - t.weekday()) % 7)
+
+
+def template_files(tpl: PostTemplate) -> list[dict]:
+    """Shablonga biriktirilgan Cloudflare fayllari (hali mavjudlari)."""
+    from apps.content import temphost
+    from apps.content.models import TempObject
+    ids = [int(x) for x in (tpl.options or {}).get("cloud_ids") or [] if str(x).isdigit()]
+    out = []
+    for o in TempObject.objects.filter(pk__in=ids, status="uploaded").filter(Q(business=tpl.business) | Q(item__business=tpl.business)):
+        ext = (o.filename or o.key).rsplit(".", 1)[-1].lower()
+        out.append({"id": o.pk, "name": o.filename or o.key, "kind": "video" if ext in ("mp4", "mov", "m4v", "webm") else "image", "url": temphost.view_url(o)})
+    order = {i: n for n, i in enumerate(ids)}
+    return sorted(out, key=lambda x: order.get(x["id"], 0))
+
+
 def template_initial(tpl: PostTemplate, business, accounts, when: date | None = None) -> dict:
     o = tpl.options or {}
+    wd = o.get("weekday")
+    if when is None and isinstance(wd, int) and 0 <= wd <= 6:
+        when = _next_weekday(wd)
     ini = {"title": fill_vars(tpl.title, business, when), "text": fill_vars(tpl.text, business, when), "media_type": tpl.media_type,
            "brief": tpl.brief, "yt_title": fill_vars(o.get("title", ""), business, when), "yt_tags": ", ".join(o.get("tags") or []),
            "yt_privacy": o.get("privacy", "public"), "media_size": o.get("media_size", "orig"), "fit_mode": o.get("fit_mode", "pad"),
@@ -148,22 +169,95 @@ def template_from_item(request, pk):
     return redirect("content_detail", pk=item.pk)
 
 
+def _tpl_row(t: PostTemplate, request) -> dict:
+    from apps.web.forms import ALLOWED_TYPES, buttons_to_text
+    o = t.options or {}
+    wd = o.get("weekday")
+    return {"id": t.pk, "name": t.name, "business": t.business.name, "platform": t.platform, "media_type": t.media_type, "title": t.title, "text": t.text,
+            "brief": t.brief, "time_hint": t.time_hint, "weekday": wd if isinstance(wd, int) else "", "uses": t.uses,
+            "tg_buttons": buttons_to_text(o.get("buttons") or []), "tg_cols": str(o.get("btn_cols") or 2),
+            "yt_title": o.get("title", ""), "yt_tags": ", ".join(o.get("tags") or []), "yt_privacy": o.get("privacy", "public"),
+            "files": template_files(t), "can_edit": perms.can(request.user, "calendar.edit", t.business), "can_delete": perms.can(request.user, "calendar.delete", t.business)}
+
+
 @login_required
 @require_permission("calendar.view")
 def template_list(request):
+    from apps.web.forms import ALLOWED_TYPES
+    from . import spa
     ids = [request.business.pk] if request.business else list(perms.businesses_for(request.user, "calendar.view").values_list("pk", flat=True))
     qs = PostTemplate.objects.filter(business_id__in=ids).select_related("business")
     can_c = bool(request.business) and perms.can(request.user, "calendar.create", request.business)
-    rows = []
-    for t in qs:
-        use = ui.link("Ishlatish", f"/kalendar/yangi/?shablon={t.pk}") if can_c else "—"
-        dele = ui.btn("O'chirish", f"/shablonlar/{t.pk}/ochir/", "danger sm", "Shablon o'chirilsinmi?") if perms.can(request.user, "calendar.delete", t.business) else "—"
-        rows.append([t.name, t.business.name, (t.platform or "hammasi").title(), t.get_media_type_display() if hasattr(t, "get_media_type_display") else t.media_type,
-                     (t.text or "")[:90], t.uses, use, dele])
-    blocks = [ui.table("Saqlangan shablonlar", ["Nomi", "Biznes", "Platforma", "Turi", "Matn", "Ishlatilgan", "", ""], rows,
-                       empty="Hali shablon yo'q. Post sahifasida «Shablon sifatida saqlash» tugmasini bosing."),
-              {"type": "text", "title": "O'zgaruvchilar", "text": "Shablon matnida quyidagilarni yozsangiz, post yaratilganda avtomatik almashtiriladi:\n" + VARS_HELP}]
-    return ui.page(request, "Post shablonlari", blocks, subtitle="Tez-tez takrorlanadigan postlar uchun tayyor qolip")
+    return spa.respond(request, {"kind": "templates", "rows": [_tpl_row(t, request) for t in qs], "can_create": can_c, "vars_help": VARS_HELP,
+                                 "allowed": {k: list(v) for k, v in ALLOWED_TYPES.items()}, "weekdays": WD, "has_business": bool(request.business)})
+
+
+def _tpl_apply(request, t: PostTemplate) -> str:
+    """POST ma'lumotlarini shablonga yozadi; xato bo'lsa matn qaytaradi."""
+    from apps.web.forms import ALLOWED_TYPES, parse_buttons
+    from apps.content.models import TempObject
+    P = request.POST
+    name = (P.get("name") or "").strip()[:120]
+    if not name:
+        return "Shablon nomini kiriting."
+    plat = P.get("platform", "")
+    if plat and plat not in ALLOWED_TYPES:
+        return "Platforma noto'g'ri."
+    mt = P.get("media_type", "text")
+    if plat and mt not in ALLOWED_TYPES[plat]:
+        return f"«{plat.title()}» uchun bu post turi mumkin emas."
+    hint = (P.get("time_hint") or "").strip()
+    if hint:
+        try:
+            datetime.strptime(hint, "%H:%M")
+        except ValueError:
+            return "Vaqt HH:MM ko'rinishida bo'lsin (masalan 10:00)."
+    o = dict(t.options or {})
+    for k in ("title", "tags", "privacy", "buttons", "btn_cols", "weekday", "cloud_ids"):
+        o.pop(k, None)
+    if (P.get("yt_title") or "").strip():
+        o["title"] = P["yt_title"].strip()[:100]
+    tags = [x.strip() for x in (P.get("yt_tags") or "").split(",") if x.strip()]
+    if tags:
+        o["tags"] = tags[:30]
+    if P.get("yt_privacy"):
+        o["privacy"] = P["yt_privacy"]
+    cols = P.get("tg_cols") if P.get("tg_cols") in ("1", "2", "3") else "2"
+    rows = parse_buttons(P.get("tg_buttons", ""), int(cols)) if (P.get("tg_buttons") or "").strip() else []
+    if rows:
+        o["buttons"], o["btn_cols"] = rows, int(cols)
+    if P.get("weekday", "").isdigit() and 0 <= int(P["weekday"]) <= 6:
+        o["weekday"] = int(P["weekday"])
+    ids = [int(x) for x in P.getlist("cloud_ids") if x.isdigit()]
+    ok = set(TempObject.objects.filter(pk__in=ids, status="uploaded").filter(Q(business=t.business) | Q(item__business=t.business)).values_list("pk", flat=True))
+    ids = [i for i in ids if i in ok][:10]
+    if ids:
+        o["cloud_ids"] = ids
+    t.name, t.platform, t.media_type, t.title, t.text, t.brief, t.time_hint, t.options = name, plat, mt, (P.get("title") or "").strip()[:200], P.get("text", ""), P.get("brief", ""), hint, o
+    return ""
+
+
+@login_required
+@require_POST
+def template_save(request, pk=None):
+    if pk:
+        t = get_obj(request, PostTemplate, pk, "calendar.edit")
+    else:
+        if not request.business:
+            messages.error(request, "Avval biznesni tanlang.")
+            return redirect("template_list")
+        if not perms.can(request.user, "calendar.create", request.business):
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied
+        t = PostTemplate(business=request.business, created_by=request.user)
+    err = _tpl_apply(request, t)
+    if err:
+        messages.error(request, err)
+        return redirect("template_list")
+    t.save()
+    audit("template.update" if pk else "template.create", user=request.user, business_id=t.business_id, target=f"tpl:{t.pk}", detail={"name": t.name})
+    messages.success(request, f"«{t.name}» shabloni saqlandi.")
+    return redirect("template_list")
 
 
 @login_required

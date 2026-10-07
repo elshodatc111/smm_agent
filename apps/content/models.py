@@ -141,7 +141,8 @@ class TempObject(models.Model):
     backend = models.CharField(max_length=12, blank=True)  # worker_kv|r2|fake ('' = hali yuklanmagan)
     size = models.BigIntegerField(default=0)
     public_url = models.CharField(max_length=800, blank=True)
-    status = models.CharField(max_length=10, default="uploaded")  # pending|uploaded|deleted|failed
+    status = models.CharField(max_length=10, default="uploaded")  # uploading(brauzerdan)|pending|uploaded|deleted|failed
+    progress = models.PositiveSmallIntegerField(default=0)  # 0..100 — Cloudflare'ga yuklash foizi
     item = models.ForeignKey(ContentItem, null=True, blank=True, on_delete=models.SET_NULL, related_name="temp_objects")
     created_at = models.DateTimeField(auto_now_add=True)
     delete_after = models.DateTimeField(null=True, blank=True)

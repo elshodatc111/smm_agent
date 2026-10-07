@@ -36,7 +36,7 @@ class WorkerKVHost:
     def _h(self):
         return {"Authorization": f"Bearer {get_secret('worker.admin_token')}"}
 
-    def upload(self, path: str, key: str, ttl_sec: int) -> str:
+    def upload(self, path: str, key: str, ttl_sec: int, progress=None) -> str:
         with open(path, "rb") as f:
             try:
                 r = requests.put(f"{self._base()}/admin/tmp/{key}", params={"ttl": max(ttl_sec, 60)}, headers=self._h(), data=f, timeout=120)
@@ -53,6 +53,24 @@ class WorkerKVHost:
             pass
 
 
+_BUCKET_RE = __import__("re").compile(r"^[a-z0-9][a-z0-9.\-_]{1,62}$")
+
+
+def r2_bucket() -> str:
+    """Bucket nomi. Foydalanuvchi URL kiritib qo'ygan bo'lsa (https://<id>.r2.cloudflarestorage.com/<bucket>) nomini ajratib oladi;
+    nom topilmasa PlatformError (tushunarli matn bilan) ko'taradi."""
+    raw = (get_setting("r2.bucket") or "").strip()
+    if raw.lower().startswith(("http://", "https://")) or "cloudflarestorage.com" in raw.lower():
+        from urllib.parse import urlparse
+        path = urlparse(raw if "://" in raw else "https://" + raw).path.strip("/")
+        raw = path.split("/")[0] if path else ""
+    if not _BUCKET_RE.match(raw.lower()):
+        raise PlatformError("R2 bucket nomi noto'g'ri", user_message_uz=(
+            "«R2 Bucket» maydoniga URL emas, faqat bucket NOMI yozilishi kerak (masalan: smm-media). "
+            "Nomni Cloudflare → R2 → Buckets ro'yxatidan ko'ring va Sozlamalar → Kalitlar'da to'g'rilang."))
+    return raw
+
+
 class R2Host:
     name = "r2"
 
@@ -61,40 +79,61 @@ class R2Host:
 
     def _client(self):
         import boto3
-        return boto3.client("s3", endpoint_url=f"https://{get_setting('r2.account_id')}.r2.cloudflarestorage.com",
+        from botocore.config import Config
+        return boto3.client("s3", config=Config(connect_timeout=15, read_timeout=120, retries={"max_attempts": 4, "mode": "standard"}), endpoint_url=f"https://{get_setting('r2.account_id')}.r2.cloudflarestorage.com",
                             aws_access_key_id=get_secret("r2.access_key_id"), aws_secret_access_key=get_secret("r2.secret_access_key"),
                             region_name="auto")
 
-    def upload(self, path: str, key: str, ttl_sec: int) -> str:
+    def upload(self, path: str, key: str, ttl_sec: int, progress=None) -> str:
+        """8 MB li bo'laklar bilan parallel (multipart) yuklaydi; progress(foiz) chaqiriladi."""
+        from boto3.s3.transfer import TransferConfig
         c = self._client()
-        c.upload_file(path, get_setting("r2.bucket"), key)
+        total = max(os.path.getsize(path), 1)
+        done = [0]
+
+        def cb(n):
+            done[0] += n
+            if progress:
+                progress(min(99, int(done[0] * 100 / total)))
+        mb = 1024 * 1024
+        c.upload_file(path, r2_bucket(), key, Callback=cb, Config=TransferConfig(multipart_threshold=8 * mb, multipart_chunksize=8 * mb, max_concurrency=4))
         return self.url_for(key, ttl_sec)
 
     def url_for(self, key: str, ttl_sec: int = 6 * 3600) -> str:
         """Imzolangan vaqtinchalik havola (R2 uchun eng ko'pi 7 kun)."""
-        return self._client().generate_presigned_url("get_object", Params={"Bucket": get_setting("r2.bucket"), "Key": key},
+        return self._client().generate_presigned_url("get_object", Params={"Bucket": r2_bucket(), "Key": key},
                                                      ExpiresIn=min(max(ttl_sec, 3600), 7 * 24 * 3600))
 
     def test(self) -> str:
         """Ulanishni tekshiradi; xato bo'lsa matn qaytaradi, yaxshi bo'lsa ''."""
         try:
-            self._client().head_bucket(Bucket=get_setting("r2.bucket"))
+            c = self._client()
+            key = f"_test/{uuid.uuid4().hex}.txt"
+            # HeadBucket ba'zi bucket-cheklangan kalitlarda 403 beradi, shuning uchun haqiqiy amal (yozish/o'qish/o'chirish) bilan tekshiramiz
+            c.put_object(Bucket=r2_bucket(), Key=key, Body=b"ok")
+            c.get_object(Bucket=r2_bucket(), Key=key)["Body"].read()
+            c.delete_object(Bucket=r2_bucket(), Key=key)
             return ""
+        except PlatformError as e:
+            return e.user_message_uz
         except Exception as e:  # noqa: BLE001
             msg = str(e)
+            if "403" in msg or "AccessDenied" in msg or "Forbidden" in msg:
+                return ("Kalitga bu bucket («%s») uchun yozish ruxsati berilmagan (403). Cloudflare → R2 → Manage API Tokens'da kalitni "
+                        "«Object Read & Write» ruxsati va aynan shu bucket (yoki barcha bucketlar) uchun yarating va yangi Access Key/Secret ni kiriting." % get_setting("r2.bucket"))
             for secret in (get_secret("r2.secret_access_key"), get_secret("r2.access_key_id")):
                 if secret:
                     msg = msg.replace(secret, "***")
             return msg[:250]
 
     def delete(self, key: str) -> None:
-        self._client().delete_object(Bucket=get_setting("r2.bucket"), Key=key)
+        self._client().delete_object(Bucket=r2_bucket(), Key=key)
 
     def list_keys(self) -> list[str]:
         c = self._client()
         out, token = [], None
         while True:
-            kw = {"Bucket": get_setting("r2.bucket"), **({"ContinuationToken": token} if token else {})}
+            kw = {"Bucket": r2_bucket(), **({"ContinuationToken": token} if token else {})}
             r = c.list_objects_v2(**kw)
             out += [o["Key"] for o in r.get("Contents", [])]
             if not r.get("IsTruncated"):
@@ -107,7 +146,7 @@ class FakeHost:
     store: dict[str, int] = {}
 
     def available(self, size): return True
-    def upload(self, path, key, ttl_sec):
+    def upload(self, path, key, ttl_sec, progress=None):
         FakeHost.store[key] = os.path.getsize(path)
         return f"https://tmp.example/{key}"
     def delete(self, key): FakeHost.store.pop(key, None)
@@ -164,7 +203,7 @@ def _life(host_name: str, ttl_hours):
     return hours * 3600, timezone.now() + timedelta(hours=hours)
 
 
-def host_file(path: str, item=None, *, fake: bool = False, ttl_hours: int | None = None, asset=None, business=None, obj: TempObject | None = None) -> TempObject:
+def host_file(path: str, item=None, *, fake: bool = False, ttl_hours: int | None = None, asset=None, business=None, obj: TempObject | None = None, progress=None) -> TempObject:
     """Faylni Cloudflare'ga yuklaydi. obj berilsa (kutayotgan yozuv) — o'sha yangilanadi."""
     size = os.path.getsize(path)
     ext = os.path.splitext(path)[1].lower()
@@ -173,11 +212,11 @@ def host_file(path: str, item=None, *, fake: bool = False, ttl_hours: int | None
     if h is not None:
         ttl, after = _life(h.name, ttl_hours)
         try:
-            url = h.upload(path, key, ttl)
+            url = h.upload(path, key, ttl, progress=progress)
         except PlatformError as e:
             last = e
         else:
-            fields = dict(backend=h.name, size=size, public_url=url, status="uploaded", error="", delete_after=after)
+            fields = dict(backend=h.name, size=size, public_url=url, status="uploaded", error="", delete_after=after, progress=100)
             if obj:
                 for k, v in fields.items():
                     setattr(obj, k, v)
@@ -208,8 +247,16 @@ def upload_pending(obj: TempObject, *, fake: bool = False) -> TempObject:
         obj.status, obj.error = "failed", "Asl fayl topilmadi"
         obj.save(update_fields=["status", "error"])
         return obj
+    last = [-1]
+
+    def progress(pct: int) -> None:
+        if pct != last[0]:
+            last[0] = pct
+            TempObject.objects.filter(pk=obj.pk).update(progress=pct)
+    obj.progress, obj.error = 0, ""
+    obj.save(update_fields=["progress", "error"])
     try:
-        res = host_file(path, obj.item, fake=fake, asset=obj.asset, obj=obj)
+        res = host_file(path, obj.item, fake=fake, asset=obj.asset, obj=obj, progress=progress)
         if obj.local_path and not obj.asset_id:   # qo'lda yuklangan: mahalliy nusxa kerak emas
             try:
                 os.remove(obj.local_path)
@@ -222,8 +269,25 @@ def upload_pending(obj: TempObject, *, fake: bool = False) -> TempObject:
         obj.status, obj.error = "failed", "Cloudflare joyi to'lgan — keraksiz fayllarni o'chiring"
     except PlatformError as e:
         obj.status, obj.error = "failed", (getattr(e, "user_message_uz", "") or str(e))[:300]
+    except Exception as e:  # noqa: BLE001 — qotib qolmasin: har qanday xato "Xato" holati va tushunarli matn bilan ko'rinadi
+        obj.status, obj.error = "failed", _friendly(e)
     obj.save(update_fields=["status", "error"])
     return obj
+
+
+def _friendly(e: Exception) -> str:
+    msg = str(e)
+    low = msg.lower()
+    if "bucket" in low and ("invalid" in low or "nosuchbucket" in low or "does not exist" in low):
+        return "R2 bucket topilmadi yoki nomi noto'g'ri. Sozlamalar → Kalitlar'da «R2 Bucket» maydoniga faqat nom yozing."
+    if "accessdenied" in low or "invalidaccesskey" in low or "signature" in low or "403" in low:
+        return "R2 kaliti noto'g'ri yoki ruxsat yo'q (Access Key / Secret / Account ID ni tekshiring)."
+    if "timed out" in low or "timeout" in low or "connection" in low:
+        return "Cloudflare'ga ulanishda tarmoq xatosi. Qayta urinib ko'ring."
+    for sec in (get_secret("r2.secret_access_key"), get_secret("r2.access_key_id")):
+        if sec:
+            msg = msg.replace(sec, "***")
+    return ("Yuklash xatosi: " + msg)[:300]
 
 
 def view_url(obj: TempObject) -> str:
