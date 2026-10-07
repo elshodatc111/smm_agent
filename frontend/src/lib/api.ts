@@ -47,6 +47,10 @@ export async function request(path: string, opts: { method?: string; body?: Body
   let data: any = null
   if (ct.includes('json')) data = await res.json().catch(() => null)
   else if (res.status !== 204) data = await res.text().catch(() => '')
+  if (data && data.kind === 'external' && data.url) {   // server tashqi saytga (OAuth) yo'naltirmoqchi: brauzer o'zi o'tadi
+    location.assign(data.url)
+    return new Promise<Result>(() => {})
+  }
   if (data && Array.isArray(data.messages) && !opts.silent) emit(data.messages)
   const u = new URL(res.url, location.origin)
   const final = u.pathname + u.search
@@ -65,6 +69,7 @@ export function isAppPath(url: string): boolean {
   if (!url || !url.startsWith('/') || url.startsWith('//')) return false
   const p = url.split('?')[0]
   if (/^\/(static|media|api|h|brend|sw\.js|manifest|oflayn|admin)\b/.test(p)) return false
+  if (/^\/(ulanishlar\/oauth|oauth)\//.test(p)) return false   // OAuth: tashqi saytga o'tadi — butun sahifa yo'naltirishi kerak
   if (/\/fayl\/(pdf|xlsx)?\/?$/.test(p) && !/\/fayl\/\d+/.test(p)) return false
   if (/^\/cloudflare\/\d+\/fayl\/$/.test(p)) return false
   if (/^\/kalendar\/\d+\/media\/\d+\/$/.test(p)) return false

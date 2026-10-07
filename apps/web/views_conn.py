@@ -125,11 +125,22 @@ def _state(request, provider: str) -> str:
     return f"{meta}.{nonce}"
 
 
+def _go_external(request, url: str):
+    """Tashqi saytga (Meta/Google) o'tish: React (fetch) so'rovida JSON, oddiy brauzer so'rovida 302."""
+    if request.headers.get("X-Requested-With") == "fetch":
+        from django.http import JsonResponse
+        return JsonResponse({"kind": "external", "url": url})
+    return redirect(url)
+
+
 @login_required
 @require_permission("connections.create")
 def oauth_start(request, provider):
-    if provider not in ("instagram", "youtube") or not request.business:
+    if provider not in ("instagram", "youtube"):
         raise Http404
+    if not request.business:
+        messages.info(request, "Avval yuqoridan biznesni tanlang, keyin ulang.")
+        return redirect("connection_list")
     if settings.USE_FAKES:   # kalitsiz demo: haqiqiy OAuth yo'q, ulanish to'g'ridan-to'g'ri yaratiladi
         acc = SocialAccount(business=request.business, platform=provider, name=f"Demo {provider}", handle=f"demo_{provider}", external_id=f"fake-{provider}", status="active")
         acc.set_credentials({"access_token": "fake", "refresh_token": "fake"})
@@ -142,11 +153,11 @@ def oauth_start(request, provider):
         if not get_setting("meta.app_id", ""):
             messages.error(request, "Avval Sozlamalar → API kalitlar bo'limida Meta App ID/Secret kiriting (Yo'riqnomaga qarang).")
             return redirect("connection_new")
-        return redirect(instagram.authorize_url(uri, state))
+        return _go_external(request, instagram.authorize_url(uri, state))
     if not get_setting("google.client_id", ""):
         messages.error(request, "Avval Sozlamalar → API kalitlar bo'limida Google Client ID/Secret kiriting.")
         return redirect("connection_new")
-    return redirect(youtube.authorize_url(uri, state))
+    return _go_external(request, youtube.authorize_url(uri, state))
 
 
 @login_required
