@@ -153,11 +153,17 @@ def oauth_start(request, provider):
 
 @login_required
 def oauth_done(request, provider):
-    saved = request.session.pop("oauth", None)
+    saved = request.session.get("oauth")
     state = request.GET.get("state", "")
-    if not saved or saved.get("provider") != provider or state.split(".")[-1] != saved["nonce"]:
-        messages.error(request, "OAuth holati mos kelmadi (muddati o'tgan bo'lishi mumkin). Qaytadan urinib ko'ring.")
+    if not saved:
+        messages.error(request, "Ulanish holati topilmadi: sessiya bu manzilda yo'q. Tizimni ulanishni boshlagan manzil bilan (masalan http://192.168.100.22:8765) oching va bitta oynada qaytadan urinib ko'ring. "
+                                "(Sahifani yangilamang, orqaga qaytmang.)")
         return redirect("connection_list")
+    if saved.get("provider") != provider or state.split(".")[-1] != saved["nonce"]:
+        # eski/parallel urinish: joriy urinishni saqlab qolamiz (yangi urinishni buzmaslik uchun pop qilmaymiz)
+        messages.error(request, "Bu ulanish urinishi eskirgan (boshqa oynada yangi urinish boshlangan). Qolgan Instagram/Google oynalarini yoping va faqat bitta oynada qaytadan urinib ko'ring.")
+        return redirect("connection_list")
+    request.session.pop("oauth", None)
     if request.GET.get("error") or not request.GET.get("code"):
         messages.error(request, f"Ulanish bekor qilindi: {request.GET.get('error_description') or request.GET.get('error', '')}")
         return redirect("connection_list")
