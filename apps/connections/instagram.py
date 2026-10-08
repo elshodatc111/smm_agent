@@ -42,7 +42,7 @@ def _unreadable(e: Exception) -> bool:
 
 def authorize_url(redirect_uri: str, state: str, scopes: list[str] | None = None) -> str:
     q = {"client_id": get_setting("meta.app_id", ""), "redirect_uri": redirect_uri, "response_type": "code",
-         "scope": ",".join(scopes or SCOPES), "state": state, "enable_fb_login": "0", "force_authentication": "1"}
+         "scope": ",".join(scopes or SCOPES), "state": state, "enable_fb_login": "0", "force_authentication": "1", "force_reauth": "true"}
     return "https://www.instagram.com/oauth/authorize?" + urlencode(q)
 
 
