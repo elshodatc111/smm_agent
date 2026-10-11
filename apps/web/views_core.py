@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 
@@ -11,7 +10,7 @@ from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.http import Http404, HttpResponse
-from django.shortcuts import redirect
+from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
@@ -22,8 +21,6 @@ from apps.accounts.services import perms
 from apps.core.models import AuditLog, Notification, NotificationPref
 from apps.core.notify import TYPES
 from apps.metrics import analytics as an
-
-from . import dash, spa
 
 
 def login_view(request):
@@ -40,7 +37,7 @@ def login_view(request):
             nxt = request.POST.get("next") or "/"
             return redirect(nxt if url_has_allowed_host_and_scheme(nxt, {request.get_host()}) else "/")
         err = err or "Login yoki parol noto'g'ri."
-    return spa.respond(request, {"kind": "login", "error": err, "next": request.GET.get("next", ""), "brand": spa.brand_payload()}, 401 if err else 200)
+    return render(request, "auth/login.html", {"error": err, "next": request.GET.get("next", "")})
 
 
 @require_POST
@@ -67,43 +64,45 @@ def business_select(request):
         request.session["business_id"] = int(bid)
     else:
         request.session.pop("business_id", None)
-    return HttpResponse(status=204)
+    return redirect(request.META.get("HTTP_REFERER") or "dashboard")
 
 
-def _biz_summary(b):
+def _biz_summary(b, user):
     c = an.compare_periods(b, 30)
     accs = list(b.accounts.filter(archived_at__isnull=True))
     bad = [a for a in accs if a.status in ("error", "token_expiring")]
-    from apps.content.models import ContentTarget
-    sched = ContentTarget.objects.filter(account__business=b, status="pending", item__status__in=["scheduled", "approved"], item__deleted_at__isnull=True,
-                                         item__scheduled_at__gte=timezone.now()).count()
-    return {"id": b.pk, "name": b.name, "kpi": dash.kpi_json(c["current"], c["delta_pct"]), "accounts": len(accs), "scheduled": sched,
-            "problems": [{"id": a.pk, "name": a.name, "status": a.get_status_display()} for a in bad]}
+    return {"b": b, "kpi": c["current"], "delta": c["delta_pct"], "accounts": len(accs), "problems": bad}
 
 
 @login_required
 @require_permission("dashboard.view")
 def dashboard(request):
     b = request.business
+    ctx = {}
     if b is None:
-        rows = [_biz_summary(x) for x in perms.businesses_for(request.user, "dashboard.view")]
-        return spa.respond(request, {"kind": "dashboard_all", "rows": rows})
+        rows = [_biz_summary(x, request.user) for x in perms.businesses_for(request.user, "dashboard.view")]
+        ctx["rows"] = rows
+        return render(request, "dashboard_all.html", ctx)
+    c = an.compare_periods(b, 30)
+    series = an.business_follower_series(b, 30)
     from apps.content.models import ContentItem
     from apps.jobs.models import Job
-    c = an.compare_periods(b, 30)
-    types = an.by_type(b)
-    accounts = [dash.account_row(b, a) for a in b.accounts.filter(archived_at__isnull=True)]
-    upcoming = ContentItem.objects.filter(business=b, scheduled_at__gte=timezone.now(), status__in=["scheduled", "draft", "approved"]).order_by("scheduled_at")[:6]
-    freq = an.post_frequency(b)
-    return spa.respond(request, {
-        "kind": "dashboard", "business": {"id": b.pk, "name": b.name}, "kpi": dash.kpi_json(c["current"], c["delta_pct"]),
-        "per_week": round(freq.get("per_week") or 0, 1) if isinstance(freq, dict) else 0,
-        "series": an.business_follower_series(b, 30), "types": [{"type": t["type"], "count": t["count"], "er": round((t["avg_er"] or 0) * 100, 2)} for t in types],
-        "top": [dash.post_json(r) for r in an.top_posts(b, 5)], "worst": [dash.post_json(r) for r in an.top_posts(b, 3, worst=True)],
-        "upcoming": [{"id": i.pk, "title": i.title, "at": i.scheduled_at.isoformat(), "status": i.get_status_display(), "type": i.media_type} for i in upcoming],
-        "accounts": accounts,
-        "imports": [{"id": j.pk, "progress": j.progress, "status": j.get_status_display()} for j in
-                    Job.objects.filter(business_id=b.pk, type="historical_import", status__in=["pending", "running"])]})
+    ctx.update(b=b, kpi=c["current"], delta=c["delta_pct"], series=series,
+               top=an.top_posts(b, 5), worst=an.top_posts(b, 3, worst=True), types=an.by_type(b),
+               upcoming=ContentItem.objects.filter(business=b, scheduled_at__gte=timezone.now(), status__in=["scheduled", "draft"]).order_by("scheduled_at")[:6],
+               accounts=b.accounts.filter(archived_at__isnull=True),
+               imports=Job.objects.filter(business_id=b.pk, type="historical_import", status__in=["pending", "running"]),
+               freq=an.post_frequency(b))
+    try:
+        from apps.businesses.passport import completeness
+        from apps.goals import services as gs
+        if perms.can(request.user, "goals.view", b):
+            ctx["goals"] = gs.summary_for(b, 4)
+            ctx["goal_free"] = gs.accounts_without_goal(b)
+        ctx["passport"] = completeness(b)
+    except Exception:  # noqa: BLE001 — dashboard hech qachon yiqilmasin
+        pass
+    return render(request, "dashboard.html", ctx)
 
 
 @login_required
@@ -115,12 +114,7 @@ def notification_list(request):
         return redirect("notification_list")
     page = Paginator(qs, 30).get_page(request.GET.get("p"))
     prefs = {p.type: p for p in NotificationPref.objects.filter(user=request.user)}
-    return spa.respond(request, {
-        "kind": "notifications", "pager": spa.pager_json(page),
-        "items": [{"id": n.pk, "title": n.title, "body": n.body[:240], "link": n.link, "severity": n.severity, "read": bool(n.read_at),
-                   "at": n.created_at.isoformat()} for n in page],
-        "types": [{"key": k, "label": v, "web": prefs[k].web if k in prefs else True, "telegram": prefs[k].telegram if k in prefs else False}
-                  for k, v in TYPES.items()]})
+    return render(request, "notifications.html", {"page": page, "types": TYPES, "prefs": prefs})
 
 
 @login_required
@@ -142,13 +136,11 @@ def audit_list(request):
     q = request.GET.get("q")
     if q:
         qs = qs.filter(action__icontains=q)
-    page = Paginator(qs, 50).get_page(request.GET.get("p"))
-    return spa.respond(request, {"kind": "audit", "q": q or "", "pager": spa.pager_json(page), "rows": [
-        {"at": a.at.isoformat(), "user": str(a.user) if a.user else "—", "action": a.action, "target": a.target, "detail": json.dumps(a.detail, ensure_ascii=False)[:200] if a.detail else ""}
-        for a in page]})
+    return render(request, "audit.html", {"page": Paginator(qs, 50).get_page(request.GET.get("p")), "q": q or ""})
 
 
 GUIDE_DIR = Path(settings.BASE_DIR) / "docs" / "setup"
+GUIDE_TITLES = {}
 
 
 def _guides():
@@ -162,7 +154,7 @@ def _guides():
 @login_required
 @require_permission("guides.view")
 def guide_index(request):
-    return spa.respond(request, {"kind": "guide", "guides": _guides(), "slug": "", "html": ""})
+    return render(request, "guides_index.html", {"guides": _guides()})
 
 
 @login_required
@@ -174,4 +166,4 @@ def guide_view(request, slug):
     if not f.exists():
         raise Http404
     html = markdown.markdown(f.read_text(encoding="utf-8"), extensions=["tables", "fenced_code", "toc", "sane_lists"])
-    return spa.respond(request, {"kind": "guide", "guides": _guides(), "slug": slug, "html": html})
+    return render(request, "guide.html", {"html": html, "guides": _guides(), "slug": slug})

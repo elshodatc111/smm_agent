@@ -25,16 +25,20 @@ from apps.core.audit import audit
 from apps.jobs.queue import enqueue
 from apps.links import services as lsvc
 from apps.links.models import ShortLink, WorkerStatus
-from apps.media_analysis.models import MediaFile
+from apps.media_analysis.models import MediaAnalysis, MediaFile
 from apps.reports.generator import default_period
 from apps.reports.models import Report, ReportSchedule
 from apps.studio import services as st
-from . import spa, ui
+from . import ui
 from .common import get_obj
 
 
 def mkform(fields: dict, data=None):
     return type("F", (forms.Form,), fields)(data)
+
+
+def _need_biz(request):
+    return request.business
 
 
 def _ai_call(request, fn, *a, ok="Tayyor.", **kw):
@@ -53,7 +57,8 @@ STUDIO_TABS = [("umumiy", "Umumiy"), ("reja", "Rejalar"), ("ssenariy", "Ssenariy
 
 
 def _tabs_html(cur):
-    return ui.tabs([(lbl, f"?tab={k}", k == cur) for k, lbl in STUDIO_TABS])
+    return '<div class="row" style="flex-wrap:wrap;gap:8px">' + "".join(
+        f'<a class="pill" style="{"background:#2563eb;color:#fff" if k == cur else ""}" href="?tab={k}">{lbl}</a>' for k, lbl in STUDIO_TABS) + "</div>"
 
 
 def _score_badge(v, mx=100):
@@ -71,11 +76,12 @@ def studio_home(request):
         messages.info(request, "AI studiya uchun biznesni tanlang.")
         return redirect("dashboard")
     from apps.ai_router.models import AIGeneration
+    from apps.media_analysis.models import MediaAnalysis
     from apps.studio.models import ContentPlan, Hook, Script, ScriptAnalysis
     tab = request.GET.get("tab", "umumiy")
     tab = tab if tab in dict(STUDIO_TABS) else "umumiy"
     plat = forms.ChoiceField(label="Platforma", choices=[("telegram", "Telegram"), ("instagram", "Instagram"), ("youtube", "YouTube")])
-    blocks = [_tabs_html(tab)]
+    blocks = [{"type": "html", "html": _tabs_html(tab)}]
     plans = ContentPlan.objects.filter(business=b).order_by("-created_at")
     scripts = Script.objects.filter(business=b).order_by("-created_at")
     if tab == "umumiy":
@@ -96,7 +102,7 @@ def studio_home(request):
     elif tab == "ssenariy":
         blocks.append(ui.form_block(mkform({"brief": forms.CharField(label="Qisqa maqsad", widget=forms.Textarea(attrs={"rows": 2})), "fmt": forms.ChoiceField(label="Format", choices=Script.FORMATS)}),
                                     "Ssenariy yozish", "Ssenariy yozish", action="/studiya/ssenariy/", intro="Rejissyor uslubida: hook, sahnalar vaqt bilan, matn, CTA."))
-        sc = {a.script_id: a.score for a in ScriptAnalysis.objects.filter(script__in=[s.pk for s in scripts[:20]]).order_by("created_at")}
+        sc = {a.script_id: a.score for a in ScriptAnalysis.objects.filter(script__in=scripts[:20]).order_by("created_at")}
         blocks.append(ui.table("Ssenariylar", ["Sarlavha", "Format", "Baho", "Sana", ""],
                                [[s.title, s.get_fmt_display(), _score_badge(sc.get(s.pk)), ui.dt(s.created_at), ui.link("Ochish", f"/studiya/ssenariy/{s.pk}/")] for s in scripts[:20]], "Hali ssenariy yo'q."))
     elif tab == "tahlil":
@@ -255,11 +261,9 @@ def media_detail(request, pk):
     a = m.analyses.order_by("-created_at").first()
     tech = [(k, v) for k, v in ((a.technical if a else {}) or {}).items() if not isinstance(v, (list, dict))]
     tr = a.transcript if a else None
-    return spa.respond(request, {
-        "kind": "media_detail", "id": m.pk, "name": m.original_name, "business": m.business.name, "size": m.size, "at": ui.dt(m.created_at), "status": m.status,
-        "card": normalize_media(a.ai) if a else None, "tech": [[k, str(v)] for k, v in tech], "degraded": bool(a and a.degraded), "has_analysis": bool(a),
-        "transcript": (tr if isinstance(tr, str) else (tr or {}).get("text", "")) if tr else "", "raw": json.dumps(a.ai, ensure_ascii=False, indent=2) if a and a.ai else "",
-        "running": m.status in ("pending", "running")})
+    return render(request, "media_detail.html", {"title": "Media tahlil natijasi", "m": m, "a": a, "card": normalize_media(a.ai) if a else None, "tech": tech,
+                                                 "transcript": (tr if isinstance(tr, str) else (tr or {}).get("text", "")) if tr else "", "raw": json.dumps(a.ai, ensure_ascii=False, indent=2) if a and a.ai else "",
+                                                 "running": m.status in ("pending", "running")})
 
 
 # ---------------- Reklama ----------------
@@ -301,7 +305,7 @@ def ads_forecast(request):
         messages.error(request, "Byudjetni raqam bilan kiriting.")
         return redirect("ads_home")
     rows = [[k, v["impressions"], v["clicks"], v["leads"], v["sales"], v["revenue"], v["roi"], v["cost_per_lead"]] for k, v in fc["scenarios"].items()]
-    return ui.page(request, "Prognoz", [ui.table("3 stsenariy", ["Stsenariy", "Ko'rsatuv", "Klik", "Murojaat", "Sotuv", "Tushum", "ROI", "Murojaat narxi"], rows),
+    return ui.page(request, "Prognoz", [ui.table("3 stsenariy", ["Stsenariy", "Ko'rsatuv", "Klik", "Lead", "Sotuv", "Tushum", "ROI", "Lead narxi"], rows),
                                       ui.table("Taxminlar manbasi", ["Ko'rsatkich", "Qiymat", "Manba", "Namuna"], [[k, v["value"], v["source"], v["sample"]] for k, v in fc["assumptions"].items()]),
                                       {"type": "text", "title": "Ogohlantirish", "text": fc["disclaimer"] + ("\n" + "\n".join(fc["warnings"]) if fc["warnings"] else "")}],
                    toolbar=[{"label": "Orqaga", "url": "/reklama/"}])
@@ -326,10 +330,10 @@ def ads_campaign(request, pk):
     c = get_obj(request, AdCampaign, pk, "ads.view")
     res = c.results.order_by("-date")[:30]
     blocks = [{"type": "text", "title": "Kampaniya loyihasi (targetolog kabinetda o'zi yaratadi)", "text": json.dumps(c.plan, ensure_ascii=False, indent=2)},
-              ui.table("Natijalar", ["Sana", "Sarf", "Ko'rsatuv", "Klik", "Murojaat", "Sotuv", "Tushum"], [[r.date, r.spend, r.impressions, r.clicks, r.leads, r.sales, r.revenue] for r in res]),
+              ui.table("Natijalar", ["Sana", "Sarf", "Ko'rsatuv", "Klik", "Lead", "Sotuv", "Tushum"], [[r.date, r.spend, r.impressions, r.clicks, r.leads, r.sales, r.revenue] for r in res]),
               ui.kv("Reja va fakt farqi", [(k, v) for k, v in ads.campaign_variance(c).get("diff_pct", {}).items()] if c.results.exists() else [("—", "Natija kiritilmagan")])]
     blocks.append(ui.form_block(mkform({"date": forms.DateField(label="Sana", initial=date.today, widget=forms.DateInput(attrs={"type": "date"})), "spend": forms.FloatField(label="Sarf", initial=0),
-                                        "impressions": forms.IntegerField(label="Ko'rsatuv", initial=0), "clicks": forms.IntegerField(label="Klik", initial=0), "leads": forms.IntegerField(label="Murojaat", initial=0),
+                                        "impressions": forms.IntegerField(label="Ko'rsatuv", initial=0), "clicks": forms.IntegerField(label="Klik", initial=0), "leads": forms.IntegerField(label="Lead", initial=0),
                                         "sales": forms.IntegerField(label="Sotuv", initial=0), "revenue": forms.FloatField(label="Tushum", initial=0)}),
                                 "Natija kiritish (qo'lda)", "Saqlash", action=f"/reklama/{c.pk}/natija/"))
     return ui.page(request, c.name, blocks, subtitle=c.business.name, toolbar=[{"label": "Orqaga", "url": "/reklama/"}])

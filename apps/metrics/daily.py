@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from apps.core.utils import tz
 
-from .models import AccountMetrics, DailyStat, Post, Story
+from .models import AccountMetrics, DailyStat, Lead, Post, PostMetricsHistory, Story, StoryMetricsHistory
 
 
 def _bounds(day: date):
@@ -67,10 +67,11 @@ def rollup_business(business, day: date) -> int:
             tot["followers"] += f
         for k in ("followers_delta", "posts", "stories", "views", "reach", "likes", "comments", "shares", "saves", "story_views"):
             tot[k] += vals[k]
+    leads = Lead.objects.filter(business=business, created_at__gte=a, created_at__lt=b).count()
     DailyStat.objects.update_or_create(business=business, account=None, day=day, defaults=dict(
         platform="", followers=tot["followers"] if have_f else None, followers_delta=tot["followers_delta"], posts=tot["posts"], stories=tot["stories"],
         views=tot["views"], reach=tot["reach"], likes=tot["likes"], comments=tot["comments"], shares=tot["shares"], saves=tot["saves"],
-        story_views=tot["story_views"], link_clicks=_clicks(business.pk, a, b)))
+        story_views=tot["story_views"], link_clicks=_clicks(business.pk, a, b), leads=leads))
     return n + 1
 
 

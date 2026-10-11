@@ -2,14 +2,13 @@
 from __future__ import annotations
 
 import json
-import re
 
 from django import forms
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.http import Http404, HttpResponseForbidden
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
@@ -26,7 +25,7 @@ from apps.jobs.models import Job
 from apps.jobs.queue import enqueue
 from apps.tgbot.bot import create_invite
 from apps.tgbot.models import ClientBotUser, ClientInvite
-from . import spa, ui
+from . import ui
 
 # ---------------- Tizim holati ----------------
 
@@ -35,10 +34,13 @@ from . import spa, ui
 @require_permission("system_health.view")
 def health(request):
     snap = hs.snapshot()
-    for c in snap.get("connections", []):
-        if c.get("expires") and hasattr(c["expires"], "strftime"):
-            c["expires"] = c["expires"].strftime("%d.%m.%Y")
-    return spa.respond(request, {"kind": "health", "s": snap})
+    return render(request, "health.html", {"s": snap})
+
+
+@login_required
+@require_permission("system_health.view")
+def health_partial(request):
+    return render(request, "partials/health_body.html", {"s": hs.snapshot()})
 
 
 @login_required
@@ -50,9 +52,8 @@ def job_list(request):
     page = Paginator(qs, 50).get_page(request.GET.get("p"))
     rows = [[j.pk, j.type, j.queue, ui.badge(j.status, j.status), j.attempts, ui.dt(j.created_at), (j.last_error or "")[:100] or "—",
              ui.btn("Qayta", f"/tizim/vazifalar/{j.pk}/qayta/") if j.status in ("failed", "dead") else ""] for j in page]
-    cur = request.GET.get("status", "")
-    chips = ui.tabs([("Hammasi", "?", not cur)] + [(s, f"?status={s}", cur == s) for s in ("pending", "running", "done", "failed")])
-    return ui.page(request, "Vazifalar navbati", [chips, ui.table(None, ["ID", "Tur", "Navbat", "Holat", "Urinish", "Yaratilgan", "Xato", ""], rows)])
+    chips = "".join(f'<a class="pill" href="?status={s}">{s}</a> ' for s in ("pending", "running", "done", "failed"))
+    return ui.page(request, "Vazifalar navbati", [{"type": "html", "html": chips + '<a class="pill" href="?">hammasi</a>'}, ui.table(None, ["ID", "Tur", "Navbat", "Holat", "Urinish", "Yaratilgan", "Xato", ""], rows)])
 
 
 @login_required
@@ -108,42 +109,6 @@ TABS = {
 }
 
 
-KEYS = {key: (label, kind, hlp) for _t, (_n, rows) in TABS.items() for key, label, kind, hlp in rows}
-
-
-class Sec:
-    """Sozlamalar bo'limi: sarlavha, nima uchun kerakligi, yo'riqnoma, kalitlar va (bo'lsa) tekshirish tugmasi."""
-
-    def __init__(self, title, desc, keys, guide=None, test=None, service=False):
-        self.title, self.desc, self.keys, self.guide, self.test, self.service = title, desc, keys, guide, test, service
-
-
-# (kalit, nom, ikonka, qisqa izoh, bo'limlar)
-CATEGORIES = [
-    ("brend", "Brend va tizim", "palette", "Tizim nomi, logotip, rang, xavfsizlik", [
-        Sec("Manzil va chegaralar", "Tashqi manzil mijozga yuboriladigan hisobot havolasi va telefon ilovasi uchun kerak.", ["general.public_url", "agency.max_businesses"], "00-mobil"),
-        Sec("Xavfsizlik", "Parolni ketma-ket noto'g'ri kiritganda hisob vaqtincha bloklanadi.", ["security.lockout_attempts", "security.lockout_minutes"], "00-rol-admin")]),
-    ("xizmatlar", "Tashqi xizmatlar", "plug", "Instagram, YouTube, Telegram, Cloudflare, ScrapeCreators", [
-        Sec("Instagram (Meta)", "Instagram akkauntini ulash, statistikani olish va post joylash uchun. Meta ilovasi (App) kerak.", ["meta.app_id", "meta.app_secret"], "02-meta-instagram", service=True),
-        Sec("YouTube (Google)", "YouTube kanalini ulash (OAuth) va ochiq ma'lumotlarni olish uchun.", ["google.client_id", "google.client_secret", "youtube.api_key"], "03-google-youtube", "youtube", True),
-        Sec("Telegram", "Telethon (kanal statistikasi) va mijoz kabineti boti. Kanalga post joylaydigan bot «Ulanishlar»da qo'shiladi.", ["telegram.api_id", "telegram.api_hash", "telegram.agency_bot_token"], "04-telegram", "agency_bot", True),
-        Sec("Cloudflare Worker", "Qisqa havolalar, bosishlarni hisoblash va OAuth qaytish manzili uchun (bepul).", ["worker.cloudflare_url", "worker.admin_token", "oauth.callback_url"], "05-cloudflare-worker", "worker", True),
-        Sec("Cloudflare R2 (fayllar)", "Katta rasm/video fayllarni vaqtincha saqlash (Instagram/YouTube'ga yuborish uchun).", ["r2.account_id", "r2.access_key_id", "r2.secret_access_key", "r2.bucket"], "05-cloudflare-worker", "r2", True),
-        Sec("ScrapeCreators", "Raqobatchilar va ochiq ma'lumot uchun zaxira provayder (pullik, kredit bilan).", ["scrapecreators.api_key"], "07-scrapecreators", "scrapecreators", True)]),
-    ("ai", "AI", "spark", "AI rejimi, OpenAI, kalitlar", [
-        Sec("AI rejimi va byudjet", "Qaysi AI avval ishlashi va oylik xarajat chegarasi.", ["ai.mode", "ai.openai.fallback", "ai.openai.monthly_budget_usd", "ai.openai.model_complex", "ai.paid.enabled", "ai.paid.policy", "ai.paid.monthly_budget_usd", "ai.paid.claude_key"], "06-ai-kalitlar"),
-        Sec("Ilg'or: yo'nalish va modellar", "Faqat nima qilayotganingizni bilsangiz o'zgartiring.", ["ai.routes", "ai.models", "stt.min_confidence"], "06-ai-kalitlar")]),
-    ("malumot", "Ma'lumot yig'ish", "pulse", "Jadval, raqobatchilar, provayderlar", [
-        Sec("Yig'ish jadvali", "Statistika qaysi vaqtlarda avtomatik yig'iladi.", ["collect.enabled", "collect.schedule", "collect.history_days"], "13-yangi-imkoniyatlar"),
-        Sec("Raqobatchilar", "Raqobatchi akkauntlarini tekshirish tezligi.", ["competitors.light_per_day", "competitors.heavy_per_week"], "13-yangi-imkoniyatlar"),
-        Sec("Provayderlar va limitlar", "Ma'lumot manbalari ustuvorligi va kunlik/oylik chegaralar (ban va xarajatdan himoya).", ["providers.priority", "providers.quota_switch_pct", "providers.youtube_data_api.daily_quota", "scrapecreators.mode", "scrapecreators.daily_cap", "scrapecreators.monthly_cap", "scrapecreators.credit_warn_threshold", "telethon.daily_request_cap", "telethon.min_delay_sec", "telethon.max_delay_sec"], "07-scrapecreators")]),
-    ("nashr", "Nashr va zaxira", "send", "Nashr qoidalari, zaxira nusxa", [
-        Sec("Nashr", "Post chiqarish siyosati: kechikish, urinishlar, hosting.", ["publish.use_r2", "publish.late_policy_min", "publish.max_attempts", "youtube.upload_daily_cap", "publish.r2.max_gb"], "05-cloudflare-worker"),
-        Sec("Zaxira va saqlash", "Ma'lumotlar bazasi zaxirasi qancha saqlanishi.", ["backup.keep_days", "backup.dir", "media.retention_days"], "09-zaxira")]),
-]
-CAT_KEYS = {c[0]: [k for sec in c[4] for k in sec.keys] for c in CATEGORIES}
-
-
 def _to_form_value(kind, key):
     v = ss.get_setting(key, "")
     if kind == "secret":
@@ -155,10 +120,9 @@ def _to_form_value(kind, key):
     return v
 
 
-def _build_form(cat, data=None):
+def _build_form(tab, data=None):
     fields = {}
-    for key in CAT_KEYS[cat]:
-        label, kind, hlp = KEYS[key]
+    for key, label, kind, hlp in TABS[tab][1]:
         name = key.replace(".", "__")
         if kind == "bool":
             f = forms.BooleanField(label=label, required=False, help_text=hlp)
@@ -177,37 +141,24 @@ def _build_form(cat, data=None):
         fields[name] = f
     form = type("SF", (forms.Form,), fields)(data)
     if data is None:
-        for key in CAT_KEYS[cat]:
-            form.fields[key.replace(".", "__")].initial = _to_form_value(KEYS[key][1], key)
+        for key, label, kind, hlp in TABS[tab][1]:
+            form.fields[key.replace(".", "__")].initial = _to_form_value(kind, key)
     return form
-
-
-def _sec_status(sec):
-    """Xizmat kartasi holati: barcha kalit kiritilgan -> ok, ba'zisi -> partial, hech biri -> empty."""
-    vals = [bool(ss.get_setting(k, "")) for k in sec.keys if KEYS[k][1] in ("secret", "text") and not k.startswith("oauth.") and k != "r2.account_id"]
-    return "ok" if vals and all(vals) else "partial" if any(vals) else "empty"
-
-
-def _brand_json():
-    from apps.web.spa import brand_payload
-    return brand_payload()
 
 
 @login_required
 @require_permission("settings.view")
 def settings_home(request):
-    cat = request.GET.get("tab", "brend")
-    cat = {"umumiy": "brend", "kalitlar": "xizmatlar", "yigish": "malumot", "provayder": "malumot", "zaxira": "nashr"}.get(cat, cat)
-    if cat not in CAT_KEYS:
+    tab = request.GET.get("tab", "umumiy")
+    if tab not in TABS:
         raise Http404
     can_edit = perms.can(request.user, "settings.configure", None)
-    form = _build_form(cat, request.POST or None)
+    form = _build_form(tab, request.POST or None)
     if request.method == "POST":
         if not can_edit:
             return HttpResponseForbidden("Ruxsat yo'q")
         if form.is_valid():
-            for key in CAT_KEYS[cat]:
-                label, kind, _h = KEYS[key]
+            for key, label, kind, hlp in TABS[tab][1]:
                 v = form.cleaned_data.get(key.replace(".", "__"))
                 if kind == "secret":
                     if v:
@@ -230,66 +181,25 @@ def settings_home(request):
                         continue
                 ss.set_setting(key, v, user=request.user)
             messages.success(request, "Sozlamalar saqlandi.")
-            return redirect(f"/sozlamalar/?tab={cat}")
-    guides = {g["slug"]: g["title"] for g in __import__("apps.web.views_core", fromlist=["_guides"])._guides()}
-    sections = [{"title": sec.title, "desc": sec.desc, "fields": [k.replace(".", "__") for k in sec.keys], "status": _sec_status(sec) if sec.service else None,
-                 "guide": {"slug": sec.guide, "title": guides.get(sec.guide, "Yo'riqnoma")} if sec.guide else None,
-                 "test": ({"label": "Ulanishni tekshirish", "post": "/cloudflare/sinov/" if sec.test == "r2" else f"/sozlamalar/tekshir/{sec.test}/"} if sec.test and can_edit else None)}
-                for sec in dict((c[0], c[4]) for c in CATEGORIES)[cat]]
-    extra = []
-    if cat == "ai":
-        extra.append(_openai_block())
+            return redirect(f"/sozlamalar/?tab={tab}")
+    tabs = "".join(f'<a class="pill {"active" if k == tab else ""}" href="?tab={k}">{v[0]}</a> ' for k, v in TABS.items())
+    tabs += '<a class="pill" href="/sozlamalar/biznes-turlari/">Biznes turlari</a>'
+    blocks = [{"type": "html", "html": tabs}, ui.form_block(form, TABS[tab][0], "Saqlash" if can_edit else "Faqat ko'rish")]
+    if tab == "ai":
+        blocks.insert(1, _openai_block())
         keys = AIKey.objects.order_by("provider", "alias")
-        extra.append(ui.table("AI kalitlar (rotatsiya)", ["Provayder", "Nomi", "Holat", "Oxirgi xato", "", ""],
-                              [[k.provider, k.alias, ui.badge("Faol" if k.enabled else "O'chiq", "active" if k.enabled else "paused", f"sovish: {ui.dt(k.cooldown_until)}" if k.cooldown_until else None), (k.last_error or "—")[:90],
-                                ui.btn("Tekshirish", f"/sozlamalar/ai-kalit/{k.pk}/tekshir/"), ui.btn("O'chirish", f"/sozlamalar/ai-kalit/{k.pk}/ochir/", "danger", "Kalit o'chirilsinmi?")] for k in keys], "AI kalit qo'shilmagan."))
+        blocks.append(ui.table("AI kalitlar (rotatsiya)", ["Provayder", "Nomi", "Holat", "Oxirgi xato", "", ""],
+                               [[k.provider, k.alias, ui.badge("Faol" if k.enabled else "O'chiq", "active" if k.enabled else "paused", f"sovish: {ui.dt(k.cooldown_until)}" if k.cooldown_until else None), (k.last_error or "—")[:80],
+                                 ui.btn("Tekshirish", f"/sozlamalar/ai-kalit/{k.pk}/tekshir/"), ui.btn("O'chirish", f"/sozlamalar/ai-kalit/{k.pk}/ochir/", "danger", "Kalit o'chirilsinmi?")] for k in keys], "AI kalit qo'shilmagan."))
         if can_edit:
+            blocks.append(ui.form_block(forms.Form(), None))
             f = type("KF", (forms.Form,), {"provider": forms.ChoiceField(label="Provayder", choices=[(p, p) for p, _ in AIKey._meta.get_field("provider").choices]),
                                            "alias": forms.CharField(label="Nom (masalan: gemini-1)"), "key": forms.CharField(label="Kalit", widget=forms.PasswordInput)})()
-            extra.append(ui.form_block(f, "AI kalit qo'shish", "Qo'shish va tekshirish", action="/sozlamalar/ai-kalit/qoshish/"))
-    return spa.respond(request, {
-        "kind": "settings", "tab": cat, "can_edit": bool(can_edit), "tabs": [{"key": c[0], "label": c[1], "icon": c[2], "desc": c[3]} for c in CATEGORIES],
-        "brand": _brand_json() if cat == "brend" else None, "form": spa.form_schema(form), "sections": sections, "extra": [spa.block_json(b) for b in extra]})
-
-
-@login_required
-@require_POST
-@require_permission("settings.configure")
-def brand_save(request):
-    """Tizim nomi, rang, standart mavzu va logotip (yuklash/olib tashlash)."""
-    import os
-    from pathlib import Path
-
-    from django.conf import settings as dj
-    name = (request.POST.get("name") or "").strip()[:60]
-    color = (request.POST.get("color") or "").strip()
-    theme = request.POST.get("theme")
-    if name:
-        ss.set_setting("general.system_name", name, user=request.user)
-    if re.fullmatch(r"#[0-9a-fA-F]{6}", color):
-        ss.set_setting("general.brand_color", color.upper(), user=request.user)
-    if theme in ("light", "dark"):
-        ss.set_setting("general.theme_default", theme, user=request.user)
-    if request.POST.get("remove_logo") == "1":
-        ss.set_setting("general.agency_logo", "", user=request.user)
-    f = request.FILES.get("logo")
-    if f:
-        ext = os.path.splitext(f.name)[1].lower()
-        if ext not in (".png", ".jpg", ".jpeg", ".webp", ".svg") or f.size > 2 * 1024 * 1024:
-            messages.error(request, "Logotip PNG/JPG/WEBP/SVG bo'lishi va 2 MB dan oshmasligi kerak.")
-            return redirect("/sozlamalar/?tab=brend")
-        d = Path(dj.MEDIA_ROOT) / "brand"
-        d.mkdir(parents=True, exist_ok=True)
-        for old in d.glob("logo.*"):
-            old.unlink()
-        dest = d / f"logo{ext}"
-        with open(dest, "wb") as out:
-            for ch in f.chunks():
-                out.write(ch)
-        ss.set_setting("general.agency_logo", f"brand/logo{ext}", user=request.user)
-    audit("setting.brand", user=request.user, target="brand")
-    messages.success(request, "Brend sozlamalari saqlandi.")
-    return redirect("/sozlamalar/?tab=brend")
+            blocks[-1] = ui.form_block(f, "AI kalit qo'shish", "Qo'shish va tekshirish", action="/sozlamalar/ai-kalit/qoshish/")
+    if tab == "kalitlar" and can_edit:
+        blocks.append({"type": "actions", "title": "Ulanishni tekshirish", "buttons": [ui.btn("Cloudflare Worker", "/sozlamalar/tekshir/worker/"), ui.btn("ScrapeCreators", "/sozlamalar/tekshir/scrapecreators/"),
+                                                                                        ui.btn("YouTube API kaliti", "/sozlamalar/tekshir/youtube/"), ui.btn("Mijoz boti", "/sozlamalar/tekshir/agency_bot/")]})
+    return ui.page(request, "Sozlamalar", blocks)
 
 
 @login_required
@@ -378,7 +288,7 @@ def setting_test(request, what):
         raise
     except Exception as e:  # noqa: BLE001
         messages.error(request, getattr(e, "user_message_uz", None) or f"Tekshiruvda xato: {e}")
-    return redirect("/sozlamalar/?tab=xizmatlar")
+    return redirect("/sozlamalar/?tab=kalitlar")
 
 
 # ---------------- Foydalanuvchilar ----------------
@@ -426,7 +336,7 @@ def user_new(request):
             audit("user.create", user=request.user, target=u.username)
             messages.success(request, "Foydalanuvchi yaratildi. Endi biznes va rol biriktiring.")
             return redirect("user_detail", pk=u.pk)
-    return ui.form_page(request, "Yangi foydalanuvchi", form, back="/foydalanuvchilar/")
+    return render(request, "form.html", {"title": "Yangi foydalanuvchi", "form": form, "back": "/foydalanuvchilar/"})
 
 
 @login_required
@@ -537,10 +447,7 @@ def role_detail(request, pk):
         messages.success(request, "Ruxsatlar saqlandi.")
         return redirect("role_detail", pk=r.pk)
     have = set(r.permissions.values_list("code", flat=True))
-    return spa.respond(request, {
-        "kind": "role_matrix", "role": {"id": r.pk, "name": r.name, "is_system": bool(r.is_system), "description": r.description}, "can": bool(can),
-        "modules": [[k, v] for k, v in MODULES.items() if k != "approvals"], "actions": [[k, v] for k, v in ACTIONS.items() if k != "approve"],
-        "have": sorted(have)})
+    return render(request, "role_matrix.html", {"role": r, "modules": {k: v for k, v in MODULES.items() if k != "approvals"}, "actions": {k: v for k, v in ACTIONS.items() if k != "approve"}, "have": have, "can": can})
 
 
 @login_required
@@ -596,6 +503,7 @@ def client_user_toggle(request, pk):
 
 
 def _openai_block() -> dict:
+    from datetime import timedelta
     from decimal import Decimal
     from django.db.models import Count, Sum
     from django.utils import timezone

@@ -7,7 +7,7 @@ import re
 
 import requests
 
-from apps.connections.base import AuthError, PlatformError, RateLimitError, TransientError
+from apps.connections.base import AuthError, NotFoundError, PlatformError, RateLimitError, TransientError
 from apps.connections.http import raise_for_status
 from apps.core.logging_utils import scrub
 
@@ -118,6 +118,9 @@ class GroqProvider(_OpenAICompat):
             a = req.attachments[0]
             return self.transcribe(a.data, key, model, req.options.get("language", "uz"), req.options.get("prompt"), a.name)
         return super().call(req, key, model, system)
+
+    def supports(self, task):
+        return task != TaskType.VISION
 
 
 class OpenRouterProvider(_OpenAICompat):

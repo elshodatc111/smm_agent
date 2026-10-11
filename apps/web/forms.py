@@ -7,21 +7,21 @@ from apps.content.models import ContentItem
 
 BUSINESS_UZ = {
     "name": ("Biznes nomi", "Mijozlar biladigan rasmiy nom.", "Masalan: ATKO o'quv markazi"),
-    "template": ("Soha shabloni", "Tanlansa, tavsiya etilgan kontent ustunlari, hashtaglar va rejalar avtomatik tayyorlanadi.", ""),
-    "industry": ("Soha", "", "Ta'lim — o'quv markaz"),
-    "region": ("Hudud", "Qaysi shahar/tumanlarga xizmat ko'rsatasiz.", "Toshkent shahri, Chilonzor tumani"),
+    "template": ("Biznes turi", "Tanlangan tur bo'yicha «Biznes pasporti» savollari, faktlar mavzulari va maslahatlar tayyorlanadi. Kerakli tur bo'lmasa: Sozlamalar → Biznes turlari.", ""),
+    "industry": ("Soha", "Qaysi sohada ishlaysiz (1 qator).", "Masalan: Ta'lim; Grafik dizayn va SMM; Kafe; Kiyim do'koni"),
+    "region": ("Hudud", "Qaysi shahar/tumanlarga xizmat ko'rsatasiz.", "Masalan: Toshkent shahri; Qarshi; butun O'zbekiston (onlayn)"),
     "languages": ("Kontent tillari", "Vergul bilan: uz, ru, en", "uz, ru"),
     "description": ("Biznes haqida", "AI shu matndan brend ovozini o'rganadi. 4-6 gap: kim siz, nimasi bilan ajralib turasiz, necha yildan beri, natijalar.", ""),
-    "products": ("Xizmat / mahsulotlar", "Har qatorda bitta kurs: nomi, davomiyligi, formati.", "Ingliz tili (IELTS) — 6 oy\nMatematika (abituriyent) — 8 oy\nIT: Python — 5 oy"),
-    "price_range": ("Narx oralig'i", "", "Oyiga 400 000 – 900 000 so'm"),
-    "audience": ("Maqsadli auditoriya", "Kimga sotasiz: yoshi, qiziqishi, ehtiyoji. Ota-onalar va o'quvchilar alohida yozilsin.", "16–24 yoshli abituriyentlar; 30–45 yoshli ota-onalar"),
+    "products": ("Xizmat / mahsulotlar", "Har qatorda bittadan: nomi (va kerak bo'lsa davomiyligi/narxi).", "Masalan:\nLogo va brend uslubi\nIjtimoiy tarmoq dizayni\nSMM yuritish"),
+    "price_range": ("Narx oralig'i", "", "Masalan: logo 500 000 so'mdan; oylik xizmat 2 000 000 so'mdan"),
+    "audience": ("Maqsadli auditoriya", "Kimga sotasiz: yoshi, qiziqishi, ehtiyoji. Har xil mijoz turi bo'lsa alohida yozing.", "Masalan: kichik biznes egalari (25–45 yosh); yangi biznes boshlayotganlar"),
     "main_goal": ("Asosiy maqsad", "Hisobotlar va tavsiyalar shunga qarab tuziladi.", ""),
     "monthly_ad_budget": ("Oylik reklama byudjeti", "Bo'sh qoldirsangiz 0 bo'ladi.", "5000000"),
     "currency": ("Valyuta", "UZS yoki USD", "UZS"),
-    "avg_check": ("O'rtacha chek (bir o'quvchi)", "Bir o'quvchidan oylik tushum.", "600000"),
-    "lead_to_sale": ("Murojaat → xarid konversiyasi", "0.2 = har 5 ta murojaatdan 1 tasi yoziladi.", "0.2"),
+    "avg_check": ("O'rtacha chek (bir mijoz / buyurtma)", "Bitta mijozdan o'rtacha tushum (oylik yoki bir martalik).", "600000"),
+    "lead_to_sale": ("Murojaat → xarid konversiyasi", "0.2 = har 5 ta murojaatdan 1 tasi xarid qiladi.", "0.2"),
     "margin": ("Foyda marjasi", "0.35 = 35%. Bilmasangiz bo'sh qoldiring.", "0.35"),
-    "contact_info": ("Aloqa ma'lumotlari", "Postlarda ishlatiladi: telefon, manzil, Telegram, ish vaqti.", "Tel: +998 90 000 00 00\nManzil: Chilonzor 7-mavze\nTelegram: @atko_admin\nIsh vaqti: 09:00–20:00"),
+    "contact_info": ("Aloqa ma'lumotlari", "Postlarda ishlatiladi: telefon, manzil, Telegram, ish vaqti.", "Tel: +998 90 000 00 00\nTelegram: @username\nInstagram: @username\nIsh vaqti: 09:00–20:00"),
     "logo": ("Logotip", "PNG yoki JPG, kvadrat bo'lsa yaxshi.", ""),
 }
 
@@ -33,13 +33,15 @@ class BusinessForm(forms.ModelForm):
     class Meta:
         model = Business
         fields = ["name", "template", "industry", "region", "languages", "description", "products", "price_range", "audience",
-                  "main_goal", "monthly_ad_budget", "currency", "avg_check", "lead_to_sale", "margin", "contact_info", "logo"]
+                  "main_goal", "currency", "avg_check", "contact_info", "logo"]
         widgets = {k: forms.Textarea(attrs={"rows": 3}) for k in ("description", "products", "audience", "contact_info")}
 
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
-        for f in ("monthly_ad_budget", "avg_check", "lead_to_sale", "margin"):
+        for f in ("avg_check",):
             self.fields[f].required = False
+        self.fields["template"].required = False
+        self.fields["template"].empty_label = "— biznes turini tanlang —"
         for f, (label, hint, ph) in BUSINESS_UZ.items():
             if f in self.fields:
                 self.fields[f].label = label
@@ -60,9 +62,8 @@ class BusinessForm(forms.ModelForm):
 
     def clean(self):
         d = super().clean()
-        for f, default in (("monthly_ad_budget", 0), ("avg_check", 0), ("lead_to_sale", 0.2)):
-            if d.get(f) in (None, ""):
-                d[f] = default
+        if d.get("avg_check") in (None, ""):
+            d["avg_check"] = 0
         return d
 
     def save(self, commit=True):
@@ -127,10 +128,10 @@ class ContentForm(forms.ModelForm):
     crop_x = forms.FloatField(required=False, min_value=0, max_value=1, widget=forms.HiddenInput)
     crop_y = forms.FloatField(required=False, min_value=0, max_value=1, widget=forms.HiddenInput)
     crop_zoom = forms.FloatField(required=False, min_value=1, max_value=4, widget=forms.HiddenInput)
+    music_source = forms.CharField(label="Musiqa / audio manbasi", required=False, max_length=200,
+                                   widget=forms.TextInput(attrs={"placeholder": "Masalan: CapCut bepul kutubxona, o'z ovozim, litsenziyali"}))
     tg_buttons = forms.CharField(label="Telegram tugmalari (har qatorda: Matn | https://havola)", required=False,
-                                 widget=forms.Textarea(attrs={"rows": 4, "placeholder": "Ro'yxatdan o'tish | https://example.com\nBog'lanish | https://t.me/username\nInstagram | https://instagram.com/... || YouTube | https://youtube.com/..."}))
-    tg_cols = forms.ChoiceField(label="Qatorda nechta tugma", required=False, initial="2",
-                                choices=[("1", "1 ta (uzun tugmalar)"), ("2", "2 ta (tavsiya etiladi)"), ("3", "3 ta (qisqa matnlar)")])
+                                 widget=forms.Textarea(attrs={"rows": 2, "placeholder": "Ro'yxatdan o'tish | https://example.com"}))
 
     class Meta:
         model = ContentItem
@@ -156,19 +157,16 @@ class ContentForm(forms.ModelForm):
             self.fields["yt_privacy"].initial = o.get("privacy", "public")
             self.fields["media_size"].initial = o.get("media_size", "orig")
             self.fields["fit_mode"].initial = o.get("fit_mode", "pad")
+            self.fields["music_source"].initial = o.get("music_source", "")
             c = o.get("crop") or {}
             self.fields["crop_x"].initial, self.fields["crop_y"].initial, self.fields["crop_zoom"].initial = c.get("x", 0.5), c.get("y", 0.5), c.get("z", 1)
-            self.fields["tg_buttons"].initial = buttons_to_text(o.get("buttons") or [])
-            self.fields["tg_cols"].initial = str(o.get("btn_cols") or 2)
+            self.fields["tg_buttons"].initial = "\n".join(f"{b.get('text', '')} | {b.get('url', '')}" for row in (o.get("buttons") or []) for b in row)
         for f in ("goal", "hook_idea", "cta", "notes", "assignee", "title", "brief", "due_at"):
             if f in self.fields:
                 self.fields[f].required = False
 
     def clean(self):
         d = super().clean()
-        if not (d.get("title") or "").strip() and (d.get("text") or "").strip():
-            from apps.content.richtext import to_plain
-            d["title"] = to_plain(d["text"]).strip().split("\n")[0][:80]     # nom kiritilmasa — matnning birinchi qatori
         mt = d.get("media_type")
         for pk in d.get("targets") or []:
             plat = self.account_platforms.get(str(pk))
@@ -179,25 +177,25 @@ class ContentForm(forms.ModelForm):
                 break
         return d
 
-    def clean_tg_cols(self):
-        v = (self.cleaned_data.get("tg_cols") or "2").strip()
-        return v if v in ("1", "2", "3") else "2"
-
     def clean_tg_buttons(self):
-        raw = self.cleaned_data.get("tg_buttons") or ""
-        cols = (self.data.get(self.add_prefix("tg_cols")) or (self.fields["tg_cols"].initial or "2")).strip()
-        try:
-            self._tg_rows = parse_buttons(raw, int(cols) if cols in ("1", "2", "3") else 2)
-        except ValueError as e:
-            raise forms.ValidationError(str(e))
-        return raw
+        rows = []
+        for line in (self.cleaned_data.get("tg_buttons") or "").splitlines():
+            if not line.strip():
+                continue
+            txt, _, url = line.partition("|")
+            txt, url = txt.strip(), url.strip()
+            if not txt or not url.startswith(("http://", "https://", "tg://", "https://t.me")):
+                raise forms.ValidationError(f"Noto'g'ri qator: «{line.strip()}». Format: Matn | https://havola")
+            rows.append([{"text": txt[:64], "url": url}])
+        self._tg_rows = rows
+        return self.cleaned_data.get("tg_buttons")
 
     def options_from_cleaned(self, base: dict | None = None) -> dict:
         o = dict(base or {})
         d = self.cleaned_data
         for k, v in (("title", (d.get("yt_title") or "").strip()), ("privacy", d.get("yt_privacy") or ""),
                      ("tags", [t.strip() for t in (d.get("yt_tags") or "").split(",") if t.strip()]),
-                     ("buttons", getattr(self, "_tg_rows", [])), ("btn_cols", int(d.get("tg_cols") or 2) if getattr(self, "_tg_rows", None) else 0),
+                     ("buttons", getattr(self, "_tg_rows", [])), ("music_source", (d.get("music_source") or "").strip()),
                      ("media_size", d.get("media_size") if d.get("media_size") not in (None, "", "orig") else ""),
                      ("fit_mode", d.get("fit_mode") if d.get("media_size") not in (None, "", "orig") else "")):
             if v:
@@ -218,55 +216,3 @@ class AssetForm(forms.Form):
 
 class SettingsForm(forms.Form):
     """Dinamik: maydonlar view'da qo'shiladi."""
-
-TG_URL_OK = ("http://", "https://", "tg://")
-TG_MAX_BUTTONS = 24
-
-
-def parse_buttons(raw: str, cols: int = 2) -> list[list[dict]]:
-    """«Matn | havola» qatorlaridan Telegram inline_keyboard yasaydi.
-
-    Oddiy qatorlar `cols` tadan bir qatorga joylanadi (sukut 2). Bir qatorda `||` bilan ajratilgan
-    tugmalar esa aynan shu qatorda, alohida satr bo'lib turadi."""
-    rows: list[list[dict]] = []
-    pack: list[dict] = []
-    total = 0
-
-    def one(piece: str, line: str) -> dict:
-        txt, _, url = piece.partition("|")
-        txt, url = txt.strip(), url.strip()
-        if not txt or not url.lower().startswith(TG_URL_OK) or " " in url:
-            raise ValueError(f"Noto'g'ri qator: «{line.strip()}». Format: Matn | https://havola")
-        return {"text": txt[:64], "url": url}
-
-    for line in (raw or "").splitlines():
-        if not line.strip():
-            continue
-        pieces = [p for p in line.split("||") if p.strip()]
-        btns = [one(p, line) for p in pieces]
-        total += len(btns)
-        if total > TG_MAX_BUTTONS:
-            raise ValueError(f"Tugmalar {TG_MAX_BUTTONS} tadan oshmasligi kerak.")
-        if len(btns) > 1:                        # aniq qator: `A | url || B | url`
-            if pack:
-                rows.append(pack)
-                pack = []
-            rows.append(btns[:8])
-            continue
-        pack.append(btns[0])
-        if len(pack) >= max(1, cols):
-            rows.append(pack)
-            pack = []
-    if pack:
-        rows.append(pack)
-    return rows
-
-
-def buttons_to_text(rows: list[list[dict]]) -> str:
-    """Saqlangan qatorlarni formaga qaytaradi: bir tugmali qator = bir satr, ko'p tugmali = `A | u || B | u`."""
-    lines = []
-    for row in rows:
-        items = [f"{b.get('text', '')} | {b.get('url', '')}" for b in row]
-        lines.append(" || ".join(items))
-    return "\n".join(lines)
-

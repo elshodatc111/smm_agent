@@ -75,6 +75,7 @@ def make_env():
 
 def db_reachable():
     """.env dagi bazaga ulanib ko'radi; (ok, xabar)."""
+    import os
     env = {}
     for line in ENV.read_text(encoding="utf-8").splitlines():
         if "=" in line and not line.startswith("#"):

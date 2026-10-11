@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from django.shortcuts import render
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -9,7 +10,7 @@ from django.views.decorators.http import require_POST
 from apps.accounts.decorators import require_permission
 from apps.accounts.services import perms
 from apps.businesses import services as bsvc
-from apps.businesses.models import BrandProfile, Business
+from apps.businesses.models import BrandProfile, Business, BusinessTemplate
 from apps.core.audit import audit
 from . import ui
 from .forms import BrandForm, BusinessForm
@@ -37,15 +38,18 @@ def business_new(request):
     form = BusinessForm(request.POST or None, request.FILES or None)
     if request.method == "POST" and form.is_valid():
         b = form.save()
+        if not b.template_id:
+            b.template = BusinessTemplate.objects.filter(key="boshqa").first()
+            b.save(update_fields=["template"])
         from apps.accounts.models import UserBusinessAccess
         if not request.user.is_admin:
             UserBusinessAccess.objects.get_or_create(user=request.user, business=b, defaults={"all_flag": False})
         from apps.accounts.services import bump_permissions
         bump_permissions()
         audit("business.create", user=request.user, business_id=b.pk, target=b.name)
-        messages.success(request, "Biznes yaratildi. Endi brend xotirasini tayyorlang.")
-        return redirect("business_detail", pk=b.pk)
-    return ui.form_page(request, "Yangi biznes", form, back="/bizneslar/")
+        messages.success(request, "Biznes yaratildi. Endi biznes pasportini to'ldiring: tavsiyalar shunga tayanadi.")
+        return redirect("passport", pk=b.pk)
+    return render(request, "form.html", {"title": "Yangi biznes", "form": form, "back": "/bizneslar/"})
 
 
 @login_required
@@ -59,7 +63,7 @@ def business_edit(request, pk):
         audit("business.edit", user=request.user, business_id=b.pk)
         messages.success(request, "Saqlandi.")
         return redirect("business_detail", pk=b.pk)
-    return ui.form_page(request, f"Tahrirlash: {b.name}", form, back=f"/bizneslar/{b.pk}/")
+    return render(request, "form.html", {"title": f"Tahrirlash: {b.name}", "form": form, "back": f"/bizneslar/{b.pk}/"})
 
 
 def _biz_or_404(request, pk, code):
@@ -76,31 +80,16 @@ def _biz_or_404(request, pk, code):
 @login_required
 def business_detail(request, pk):
     b = _biz_or_404(request, pk, "businesses.view")
-    versions = b.brand_profiles.order_by("-version")
-    rows = []
-    for v in versions:
-        acts = []
-        if v.status != "approved":
-            acts.append(ui.btn("Tasdiqlash", f"/bizneslar/{b.pk}/brend/{v.pk}/tasdiq/", "primary"))
-        acts.append(ui.btn("Shu versiyaga qaytish", f"/bizneslar/{b.pk}/brend/{v.pk}/qaytarish/"))
-        rows.append([f"v{v.version}", ui.badge(v.get_status_display(), "approved" if v.status == "approved" else "draft"), "AI" if v.generated_by_ai else "Qo'lda",
-                     v.note or "—", ui.dt(v.created_at), acts[0], acts[1] if len(acts) > 1 else ""])
-    blocks = [ui.kv("Ma'lumot", [("Soha", b.industry), ("Hudud", b.region), ("Til", b.languages), ("Maqsad", b.get_main_goal_display()),
-                                 ("Reklama byudjeti", f"{b.monthly_ad_budget} {b.currency}"), ("O'rtacha chek", b.avg_check),
-                                 ("Kontakt", b.contact_info)]),
-              ui.table("Brend xotirasi versiyalari", ["Versiya", "Holat", "Manba", "Izoh", "Sana", "", ""], rows, "Brend xotirasi hali yo'q — «AI bilan yaratish» tugmasini bosing.")]
+    from apps.businesses.passport import completeness
+    from apps.goals import services as gs
     act = b.active_brand
-    if act:
-        blocks.append({"type": "text", "title": f"Faol brend xotirasi (v{act.version})", "text": act.content})
-    if b.brand_update_suggested:
-        blocks.insert(0, {"type": "html", "html": "<b>Biznes ma'lumoti o'zgardi.</b> Brend xotirasini yangilash tavsiya etiladi."})
+    can_edit = perms.can(request.user, "businesses.edit", b)
+    goals = gs.summary_for(b, 6) if perms.can(request.user, "goals.view", b) else []
     form = BrandForm(initial={"content": (act.content if act else "")})
-    blocks.append(ui.form_block(form, "Yangi versiya (qo'lda)", "Qoralama sifatida saqlash", action=f"/bizneslar/{b.pk}/brend/yangi/"))
-    tb = [{"label": "Tahrirlash", "url": f"/bizneslar/{b.pk}/tahrir/"},
-          {"label": "AI bilan brend yaratish", "post": f"/bizneslar/{b.pk}/brend/ai/", "cls": "primary"},
-          {"label": "Avto-nashr: " + ("o'chirish" if b.autopublish_enabled else "yoqish"), "post": f"/bizneslar/{b.pk}/killswitch/",
-           "cls": "danger" if b.autopublish_enabled else "", "confirm": "Avto-nashr holatini o'zgartirasizmi?"}]
-    return ui.page(request, b.name, blocks, toolbar=tb)
+    return render(request, "business_detail.html", {
+        "title": b.name, "b": b, "comp": completeness(b), "versions": b.brand_profiles.order_by("-version"), "act": act, "can_edit": can_edit,
+        "accounts": b.accounts.filter(archived_at__isnull=True), "goals": goals, "goal_free": gs.accounts_without_goal(b) if perms.can(request.user, "goals.create", b) else [],
+        "brand_form": form, "can_ai": perms.can(request.user, "ai_studio.create", b), "can_pub": perms.can(request.user, "publish.publish", b)})
 
 
 @login_required

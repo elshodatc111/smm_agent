@@ -1,0 +1,113 @@
+{% extends "base.html" %}{% load static %}{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'css/preview.css' %}">
+<style>
+.cd-grid{display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);gap:20px;align-items:start}
+@media(max-width:1000px){.cd-grid{grid-template-columns:1fr}}
+.kv2{display:grid;grid-template-columns:150px 1fr;gap:6px 12px;font-size:14px}.kv2 dt{color:var(--muted)}.kv2 dd{margin:0}
+.gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}.gal a{display:block;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--surface-2);font-size:12px;color:var(--fg)}
+.gal img,.gal video{width:100%;height:100px;object-fit:cover;display:block}.gal span{display:block;padding:4px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pr{padding:8px 10px;border-radius:8px;margin-top:6px;font-size:13px}.pr.warn{background:color-mix(in srgb,var(--warn) 14%,transparent)}.pr.block{background:color-mix(in srgb,var(--bad) 12%,transparent)}
+.txtbox{white-space:pre-wrap;word-break:break-word;background:var(--surface-2);border-radius:10px;padding:12px;font-size:14px}
+</style>
+<div class="row sb"><div><h1 style="margin-bottom:2px">{{ item.title|default:"(nomsiz)" }}</h1><div class="muted">{{ item.business.name }}</div></div>
+  <div class="row"><a class="btn" href="{{ base }}/tahrir/">Tahrirlash</a>
+  {% if can_create %}<form method="post" action="{{ base }}/nusxa/">{% csrf_token %}<button class="btn" title="Shu postdan nusxa (qoralama)">⧉ Nusxa olish</button></form>
+  <form method="post" action="{{ base }}/shablon/" onsubmit="var n=prompt('Shablon nomi:','{{ item.title|escapejs }}');if(n===null)return false;this.name.value=n;return true">{% csrf_token %}<input type="hidden" name="name"><button class="btn" title="Shablon sifatida saqlash">📑 Shablon</button></form>{% endif %}<a class="btn" href="/kalendar/">Orqaga</a></div></div>
+
+<div class="card"><div class="row">
+  <span class="badge {{ status_cls }}">{{ item.get_status_display }}</span>
+  <span>🕒 <b>{{ scheduled_local }}</b> <span class="muted">(Toshkent vaqti)</span></span>
+  <span class="badge {{ rule_cls }}">{{ rule_label }}</span>
+  <span class="right row">
+    {% for a in acts %}<form method="post" action="{{ a.post }}" {% if a.confirm %}onsubmit="return confirm('{{ a.confirm }}')"{% endif %}>{% csrf_token %}<button class="btn sm {{ a.cls }}">{{ a.t }}</button></form>{% endfor %}
+  </span></div></div>
+
+<div class="cd-grid">
+  <div class="card" style="position:sticky;top:76px"><b>Platformalardagi ko'rinishi</b>
+    <div style="margin-top:10px">{% include "partials/preview_panel.html" %}</div></div>
+  <div>
+    <div class="card"><b>Ma'lumot</b>
+      <dl class="kv2" style="margin-top:10px">
+        <dt>Post turi</dt><dd>{{ item.get_media_type_display }}</dd>
+        <dt>Muallif</dt><dd>{{ item.created_by|default:"—" }}</dd>
+        <dt>Mas'ul</dt><dd>{{ item.assignee|default:"—" }}</dd>
+        {% if item.goal %}<dt>Maqsad</dt><dd>{{ item.goal }}</dd>{% endif %}
+        {% if item.hook_idea %}<dt>Hook</dt><dd>{{ item.hook_idea }}</dd>{% endif %}
+        {% if item.cta %}<dt>CTA</dt><dd>{{ item.cta }}</dd>{% endif %}
+        {% if item.notes %}<dt>Ichki izoh</dt><dd>{{ item.notes }}</dd>{% endif %}
+      </dl></div>
+
+    <div class="card" id="vazifa"><div class="row sb"><b>Vazifa va muddat</b>{% if task.status %}<span class="badge {{ task.cls }}">{{ task.label }}</span>{% endif %}</div>
+      {% if item.assignee or item.brief or item.due_at %}<dl class="kv2" style="margin-top:10px">
+        <dt>Mas'ul</dt><dd>{{ item.assignee|default:"—" }}</dd>
+        <dt>Muddat</dt><dd>{% if task.due_text %}{{ task.due_text }}{% if task.late %} <span class="badge bad">muddat o'tgan</span>{% endif %}{% else %}—{% endif %}</dd>
+        {% if item.brief %}<dt>Topshiriq</dt><dd style="white-space:pre-wrap">{{ item.brief }}</dd>{% endif %}</dl>{% else %}<p class="muted">Hali vazifa berilmagan. Dizayner yoki kontent-makerga topshiriq va muddat bering.</p>{% endif %}
+      {% if task.steps %}<div class="row" style="margin-top:10px;gap:8px">{% for st in task.steps %}
+        <form method="post" action="{{ base }}/vazifa/holat/{{ st.0 }}/" class="row" style="gap:6px">{% csrf_token %}{% if st.0 == "revision" or st.0 == "ready" %}<input type="text" name="note" placeholder="Izoh (ixtiyoriy)" style="width:200px">{% endif %}<button class="btn {{ st.2 }}">{{ st.1 }}</button></form>{% endfor %}</div>{% endif %}
+      {% if task.can_assign %}<details style="margin-top:12px"><summary style="cursor:pointer;font-weight:600">Vazifa berish / o'zgartirish</summary>
+        <form method="post" action="{{ base }}/vazifa/" style="margin-top:8px">{% csrf_token %}
+          <label>Mas'ul xodim</label><select name="assignee"><option value="">— tanlanmagan —</option>{% for u in staff %}<option value="{{ u.pk }}" {% if item.assignee_id == u.pk %}selected{% endif %}>{{ u.display }}</option>{% endfor %}</select>
+          <label>Muddat (Toshkent vaqti)</label><input type="datetime-local" name="due_at" value="{{ task.due_local }}">
+          <label>Topshiriq matni</label><textarea name="brief" rows="3" placeholder="Masalan: 3 ta slayd, qizil fon, logotip pastda">{{ item.brief }}</textarea>
+          <div class="mt"><button class="btn primary">Saqlash va xodimga yuborish</button></div></form></details>{% endif %}</div>
+
+    <div class="card"><b>Matn</b><div class="txtbox" style="margin-top:10px">{{ item.text|default:"(bo'sh)" }}</div></div>
+
+    <div class="card"><b>Nashr maqsadlari</b>
+      {% if targets %}<div class="tbl"><table><tr><th>Hisob</th><th>Holat</th><th>Chiqarilgan</th><th>Havola</th><th>Xato</th></tr>
+      {% for t in targets %}<tr><td>{{ t.account }}</td><td><span class="badge {% if t.status == 'published' %}ok{% elif t.status == 'failed' or t.status == 'blocked' %}bad{% endif %}">{{ t.get_status_display }}</span></td>
+        <td>{{ t.published_at|default:"—" }}</td><td>{% if t.url %}<a href="{{ t.url }}" target="_blank" rel="noopener">Ochish</a>{% else %}—{% endif %}</td><td>{{ t.error|default:"—" }}</td></tr>{% endfor %}</table></div>
+      {% else %}<p class="muted">Platforma tanlanmagan. «Tahrirlash» orqali belgilang — shunda post avtomatik rejalashtiriladi.</p>{% endif %}</div>
+
+    <div class="card"><b>Media fayllar</b> <span class="muted" style="font-size:12px">({{ assets|length }} ta{% if item.media_type == "carousel" %} — karusel uchun 2–10 ta kerak; ◀ ▶ tugmalari bilan tartibini o'zgartiring{% endif %})</span>
+      {% if assets %}<div class="gal" style="margin-top:10px">{% for a in assets %}<div class="ga"><a href="{{ base }}/media/{{ a.pk }}/" target="_blank">{% if a.kind == 'video' %}<video src="{{ base }}/media/{{ a.pk }}/" muted preload="metadata"></video>{% else %}<img src="{{ base }}/media/{{ a.pk }}/" alt="">{% endif %}<span>{{ forloop.counter }}. {{ a.original_name }} · {{ a.size|filesizeformat }}</span></a>
+        {% if can_edit %}<div class="row" style="gap:4px;margin-top:4px">
+          {% if assets|length > 1 %}<form method="post" action="{{ base }}/fayl/{{ a.pk }}/surish/">{% csrf_token %}<input type="hidden" name="dir" value="up"><button class="btn sm" title="Oldinga surish" {% if forloop.first %}disabled{% endif %}>◀</button></form>
+          <form method="post" action="{{ base }}/fayl/{{ a.pk }}/surish/">{% csrf_token %}<input type="hidden" name="dir" value="down"><button class="btn sm" title="Orqaga surish" {% if forloop.last %}disabled{% endif %}>▶</button></form>{% endif %}
+          {% if a.kind == 'image' %}<button type="button" class="btn sm" data-edit="{{ a.pk }}" data-name="{{ a.original_name }}">✂ Tahrirlash</button>{% endif %}
+          <form method="post" action="{{ base }}/fayl/{{ a.pk }}/ochir/" onsubmit="return confirm('Fayl postdan olib tashlansinmi? (Cloudflare nusxasi saqlanadi)')">{% csrf_token %}<button class="btn sm danger">🗑</button></form></div>{% endif %}</div>{% endfor %}</div>
+      {% else %}<p class="muted">Fayl yuklanmagan.</p>{% endif %}
+      {% if can_edit %}<form method="post" action="{{ base }}/fayl/" enctype="multipart/form-data" class="row" style="margin-top:12px" id="addForm">{% csrf_token %}
+        <input type="file" name="files" id="addFiles" multiple accept="image/*,video/*" style="display:none"><div id="cloudInputs"></div>
+        <button type="button" class="btn" id="addPick">📁 Fayl qo'shish (bir nechta tanlash mumkin)</button>
+        <button type="button" class="btn" id="addCloud">☁ Cloudflare'dan</button><span class="hint" id="addInfo"></span>
+        <button class="btn primary" id="addGo" style="display:none">Yuklash</button></form>
+      <form method="post" action="" id="repForm" enctype="multipart/form-data" style="display:none">{% csrf_token %}<input type="file" name="file" id="repFile"></form>{% endif %}</div>
+
+    {% if results %}<div class="card"><b>📈 Natija bo'yicha avtomatik xulosa</b>
+      {% for r in results %}<div style="padding:8px 0;border-top:1px solid var(--border);font-size:13px"><span class="badge {% if r.verdict == 'winner' %}ok{% elif r.verdict == 'weak' %}bad{% endif %}">{{ r.plat }} · {{ r.win }}</span> <span class="muted">{{ r.at }}</span>
+        <div style="white-space:pre-wrap;margin-top:4px">{{ r.text }}</div></div>{% endfor %}
+      <div class="hint">Post chiqqach 24 soat va 7 kundan keyin avtomatik tayyorlanadi va bildirishnoma yuboriladi.</div></div>{% endif %}
+    <div class="card" id="izohlar"><b>Izohlar va yozishma</b> <span class="muted" style="font-size:12px">(@foydalanuvchi_nomi bilan xodimni eslatish mumkin)</span>
+      <div style="margin-top:8px">{% for c in comments %}<div style="padding:8px 0;border-top:1px solid var(--border);font-size:13px{% if c.kind == 'status' %};color:var(--muted){% endif %}">
+        <b>{{ c.user.display|default:"tizim" }}</b> <span class="muted">{{ c.created_at|date:"d.m H:i" }}</span><div style="white-space:pre-wrap">{{ c.text }}</div></div>{% empty %}<p class="muted">Hali izoh yo'q.</p>{% endfor %}</div>
+      {% if can_comment %}<form method="post" action="{{ base }}/izoh/" style="margin-top:8px">{% csrf_token %}<textarea name="text" rows="2" placeholder="Izoh yozing…" required></textarea><div class="mt"><button class="btn primary">Yuborish</button></div></form>{% endif %}</div>
+
+    <div class="card"><b>Tarix — kim nima qildi</b>
+      {% for h in history %}<div style="padding:6px 0;border-top:1px solid var(--border);font-size:13px"><span class="muted">{{ h.at }}</span> · <b>{{ h.who }}</b> — {{ h.what }}{% if h.detail %} <span class="muted">({{ h.detail }})</span>{% endif %}</div>{% empty %}<p class="muted">Hali yozuv yo'q.</p>{% endfor %}</div>
+
+    {% if probs %}<div class="card"><b>Qoidalar natijasi</b>{% for p in probs %}<div class="pr {{ p.status }}"><b>{{ p.platform|title }}</b> · {{ p.msg }}</div>{% endfor %}</div>{% endif %}
+  </div>
+</div>
+{{ pv|json_script:"pvData" }}
+<script src="{% static 'js/post_preview.js' %}"></script><script src="{% static 'js/exact_preview.js' %}"></script>
+<script src="{% static 'js/image_editor.js' %}"></script>
+<script src="{% static 'js/cloud_picker.js' %}"></script>
+<script>
+(function(){var d=JSON.parse(document.getElementById('pvData').textContent);
+  var P=PostPreview({get:function(){return {text:d.text,mt:d.mt,sel:d.sel,media:d.media,ytTitle:d.ytTitle,ratio:d.ratio,fit:d.fit,crop:d.crop,buttons:d.buttons||[]}}});P.show(d.first);
+  document.getElementById('exactBtn').onclick=function(){ExactPreview.open({existing:d.media.filter(function(m){return m.kind==='image'}).map(function(m){return m.id}),size:d.size||'orig',fit:d.fit||'pad',crop:d.crop,plats:Object.keys(d.sel||{})})};})();
+(function(){var $=function(i){return document.getElementById(i)};if(!$('addForm'))return;
+  function upd(){var n=$('addFiles').files.length+document.querySelectorAll('#cloudInputs input').length;$('addInfo').textContent=n?(n+' ta fayl tanlandi'):'';$('addGo').style.display=n?'inline-block':'none'}
+  $('addPick').onclick=function(){var t=document.createElement('input');t.type='file';t.multiple=true;t.accept='image/*,video/*';t.onchange=function(){
+    var dt=new DataTransfer();[].slice.call($('addFiles').files).concat([].slice.call(t.files)).forEach(function(f){dt.items.add(f)});$('addFiles').files=dt.files;upd()};t.click()};
+  $('addCloud').onclick=function(){CloudPicker.open({kinds:'image,video',multi:true,onPick:function(fs){fs.forEach(function(f){
+    if(document.querySelector('#cloudInputs input[value="'+f.id+'"]'))return;var h=document.createElement('input');h.type='hidden';h.name='cloud_ids';h.value=f.id;$('cloudInputs').appendChild(h)});upd()}})};
+  document.querySelectorAll('[data-edit]').forEach(function(b){b.onclick=function(){var id=b.dataset.edit,old=b.textContent;b.textContent='⏳…';
+    fetch('{{ base }}/media/'+id+'/').then(function(r){if(!r.ok)throw 0;return r.blob()}).then(function(bl){b.textContent=old;
+      var ratio=({{ pv.ratio|default:0 }})||0;
+      ImageEditor.open(new File([bl],b.dataset.name||'rasm.jpg',{type:bl.type||'image/jpeg'}),{ratio:ratio,onDone:function(nf){var dt=new DataTransfer();dt.items.add(nf);$('repFile').files=dt.files;$('repForm').action='{{ base }}/fayl/'+id+'/almashtir/';$('repForm').submit()}})}).catch(function(){b.textContent='Xato'})}});
+})();
+</script>
+{% endblock %}

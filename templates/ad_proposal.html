@@ -1,0 +1,60 @@
+{% extends "base.html" %}{% load webtags %}{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="hero {% if r.verdict == 'improve_first' %}dark{% elif r.verdict == 'wait' %}dark{% else %}blue{% endif %}">
+  <div class="row sb" style="align-items:flex-start;gap:20px">
+    <div style="flex:1;min-width:260px"><div class="plat" style="color:#fff"><i class="{{ p.platform|platdot }}"></i>{{ plat_name }} · {{ p.account.name }}</div>
+      <h1>{{ VERDICT_UZ|dictkey:r.verdict }}</h1><p>{{ r.summary }}</p>
+      <div class="row" style="margin-top:12px"><span class="badge" style="background:rgba(255,255,255,.2);color:#fff">Maqsad: {{ p.get_objective_display }}</span>
+        <span class="badge" style="background:rgba(255,255,255,.2);color:#fff">Ishonch: {{ CONF_UZ|dictkey:p.confidence }}</span>
+        <span class="badge" style="background:rgba(255,255,255,.2);color:#fff">{% if p.source == 'ai' %}AI + hisob{% else %}Qoidalar asosida{% endif %}</span></div></div>
+    <div class="row"><a class="btn primary" href="{% url 'ads_proposal_pdf' p.pk %}">Targetolog uchun PDF</a>
+      {% if can_edit %}<form method="post" action="{% url 'ads_proposal_redo' p.pk %}">{% csrf_token %}<button class="btn">Qayta hisoblash</button></form>{% endif %}</div>
+  </div>
+</div>
+{% if ev.confidence_reasons %}<div class="callout warn"><b>!</b><div><b>Ishonchni kamaytiruvchi omillar:</b><ul style="margin:6px 0 0;padding-left:18px">{% for x in ev.confidence_reasons %}<li>{{ x }}</li>{% endfor %}</ul></div></div>{% endif %}
+{% for n in ev.notes %}<div class="callout"><b>i</b><div>{{ n }}</div></div>{% endfor %}
+
+<div class="grid g2-1" style="align-items:start">
+<div>
+  <div class="cardhead"><h2>Reklama qilinadigan kontent</h2></div>
+  {% for k in picks %}
+  <div class="card">
+    <div class="row sb" style="align-items:flex-start"><div style="flex:1;min-width:0"><span class="badge violet">#{{ k.rank }}</span>
+      <div style="font-weight:700;font-size:16px;margin:6px 0">{% if k.post and k.post.url %}<a href="{{ k.post.url }}" target="_blank" rel="noopener">{{ k.title }}</a>{% else %}{{ k.title }}{% endif %}</div>
+      <div class="tagrow">{% for w in k.why %}<span class="tag" style="color:var(--ok)">✓ {{ w }}</span>{% endfor %}</div></div>
+      <div class="ring sm {% if k.score >= 65 %}ok{% elif k.score < 45 %}warn{% endif %}" style="--p:{{ k.score|clamp100 }}"><div><span><b>{{ k.score|floatformat:0 }}</b></span></div></div></div>
+    {% with c=k.cand %}<div class="kvx mt">
+      <div><div class="k">Ko'rish</div><div class="v">{{ c.views|num }}</div></div><div><div class="k">Qamrov</div><div class="v">{{ c.reach|num }}</div></div>
+      <div><div class="k">Ulashish / saqlash</div><div class="v">{{ c.shares|num }} / {{ c.saves|num }}</div></div><div><div class="k">Medianadan</div><div class="v">{% if c.vs_median_views %}×{{ c.vs_median_views }}{% else %}—{% endif %}</div></div></div>{% endwith %}
+    {% if k.directions %}<h3 class="mt">Reklama xabari yo'nalishlari <span class="muted sm">(tayyor matn emas)</span></h3><ul style="margin:0;padding-left:20px">{% for d in k.directions %}<li>{{ d }}</li>{% endfor %}</ul>{% endif %}
+    {% if k.improve %}<h3 class="mt">Reklamadan oldin yaxshilash</h3><ul style="margin:0;padding-left:20px">{% for d in k.improve %}<li>{{ d }}</li>{% endfor %}</ul>{% endif %}
+  </div>
+  {% empty %}<div class="card"><div class="empty">Nomzod topilmadi.</div></div>{% endfor %}
+
+  <div class="card"><h2>Qaysi reklama maqsadini tanlash kerak</h2><div class="callout ok"><b>→</b><div><b>{{ r.platform_goal.name }}</b><div class="muted">{{ r.platform_goal.why }}</div></div></div>
+    <h3 class="mt">Kreativ bo'yicha eslatmalar</h3><ul style="margin:0;padding-left:20px">{% for x in r.creative_notes %}<li>{{ x }}</li>{% endfor %}</ul></div>
+
+  <div class="card"><h2>Sinov rejasi</h2><div class="kvx"><div><div class="k">Muddat</div><div class="v">{{ r.test_plan.duration_days }} kun</div></div></div>
+    <div class="grid g2 mt"><div><h3>Variantlar</h3><ul style="margin:0;padding-left:20px">{% for x in r.test_plan.variants %}<li>{{ x }}</li>{% endfor %}</ul></div>
+    <div><h3>Muvaffaqiyat belgilari</h3><ul style="margin:0;padding-left:20px">{% for x in r.test_plan.success_signals %}<li>{{ x }}</li>{% endfor %}</ul></div></div>
+    <h3 class="mt">To'xtatish belgilari</h3><ul style="margin:0;padding-left:20px">{% for x in r.test_plan.stop_signals %}<li>{{ x }}</li>{% endfor %}</ul></div>
+  <div class="card"><h2>Nima qilmaslik kerak</h2><ul style="margin:0;padding-left:20px">{% for x in r.avoid %}<li>{{ x }}</li>{% endfor %}</ul></div>
+</div>
+
+<div>
+  <div class="card"><h2>Auditoriya</h2><p>{{ r.audience.summary }}</p>
+    <div class="kvx" style="grid-template-columns:1fr"><div><div class="k">Hudud</div><div class="v">{{ r.audience.regions|join:", "|default:"—" }}</div></div><div><div class="k">Yosh</div><div class="v">{{ r.audience.age|default:"—" }}</div></div>
+    {% if r.audience.interests %}<div><div class="k">Qiziqishlar</div><div class="v">{{ r.audience.interests|join:", " }}</div></div>{% endif %}
+    {% if r.audience.channels_topics %}<div><div class="k">Kanal / mavzular</div><div class="v">{{ r.audience.channels_topics|join:"; " }}</div></div>{% endif %}</div>
+    {% if r.audience.note %}<div class="help mt">{{ r.audience.note }}</div>{% endif %}</div>
+  <div class="card"><h2>{{ guide.title }}</h2><p class="muted sm">{{ guide.objective_note }}</p>
+    <ol class="steps">{% for t, d in guide.steps %}<li><b>{{ t }}</b><div class="muted sm">{{ d }}</div></li>{% endfor %}</ol>
+    <div class="callout warn"><b>!</b><div class="sm">{{ guide.disclaimer }} Qo'llanma {{ guide.checked }} holatiga ko'ra.</div></div>
+    <h3>Maslahatlar</h3><ul style="margin:0;padding-left:20px">{% for x in guide.tips %}<li>{{ x }}</li>{% endfor %}</ul>
+    <a class="btn sm mt" href="{{ guide.url }}" target="_blank" rel="noopener">Rasmiy sahifa</a></div>
+  {% if can_edit %}<div class="card"><h2>Holat</h2><div class="row">{% for k, v in p.STATUS %}{% if k != p.status %}<form method="post" action="{% url 'ads_proposal_status' p.pk %}">{% csrf_token %}<input type="hidden" name="status" value="{{ k }}"><button class="btn sm">{{ v }}</button></form>{% endif %}{% endfor %}</div><div class="help mt">Hozir: <b>{{ p.get_status_display }}</b></div></div>{% endif %}
+  <div class="card"><h2>Tahlil asosi</h2><div class="kvx" style="grid-template-columns:1fr"><div><div class="k">Baholangan postlar</div><div class="v">{{ ev.stats.posts_used }} / {{ ev.stats.posts_total }}</div></div>
+    <div><div class="k">Obunachilar</div><div class="v">{{ ev.stats.followers|num }}</div></div><div><div class="k">Median ko'rish</div><div class="v">{{ ev.stats.median_views|num }}</div></div><div><div class="k">Pasport to'liqligi</div><div class="v">{{ ev.passport_pct }}%</div></div></div></div>
+</div>
+</div>
+{% endblock %}

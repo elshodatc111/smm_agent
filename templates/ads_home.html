@@ -1,0 +1,39 @@
+{% extends "base.html" %}{% load webtags %}{% block title %}Reklama tahlili{% endblock %}
+{% block content %}
+<div class="hero blue">
+  <h1>Reklama tahlili</h1>
+  <p>Qaysi Telegram postiga yoki Instagram videosiga reklama (Telegram Ads / Boost) yoqsangiz eng yaxshi natija beradi? Maqsadni kiriting: tizim organik ko'rsatkichlarni tahlil qiladi va targetolog uchun taklif tayyorlaydi. Reklamani bu tizim yoqmaydi.</p>
+</div>
+{% if not b %}
+  <div class="callout"><b>i</b><div>Yangi taklif olish uchun yuqoridan bitta biznesni tanlang. Quyida barcha bizneslar bo'yicha oxirgi takliflar.</div></div>
+{% else %}
+<div class="grid g2-1" style="align-items:start">
+<form method="post" action="{% url 'ads_propose' %}" class="card">{% csrf_token %}
+  <div class="cardhead"><h2>Yangi taklif</h2><span class="badge blue">{{ b.template.name|default:"Biznes turi belgilanmagan" }}</span></div>
+  {% if not comp.ok_for_ai %}<div class="callout warn"><b>!</b><div>Biznes pasporti {{ comp.pct }}% to'ldirilgan: auditoriya va xabar yo'nalishlari taxminiy bo'ladi. <a href="{% url 'passport' b.pk %}">Pasportni to'ldiring →</a></div></div>{% endif %}
+  {% if accounts %}
+  <div class="field-grid">
+    <div><label>Ijtimoiy tarmoq akkaunti</label><select name="account" required>{% for a in accounts %}<option value="{{ a.pk }}">{{ a.get_platform_display }} · {{ a.name }}</option>{% endfor %}</select>
+      <div class="help">Telegram uchun Telegram Ads, Instagram uchun Boost taklif etiladi.</div></div>
+    <div><label>Reklamadan asosiy maqsad</label><select name="objective">{% for k, v in objectives %}<option value="{{ k }}" {% if k == default_obj %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></div>
+    <div class="full"><label>Izoh (ixtiyoriy)</label><input name="note" maxlength="300" placeholder="Masalan: yangi kurs guruhiga yozilish boshlandi; Toshkent bo'yicha"></div>
+  </div>
+  {% if can_create %}<div class="row mt"><button class="btn primary lg">Taklif olish</button><span class="muted sm">Tahlil bir necha soniya oladi</span></div>{% endif %}
+  {% else %}<div class="empty">Bu biznesda Telegram yoki Instagram akkaunti ulanmagan. <a href="{% url 'connection_list' %}">Ulanishlar</a> bo'limidan ulang.</div>{% endif %}
+</form>
+<div class="card"><h2>Qanday ishlaydi</h2>
+<ol class="steps"><li><b>Maqsad</b><div class="muted sm">Obuna, ko'rish, murojaat, sotuv yoki profil trafigi.</div></li>
+<li><b>Tahlil</b><div class="muted sm">Postlar maqsadga mos ballanadi: ulashish, saqlash, ushlab turish, taklif belgilari.</div></li>
+<li><b>Taklif va PDF</b><div class="muted sm">Qaysi post, kimga, qanday sinash va qanday yoqish kerakligi. Targetologga PDF sifatida bering.</div></li></ol></div>
+</div>
+{% endif %}
+<div class="cardhead mt"><h2>Oxirgi takliflar</h2></div>
+<div class="grid g3">
+{% for x in props %}<a class="card link" href="{% url 'ads_proposal' x.pk %}" style="margin:0">
+  <div class="row sb"><span class="plat"><i class="{{ x.platform|platdot }}"></i>{{ x.account.get_platform_display }}</span><span class="badge {% if x.status == 'used' %}ok{% elif x.status == 'dismissed' %}{% else %}blue{% endif %}">{{ x.get_status_display }}</span></div>
+  <div style="font-weight:700;margin:6px 0 2px">{{ x.get_objective_display }}</div>
+  <div class="muted sm">{{ x.result.summary|truncatechars:110 }}</div>
+  <div class="tagrow mt"><span class="tag">{{ x.created_at|date:"d.m.Y" }}</span><span class="tag">ishonch: {{ CONF_UZ|dictkey:x.confidence|default:x.confidence }}</span>{% if not b %}<span class="tag">{{ x.business.name }}</span>{% endif %}</div>
+</a>{% empty %}<div class="card" style="grid-column:1/-1"><div class="empty">Hali taklif olinmagan.</div></div>{% endfor %}
+</div>
+{% endblock %}

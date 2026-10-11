@@ -1,0 +1,12 @@
+{% load webtags %}
+<a class="card link" href="{% url 'goal_detail' g.pk %}" style="margin:0">
+  <div class="row" style="gap:16px;flex-wrap:nowrap;align-items:center">
+    <div class="ring {{ p.ring_cls }}" style="--p:{{ p.pct|clamp100 }}"><div><span><b>{{ p.pct|floatformat:0 }}%</b></span></div></div>
+    <div style="min-width:0;flex:1">
+      <div class="plat"><i class="{{ g.account.platform|platdot }}"></i>{{ g.account.get_platform_display }} · {{ g.account.name|truncatechars:26 }}</div>
+      <div style="font-weight:700;margin:2px 0">{{ g.get_metric_display }}</div>
+      <div class="muted sm">{{ p.current|gfmt:g.metric }} → <b style="color:var(--fg)">{{ g.target|gfmt:g.metric }}</b> · {{ p.days_left }} kun qoldi</div>
+      <div style="margin-top:6px"><span class="badge {{ p.state_cls }}">{{ p.state_label }}</span></div>
+    </div>
+  </div>
+</a>

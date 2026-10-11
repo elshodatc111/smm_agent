@@ -86,7 +86,7 @@ Admin har bir rol uchun **modul × amal** matritsasini qo'lda belgilaydi.
 | Baza | MySQL 8 (yoki MariaDB), `utf8mb4` |
 | Fon ishlari | MySQL'dagi `jobs` jadvali + alohida worker jarayoni |
 | Rejalashtirgich | APScheduler (jadval MySQL'da saqlanadi) |
-| Frontend | React 18 + TypeScript + Vite + Tailwind (SPA; Node faqat build uchun, ishlashda kerak emas) |
+| Frontend | Django Templates + HTMX + Alpine.js + Tailwind (standalone CLI, Node kerak emas) |
 | Grafiklar | ApexCharts |
 | Telegram | python-telegram-bot yoki aiogram (bot), Telethon (statistika akkaunti) |
 | Instagram | Meta Graph API (rasmiy) |

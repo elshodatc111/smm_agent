@@ -103,6 +103,14 @@ def d_negative(b, p):
         yield A(b.pk, f"ng:{timezone.localdate()}", f"Salbiy izohlar ko'paydi ({n} ta / 24 soat): {b.name}", "Izohlarni ko'rib chiqing va javob bering — tez javob obro'ni saqlaydi.", "warn", "/studiya/izohlar/")
 
 
+def d_no_leads(b, p):
+    from apps.metrics.models import Lead
+    if not Lead.objects.filter(business=b).exists():
+        return
+    if not Lead.objects.filter(business=b, created_at__gte=timezone.now() - timedelta(days=p)).exists():
+        yield A(b.pk, f"nl:{timezone.localdate():%G%V}", f"{int(p)} kundan beri yangi lid yo'q: {b.name}", "Kontentdagi CTA va qisqa havolalarni tekshiring, lidlarni «Lidlar» bo'limiga kiritib boring.", "warn", "/lidlar/", 3)
+
+
 def d_stale_collect(b, p):
     now = timezone.now()
     for acc in b.accounts.filter(archived_at__isnull=True, status="active"):
@@ -134,7 +142,7 @@ def d_competitor_hit_stale(b, p):
     from apps.connections.models import Competitor
     old = Competitor.objects.filter(business=b, active=True).filter(last_light_at__isnull=True).count()
     if old and not (get_setting("scrapecreators.api_key", "") or get_setting("youtube.api_key", "")):
-        yield A(b.pk, "cs", f"Raqobatchi ma'lumot provayderi ulanmagan: {b.name}", "Raqobatchi tahlili provayder (ScrapeCreators / YouTube API) ulangach ishga tushadi. Loyiha ishga tushganda ulang — hozircha g'oyalar o'z tahlilingizdan olinadi.", "info", "/sozlamalar/?tab=xizmatlar", 14)
+        yield A(b.pk, "cs", f"Raqobatchi ma'lumot provayderi ulanmagan: {b.name}", "Raqobatchi tahlili provayder (ScrapeCreators / YouTube API) ulangach ishga tushadi. Loyiha ishga tushganda ulang — hozircha g'oyalar o'z tahlilingizdan olinadi.", "info", "/sozlamalar/?tab=kalitlar", 14)
 
 
 # global
@@ -219,6 +227,7 @@ ALERTS = [
     ("engagement_drop", "Faollik (ER) pasayishi", "Oxirgi postlar ER i oldingi medianadan belgilangan foizga past bo'lsa", ("Pasayish", 30, "%"), True, d_engagement_drop, False),
     ("story_drop", "Stories ko'rishlari tushishi", "Bir story o'rtacha ko'rishi oldingi davrdan belgilangan foizga past bo'lsa", ("Pasayish", 40, "%"), True, d_story_drop, False),
     ("negative", "Salbiy izohlar ko'payishi", "24 soatda salbiy izohlar soni chegaradan oshsa", ("Soni", 3, "ta"), True, d_negative, False),
+    ("no_leads", "Lid kelmayapti", "Belgilangan kunda yangi lid yozilmasa", ("Kun", 7, "kun"), True, d_no_leads, False),
     ("stale_collect", "Statistika yig'ilmayapti", "Akkaunt ma'lumoti belgilangan soatdan beri yangilanmasa", ("Soat", 36, "soat"), True, d_stale_collect, False),
     ("plan_behind", "Kontent-reja orqada", "Rejadagi postlar chiqqanidan belgilangan sondan ko'p orqada qolsa", ("Post", 3, "ta"), True, d_plan_behind, False),
     ("draft_pile", "Qoralamalar to'planib qoldi", "Vaqti belgilanmagan 7 kundan eski qoralamalar soni chegaradan oshsa", ("Soni", 10, "ta"), True, d_draft_pile, False),

@@ -21,7 +21,7 @@ POLL = 2.5
 
 def load_handlers() -> None:
     import importlib
-    for mod in ("metrics", "content", "studio", "media_analysis", "ads", "links", "reports", "tgbot", "health", "connections"):
+    for mod in ("metrics", "content", "studio", "media_analysis", "ads", "links", "reports", "tgbot", "health", "connections", "goals", "facts"):
         try:
             importlib.import_module(f"apps.{mod}.jobs")
         except ModuleNotFoundError as e:

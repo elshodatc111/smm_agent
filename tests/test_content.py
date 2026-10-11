@@ -8,7 +8,7 @@ from apps.connections.base import TransientError
 from apps.content import services, temphost
 from apps.content.models import ContentItem, ContentTarget, PublishAttempt
 from apps.content.rules import run_rules, similarity
-from apps.content.state import transition
+from apps.content.state import InvalidTransition, NotAllowed, transition, on_item_edited
 from apps.core.settings_store import set_setting
 
 GOOD = "Yangi kurs boshlandi! Narxi 500000 so'm, chegirma 20%. Aloqa: +998 90 123 45 67. Ro'yxatdan o'ting."
@@ -159,7 +159,7 @@ def test_r2_cap_enforced(tmp_path, settings, admin, monkeypatch):
     f.write_bytes(b"x" * 8000)
     monkeypatch.setattr(temphost, "hosts", lambda fake_: [temphost.R2Host()])
     monkeypatch.setattr(temphost.R2Host, "available", lambda self, size: True)
-    monkeypatch.setattr(temphost.R2Host, "upload", lambda self, p, k, t, progress=None: "https://r2/x")
+    monkeypatch.setattr(temphost.R2Host, "upload", lambda self, p, k, t: "https://r2/x")
     temphost.host_file(str(f))
     with pytest.raises(temphost.WaitingForSpace):
         temphost.host_file(str(f))

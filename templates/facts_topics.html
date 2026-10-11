@@ -1,0 +1,17 @@
+{% extends "base.html" %}{% load webtags %}{% block title %}Yo'nalishlar{% endblock %}
+{% block content %}
+<div class="pg-head"><div><h1>Yo'nalishlar</h1><div class="sub">{{ b.name }} · qaysi mavzulardan fakt va yangilik kerak. Har tarmoq uchun alohida yo'nalish qo'shing.</div></div><a class="btn" href="{% url 'facts_home' %}">Takliflar</a></div>
+<div class="grid g2-1" style="align-items:start">
+<div class="grid g2">
+{% for t in topics %}<div class="card" style="margin:0"><div class="row sb"><span class="plat"><i class="{{ t.platform|platdot }}"></i>{{ t.get_platform_display }}</span><span class="badge {% if t.active %}ok{% endif %}">{% if t.active %}faol{% else %}o'chiq{% endif %}</span></div>
+  <div style="font-weight:700;margin:6px 0">{{ t.title }}</div><div class="tagrow">{% for k in t.keywords|slice:":8" %}<span class="tag">{{ k }}</span>{% endfor %}</div>
+  {% if can %}<div class="row mt"><form method="post" action="{% url 'facts_topic_action' t.pk 'toggle' %}">{% csrf_token %}<button class="btn sm">{% if t.active %}O'chirish{% else %}Yoqish{% endif %}</button></form>
+  <form method="post" action="{% url 'facts_topic_action' t.pk 'delete' %}" onsubmit="return confirm('Yo\'nalish o\'chirilsinmi?')">{% csrf_token %}<button class="btn sm danger">O'chirish</button></form></div>{% endif %}</div>
+{% empty %}<div class="card" style="grid-column:1/-1"><div class="empty">Yo'nalish yo'q. Birinchi yangilashda avtomatik yaratiladi yoki o'ngdagi formadan qo'shing.</div></div>{% endfor %}
+</div>
+{% if can %}<form method="post" class="card">{% csrf_token %}<h2>Yangi yo'nalish</h2>
+  {% include "partials/form_card.html" %}
+  {% if default_kw %}<div class="help">Biznes turi bo'yicha tavsiya: {{ default_kw }}</div>{% endif %}
+  <div class="mt"><button class="btn primary">Qo'shish</button></div></form>{% endif %}
+</div>
+{% endblock %}

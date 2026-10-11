@@ -4,12 +4,12 @@ from __future__ import annotations
 import json
 
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 
 from apps.core.settings_store import get_setting
 
-SW_VERSION = "smm-v15"
+SW_VERSION = "smm-v13"
 
 
 def manifest(request):
@@ -17,7 +17,7 @@ def manifest(request):
     color = get_setting("general.brand_color", "#E11D2E")
     data = {
         "id": "/", "name": name, "short_name": (name[:12] or "SMM"), "description": "SMM boshqaruv platformasi: kalendar, nashr, tahlil, hisobotlar",
-        "start_url": "/app/?source=pwa", "scope": "/", "display": "standalone", "display_override": ["standalone", "minimal-ui"], "orientation": "any",
+        "start_url": "/?source=pwa", "scope": "/", "display": "standalone", "display_override": ["standalone", "minimal-ui"], "orientation": "any",
         "background_color": "#ffffff", "theme_color": color, "lang": "uz", "dir": "ltr", "categories": ["business", "productivity"],
         "icons": [
             {"src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
@@ -25,10 +25,10 @@ def manifest(request):
             {"src": "/static/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
         ],
         "shortcuts": [
-            {"name": "Yangi kontent", "url": "/app/kalendar/yangi/", "icons": [{"src": "/static/icons/icon-192.png", "sizes": "192x192"}]},
-            {"name": "Kalendar", "url": "/app/kalendar/", "icons": [{"src": "/static/icons/icon-192.png", "sizes": "192x192"}]},
-            {"name": "Vazifalar", "url": "/app/vazifalar/", "icons": [{"src": "/static/icons/icon-192.png", "sizes": "192x192"}]},
-            {"name": "Bildirishnomalar", "url": "/app/bildirishnomalar/", "icons": [{"src": "/static/icons/icon-192.png", "sizes": "192x192"}]},
+            {"name": "Yangi kontent", "url": "/kalendar/yangi/", "icons": [{"src": "/static/icons/icon-192.png", "sizes": "192x192"}]},
+            {"name": "Kalendar", "url": "/kalendar/", "icons": [{"src": "/static/icons/icon-192.png", "sizes": "192x192"}]},
+            {"name": "Vazifalar", "url": "/vazifalar/", "icons": [{"src": "/static/icons/icon-192.png", "sizes": "192x192"}]},
+            {"name": "Bildirishnomalar", "url": "/bildirishnomalar/", "icons": [{"src": "/static/icons/icon-192.png", "sizes": "192x192"}]},
         ],
     }
     r = HttpResponse(json.dumps(data, ensure_ascii=False), content_type="application/manifest+json")
@@ -38,7 +38,7 @@ def manifest(request):
 
 SW = """
 const V='%(v)s', STATIC=V+'-static';
-const SHELL=['/oflayn/','/static/favicon.svg','/static/icons/icon-192.png'];
+const SHELL=['/oflayn/','/static/css/app.css','/static/js/app.js','/static/favicon.svg','/static/icons/icon-192.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(STATIC).then(c=>Promise.all(SHELL.map(u=>c.add(u).catch(()=>0)))).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>!k.startsWith(V)).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
 self.addEventListener('fetch',e=>{

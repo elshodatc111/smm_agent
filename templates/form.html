@@ -1,0 +1,9 @@
+{% extends "base.html" %}{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="row sb"><h1>{{ title }}</h1>{% if back %}<a class="btn" href="{{ back }}">Orqaga</a>{% endif %}</div>
+{% if intro %}<p class="muted">{{ intro|safe }}</p>{% endif %}
+<div class="card" style="max-width:760px"><form method="post" enctype="multipart/form-data">{% csrf_token %}
+  {% include "partials/form_card.html" %}
+  <div class="mt row"><button class="btn primary">{{ submit|default:"Saqlash" }}</button>{% if back %}<a class="btn" href="{{ back }}">Bekor qilish</a>{% endif %}</div>
+</form></div>
+{% endblock %}

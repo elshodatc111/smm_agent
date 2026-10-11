@@ -5,8 +5,17 @@ from django.db import models
 class BusinessTemplate(models.Model):
     """Faoliyat turi andozasi: metrikalar, kontent turlari, tavsiya mantig'i."""
     key = models.SlugField(unique=True)
-    name = models.CharField(max_length=80)
+    name = models.CharField(max_length=120)
     config = models.JSONField(default=dict)  # key_metrics, content_types, seasonality, ctr/conv defaults, notes
+    # Biznes turi sifatida: pasport savollari, faktlar mavzulari, tizim turi belgisi
+    profile_fields = models.JSONField(default=list, blank=True)  # [{key,label,kind,help,choices}]
+    topics = models.JSONField(default=list, blank=True)           # faktlar/yangiliklar qidiruvi uchun kalit so'zlar (inglizcha)
+    description = models.CharField(max_length=300, blank=True)
+    is_system = models.BooleanField(default=False)
+    sort = models.PositiveSmallIntegerField(default=50)
+
+    class Meta:
+        ordering = ["sort", "name"]
 
     def __str__(self):
         return self.name
@@ -32,6 +41,7 @@ class Business(models.Model):
     margin = models.FloatField(null=True, blank=True)
     contact_info = models.TextField(blank=True)
     facts = models.JSONField(default=dict, blank=True)  # Content Rules «haqiqiylik»: phones, prices, address, discounts
+    profile = models.JSONField(default=dict, blank=True)  # biznes pasporti: {"general": {...}, "type": {...}}
     autopublish_enabled = models.BooleanField(default=True)  # kill switch
     client_approval_required = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)

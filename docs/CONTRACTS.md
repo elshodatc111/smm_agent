@@ -446,6 +446,7 @@ def run_rules(item, platform) -> "RuleCheckResult":    # status = max severity
 | `truth.unverified_claim` | truth | warn | "100% kafolat", "eng arzon" kabi da'volar |
 | `orig.competitor_similarity` | originality | block ≥0.85, warn ≥0.7 | raqobatchi/hook matniga o'xshashlik (n-gram Jaccard + embedding ixtiyoriy) |
 | `policy.sensitive_topic` | policy | warn | sog'liq/moliya va'dalari |
+| `policy.copyright_media` | policy | warn | musiqa/rasm manbasi belgilanmagan |
 | `lang.orthography_uz` | language | warn | imlo/uslub (lotin, apostrof `ʻ`/`'` birligi) |
 | `ai.draft_not_reviewed` | language | block | AI qoralamasi inson ko'rmagan |
 
@@ -669,7 +670,7 @@ Bu bo'lim yuqoridagi matnni **bekor qiladi**, agar ziddiyat bo'lsa.
 6. **STT zanjiri** — Groq Whisper (`uz`, prompt) → Gemini audio → lokal `faster-whisper`; past ishonch «qisman natija» deb belgilanadi.
 7. **Claude (pullik) standart O'CHIQ**; yoqilsa oylik byudjet + siyosat (`only_when_free_exhausted | quality_tasks | always`).
 8. **Zaxira** — kunlik `backup_db` (~03:30), `smm_YYYYMMDD_HHMM.sql.gz` + `env_….backup`, saqlash `backup.keep_days`.
-9. **Veb** — React SPA (`frontend/`, `/app/`) + Django JSON view'lari (`apps/web/spa.py`, `ui.py` bloklar tizimi). Ichki API: `/api/v1/session/|health|businesses|notifications/unread`.
+9. **Veb** — Django shablonlari + HTMX/Alpine; bitta umumiy `page.html` bloklar tizimi (`apps/web/ui.py`). Ichki API minimal (`/api/v1/health|businesses|notifications/unread`); asosiy interfeys server-render.
 10. **Yo'riqnoma** — `docs/setup/*.md` ilova ichida «Yo'riqnoma» bo'limida ko'rsatiladi (birinchi qator `# Sarlavha`).
 11. **Ishga tushirish** — `run.bat` → `tools/supervisor.py` (veb `manage.py serve` (Waitress) + `manage.py worker`, watchdog `/api/v1/health/`). Sozlash ustasi `tools/first_run.py`.
 12. **Ruxsat presetlari** — `settings`, `users`, `system_health` modullari «ko'rish» presetlariga kirmaydi (faqat admin yoki alohida berilganda).

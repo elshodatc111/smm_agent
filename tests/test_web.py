@@ -31,7 +31,7 @@ def test_login_required(db):
 def test_wrong_password(db):
     User.objects.create_user("x", password="Aaaa#1234567")
     r = Client().post("/kirish/", {"username": "x", "password": "bad"})
-    assert r.status_code == 401 and "Login yoki parol" in r.json()["error"]
+    assert r.status_code == 200 and "Login yoki parol" in r.content.decode()
 
 
 def test_all_get_pages_no_500(demo):
@@ -48,7 +48,7 @@ def test_all_get_pages_no_500(demo):
     import apps.web.urls as U
     for p in U.urlpatterns:
         pat = str(p.pattern)
-        if p.name in ("logout", "theme", "oauth_done", "spa_shell", "spa_shell_path", "brand_logo") or "<" in pat and "pk" not in pat and "slug" not in pat:
+        if p.name in ("logout", "theme", "oauth_done") or "<" in pat and "pk" not in pat and "slug" not in pat:
             continue
         if "<int:pk>" in pat:
             m = {"business_detail": b, "business_edit": b, "connection_detail": acc, "competitor_detail": comp, "content_detail": item, "content_edit": item, "post_insight": post,
@@ -90,7 +90,7 @@ def test_secret_never_rendered(demo):
     from apps.core.settings_store import set_setting
     set_setting("meta.app_secret", "SUPERSECRETVALUE123456")
     c = login("boss", "Boss#2026test!")
-    html = c.get("/sozlamalar/?tab=xizmatlar").content.decode()
+    html = c.get("/sozlamalar/?tab=kalitlar").content.decode()
     assert "SUPERSECRETVALUE123456" not in html
 
 
@@ -158,11 +158,12 @@ def test_security_headers_and_csrf(demo):
 
 
 def test_calendar_grid_and_new_ai_pages(demo):
+    from apps.ai_router import router as r
     c = login("boss", "Boss#2026test!")
     b = Business.objects.first()
     c.post("/biznes-tanlash/", {"business": b.pk})
-    j = c.get("/kalendar/").json()
-    assert j["kind"] == "calendar" and j["can_create"] and len(j["month"]) == 7
+    html = c.get("/kalendar/").content.decode()
+    assert 'class="cg"' in html and "/kalendar/yangi/?date=" in html
     assert c.get("/kalendar/yangi/?date=2030-05-06").status_code == 200
     for u in ("/raqobatchilar/", "/studiya/", "/reklama/", "/reklama/maslahat/"):
         assert c.get(u).status_code == 200, u
@@ -253,14 +254,15 @@ def test_calendar_filters(demo):
 
 def test_platform_forms_cloud_and_trash(demo, settings, tmp_path):
     from apps.content import temphost
-    from apps.content.models import ContentItem, TempObject
+    from apps.content.models import ContentAsset, ContentItem, TempObject
+    from apps.jobs.queue import Job
     settings.MEDIA_ROOT = str(tmp_path)
     c = login("boss", "Boss#2026test!")
     b = Business.objects.first()
     c.post("/biznes-tanlash/", {"business": b.pk})
     assert c.get("/kalendar/yangi/zzz/").status_code == 404
-    j = c.get("/kalendar/yangi/instagram/").json()
-    assert j["plat_brief"] != "" and j["fixed"] == "instagram"
+    html = c.get("/kalendar/yangi/instagram/").content.decode()
+    assert "tahlilidan xulosa" in html and "image_editor.js" in html
     # media saqlansa -> Cloudflare yozuvi + navbat (USE_FAKES: FakeHost)
     from django.core.files.uploadedfile import SimpleUploadedFile
     from apps.connections.models import SocialAccount
@@ -289,10 +291,3 @@ def test_platform_forms_cloud_and_trash(demo, settings, tmp_path):
     c.post(f"/kalendar/{it.pk}/ochir/")
     assert c.post(f"/kalendar/savat/{it.pk}/ochir/").status_code == 302
     assert not ContentItem.all_objects.filter(pk=it.pk).exists()
-
-
-def test_content_form_title_defaults_to_first_line():
-    from apps.web.forms import ContentForm
-    f = ContentForm(data={"text": "<b>Aksiya</b> boshlandi\nBatafsil", "media_type": "text"})
-    assert f.is_valid(), f.errors
-    assert f.cleaned_data["title"] == "Aksiya boshlandi"

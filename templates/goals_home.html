@@ -1,0 +1,25 @@
+{% extends "base.html" %}{% load webtags %}{% block title %}Maqsadlar{% endblock %}
+{% block content %}
+<div class="hero">
+  <div class="row sb"><div><h1>Maqsadlar</h1><p>Har bir ijtimoiy tarmoq uchun 3 oylik maqsad qo'ying: tizim har kuni progressni hisoblaydi, ortda qolsangiz ogohlantiradi va maqsadga yetishish uchun nima kerakligini aytadi.</p></div>
+  {% if can_create %}<a class="btn primary" href="{% url 'goal_new' %}">+ Yangi maqsad</a>{% endif %}</div>
+</div>
+<div class="grid g4" style="margin-bottom:18px">
+  <div class="card stat"><div class="ico blue"><svg viewBox="0 0 24 24">{{ icons.target|safe }}</svg></div><div><div class="v">{{ stat.total }}</div><div class="l">{% if show == 'active' %}Faol maqsadlar{% else %}Yopilgan maqsadlar{% endif %}</div></div></div>
+  <div class="card stat"><div class="ico green"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg></div><div><div class="v">{{ stat.ok }}</div><div class="l">Reja bo'yicha / bajarilgan</div></div></div>
+  <div class="card stat"><div class="ico" style="background:color-mix(in srgb,var(--warn) 14%,transparent);color:var(--warn)"><svg viewBox="0 0 24 24"><path d="M12 8v5M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg></div><div><div class="v">{{ stat.risk }}</div><div class="l">Xavf ostida</div></div></div>
+  <div class="card stat"><div class="ico red"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></div><div><div class="v">{{ stat.bad }}</div><div class="l">Ortda qolmoqda</div></div></div>
+</div>
+<div class="seg" style="margin-bottom:18px"><a href="?show=active" class="{% if show == 'active' %}on{% endif %}">Faol</a><a href="?show=closed" class="{% if show != 'active' %}on{% endif %}">Yopilgan</a></div>
+{% for biz, items in groups.items %}
+<div class="cardhead mt"><h2>{{ biz.name }}</h2><a class="sm" href="{% url 'passport' biz.pk %}">Biznes pasporti</a></div>
+<div class="grid g3">{% for g, p in items %}{% include "partials/goal_card.html" %}{% endfor %}</div>
+{% empty %}
+<div class="card"><div class="empty">{% if show == 'active' %}Hali maqsad qo'yilmagan. <a href="{% url 'goal_new' %}">Birinchi maqsadni qo'ying</a>: masalan, 3 oyda Telegram obunachilarini 3 tadan 100 taga yetkazish.{% else %}Yopilgan maqsadlar yo'q.{% endif %}</div></div>
+{% endfor %}
+{% if free %}
+<h2 class="mt2">Maqsad qo'yilmagan akkauntlar</h2>
+<div class="grid g3">{% for a in free %}<div class="card flat"><div class="plat"><i class="{{ a.platform|platdot }}"></i>{{ a.get_platform_display }} · {{ a.name }}</div>
+<div class="muted sm" style="margin:4px 0 12px">{{ a.business.name }}</div><a class="btn sm primary" href="{% url 'goal_new' %}?account={{ a.pk }}">Maqsad qo'yish</a></div>{% endfor %}</div>
+{% endif %}
+{% endblock %}

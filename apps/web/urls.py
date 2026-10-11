@@ -1,6 +1,5 @@
-from django.urls import path, re_path
+from django.urls import path
 
-from . import spa
 from . import views_activity as ac
 from . import views_biz as b
 from . import views_cloud as cl
@@ -11,14 +10,14 @@ from . import views_system as s
 from . import views_growth as g
 from . import views_preview as pv
 from . import views_pwa as pw
+from . import views_ads as ad
+from . import views_facts as fc
+from . import views_goals as gl
 from . import views_tools as t
+from . import views_types as vt
 from . import views_work as w
 
 urlpatterns = [
-    path("app/", spa.shell, name="spa_shell"),
-    re_path(r"^app/(?P<path>.+)$", spa.shell, name="spa_shell_path"),
-    path("static/spa/<path:rel>", spa.asset, name="spa_asset"),
-    path("brend/logo/", spa.brand_logo, name="brand_logo"),
     path("manifest.webmanifest", pw.manifest, name="pwa_manifest"),
     path("sw.js", pw.service_worker, name="pwa_sw"),
     path("oflayn/", pw.offline, name="pwa_offline"),
@@ -36,6 +35,11 @@ urlpatterns = [
     # bizneslar
     path("bizneslar/", b.business_list, name="business_list"),
     path("bizneslar/yangi/", b.business_new, name="business_new"),
+    path("bizneslar/<int:pk>/pasport/", vt.passport, name="passport"),
+    path("sozlamalar/biznes-turlari/", vt.biztype_list, name="biztype_list"),
+    path("sozlamalar/biznes-turlari/yangi/", vt.biztype_edit, name="biztype_new"),
+    path("sozlamalar/biznes-turlari/<int:pk>/", vt.biztype_edit, name="biztype_edit"),
+    path("sozlamalar/biznes-turlari/<int:pk>/ochir/", vt.biztype_delete, name="biztype_delete"),
     path("bizneslar/<int:pk>/", b.business_detail, name="business_detail"),
     path("bizneslar/<int:pk>/tahrir/", b.business_edit, name="business_edit"),
     path("bizneslar/<int:pk>/killswitch/", b.business_killswitch, name="business_killswitch"),
@@ -63,7 +67,6 @@ urlpatterns = [
     path("raqobatchilar/<int:pk>/ochir/", n.competitor_delete, name="competitor_delete"),
     # tahlil / kontent
     path("tahlil/", c.analytics, name="analytics"),
-    path("tahlil/postlar/", c.post_list, name="post_list"),
     path("tahlil/post/<int:pk>/", c.post_insight, name="post_insight"),
     path("kalendar/", c.calendar, name="calendar"),
     path("kalendar/yangi/", c.content_new, name="content_new"),
@@ -82,7 +85,6 @@ urlpatterns = [
     path("kalendar/savat/<int:pk>/ochir/", c.content_purge, name="content_purge"),
     path("kalendar/tanlangan-ochir/", c.content_delete_many, name="content_delete_many"),
     path("kalendar/<int:pk>/ochir/", c.content_delete, name="content_delete"),
-    path("kalendar/<int:pk>/toxtat/", c.content_stop, name="content_stop"),
     path("kalendar/<int:pk>/hozir/", c.content_now, name="content_now"),
     path("kalendar/<int:pk>/holat/<str:new>/", c.content_transition, name="content_transition"),
     path("kalendar/<int:pk>/tekshir/", c.content_check, name="content_check"),
@@ -94,6 +96,7 @@ urlpatterns = [
     path("kalendar/<int:pk>/fayl/<int:aid>/almashtir/", c.content_asset_replace, name="content_asset_replace"),
     path("kalendar/avto-vaqt/", c.content_autotime_many, name="content_autotime_many"),
     path("kalendar/<int:pk>/avto-vaqt/", c.content_autotime, name="content_autotime"),
+    path("kalendar/<int:pk>/tayyor/", c.content_ready, name="content_ready"),
     path("kalendar/<int:pk>/fayl/<int:aid>/surish/", w.content_asset_move, name="content_asset_move"),
     path("kalendar/<int:pk>/koch/", w.content_move, name="content_move"),
     path("kalendar/<int:pk>/nusxa/", w.content_duplicate, name="content_duplicate"),
@@ -107,11 +110,14 @@ urlpatterns = [
     path("goyalar/<int:pk>/holat/<str:new>/", g.idea_status, name="idea_status"),
     path("goyalar/<int:pk>/ssenariy/", g.idea_script, name="idea_script"),
     path("goyalar/<int:pk>/post/", g.idea_to_post, name="idea_to_post"),
+    path("lidlar/", g.leads_home, name="leads_home"),
+    path("lidlar/qoshish/", g.lead_add, name="lead_add"),
+    path("lidlar/import/", g.lead_import, name="lead_import"),
+    path("lidlar/eksport/", g.leads_export, name="leads_export"),
+    path("lidlar/<int:pk>/holat/<str:new>/", g.lead_status, name="lead_status"),
     path("kunlik/", g.daily_stats, name="daily_stats"),
     path("ogohlantirishlar/", g.alerts_home, name="alerts_home"),
     path("shablonlar/", w.template_list, name="template_list"),
-    path("shablonlar/yangi/", w.template_save, name="template_new"),
-    path("shablonlar/<int:pk>/saqlash/", w.template_save, name="template_save"),
     path("shablonlar/<int:pk>/ochir/", w.template_delete, name="template_delete"),
     path("vazifalar/", w.my_tasks, name="my_tasks"),
     path("qidiruv/", w.global_search, name="global_search"),
@@ -138,9 +144,6 @@ urlpatterns = [
     path("cloudflare/", cl.cloud_home, name="cloud_home"),
     path("cloudflare/tanlash/", cl.cloud_pick, name="cloud_pick"),
     path("cloudflare/yuklash/", cl.cloud_upload_manual, name="cloud_upload_manual"),
-    path("cloudflare/yuklash/boshlash/", cl.cloud_chunk_start, name="cloud_chunk_start"),
-    path("cloudflare/<int:pk>/bolak/", cl.cloud_chunk_put, name="cloud_chunk_put"),
-    path("cloudflare/<int:pk>/tugatish/", cl.cloud_chunk_done, name="cloud_chunk_done"),
     path("cloudflare/tanlangan-ochir/", cl.cloud_delete_many, name="cloud_delete_many"),
     path("cloudflare/tozalash/", cl.cloud_cleanup_published, name="cloud_cleanup_published"),
     path("cloudflare/sinov/", cl.cloud_test, name="cloud_test"),
@@ -152,12 +155,31 @@ urlpatterns = [
     path("cloudflare/<int:pk>/havola/", cl.cloud_link, name="cloud_link"),
     path("reklama/maslahat/", t.ads_advice_view, name="ads_advice_view"),
     path("reklama/maslahat/yangila/", t.ads_advice_run, name="ads_advice_run"),
-    path("reklama/", t.ads_home, name="ads_home"),
+    path("reklama/", ad.ads_home, name="ads_home"),
+    path("reklama/taklif/yangi/", ad.ads_propose, name="ads_propose"),
+    path("reklama/taklif/<int:pk>/", ad.ads_proposal, name="ads_proposal"),
+    path("reklama/taklif/<int:pk>/holat/", ad.ads_proposal_status, name="ads_proposal_status"),
+    path("reklama/taklif/<int:pk>/qayta/", ad.ads_proposal_redo, name="ads_proposal_redo"),
+    path("reklama/taklif/<int:pk>/pdf/", ad.ads_proposal_pdf, name="ads_proposal_pdf"),
     path("reklama/yangila/", t.ads_refresh, name="ads_refresh"),
     path("reklama/prognoz/", t.ads_forecast, name="ads_forecast"),
     path("reklama/tavsiya/<int:pk>/", t.ads_recommendation, name="ads_recommendation"),
     path("reklama/<int:pk>/", t.ads_campaign, name="ads_campaign"),
     path("reklama/<int:pk>/natija/", t.ads_result, name="ads_result"),
+    # faktlar va yangiliklar
+    path("faktlar/", fc.facts_home, name="facts_home"),
+    path("faktlar/yangilash/", fc.facts_refresh_now, name="facts_refresh_now"),
+    path("faktlar/yonalishlar/", fc.facts_topics, name="facts_topics"),
+    path("faktlar/yonalishlar/<int:pk>/<str:action>/", fc.facts_topic_action, name="facts_topic_action"),
+    path("faktlar/manbalar/", fc.facts_sources, name="facts_sources"),
+    path("faktlar/manbalar/<int:pk>/<str:action>/", fc.facts_source_action, name="facts_source_action"),
+    path("faktlar/taklif/<int:pk>/holat/", fc.facts_suggestion_status, name="facts_suggestion_status"),
+    # maqsadlar
+    path("maqsadlar/", gl.goals_home, name="goals_home"),
+    path("maqsadlar/yangi/", gl.goal_new, name="goal_new"),
+    path("maqsadlar/<int:pk>/", gl.goal_detail, name="goal_detail"),
+    path("maqsadlar/<int:pk>/tahrir/", gl.goal_edit, name="goal_edit"),
+    path("maqsadlar/<int:pk>/yopish/", gl.goal_close, name="goal_close"),
     # hisobot
     path("hisobotlar/", t.report_list, name="report_list"),
     path("hisobotlar/yaratish/", t.report_create, name="report_create"),
@@ -175,6 +197,7 @@ urlpatterns = [
     path("havolalar/<int:pk>/ochir/", t.link_delete, name="link_delete"),
     # tizim
     path("tizim/", s.health, name="health"),
+    path("tizim/qism/", s.health_partial, name="health_partial"),
     path("tizim/vazifalar/", s.job_list, name="job_list"),
     path("tizim/vazifalar/<int:pk>/qayta/", s.job_retry, name="job_retry"),
     path("tizim/zaxira/", s.backup_now, name="backup_now"),
@@ -182,7 +205,6 @@ urlpatterns = [
     path("sozlamalar/ai-kalit/qoshish/", s.ai_key_add, name="ai_key_add"),
     path("sozlamalar/ai-kalit/<int:pk>/ochir/", s.ai_key_delete, name="ai_key_delete"),
     path("sozlamalar/ai-kalit/<int:pk>/tekshir/", s.ai_key_test, name="ai_key_test"),
-    path("sozlamalar/brend/", s.brand_save, name="brand_save"),
     path("sozlamalar/tekshir/<str:what>/", s.setting_test, name="setting_test"),
     path("foydalanuvchilar/", s.user_list, name="user_list"),
     path("foydalanuvchilar/yangi/", s.user_new, name="user_new"),

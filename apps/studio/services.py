@@ -17,6 +17,10 @@ from .models import (CommentSuggestion, ContentPlan, Hook, PostInsight, Script, 
 
 J = {"json": True}  # response_schema belgisi: JSON kutiladi
 
+# AI faqat TAKLIF beradi: egasi o'zi yozadi/tahrirlaydi. Platforma AI matnini o'zi nashr qilmaydi.
+SUGGEST_ONLY = (" MUHIM: bu faqat TAKLIF/qoralama g'oya. Biznes egasi uni o'zi qayta yozib, o'z ovozida chiqaradi: "
+                "aniq narx, telefon, va'da yoki raqamlarni o'ylab topma; o'rniga [to'ldiring] belgisini qo'y.")
+
 
 def _biz_brief(b) -> str:
     return (f"Nomi: {b.name}\nFaoliyat: {b.industry}\nHudud: {b.region}\nTil: {b.languages}\nTavsif: {b.description}\n"
@@ -167,7 +171,7 @@ def analyze_script(script: Script, user=None, router=None) -> ScriptAnalysis:
 def captions(business, topic: str, platform: str, user=None, router=None) -> dict:
     lim = {"instagram": "2200 belgigacha, 5-10 hashtag", "telegram": "1024 belgigacha (media bilan)", "youtube": "sarlavha ≤100, tavsif ≤5000"}.get(platform, "")
     prompt = (f"{platform} uchun mavzu bo'yicha 3 ta caption varianti va hashtaglar yoz. Cheklov: {lim}. "
-              f'JSON: {{"variants":["",""],"hashtags":[]}}\nMavzu: {topic}')
+              f'JSON: {{"variants":["",""],"hashtags":[]}}{SUGGEST_ONLY}\nMavzu: {topic}')
     res, _ = generate(TaskType.LONG_UZ, prompt, business=business, kind="caption", user=user, schema=J, router=router)
     return res.data or {}
 
@@ -210,7 +214,7 @@ def smart_caption(business, platform: str, media_type: str, topic: str, current:
               f"Mavzu/maqsad: {topic or '(biznes uchun mos mavzu tanla)'}\n"
               f"Mavjud qoralama (bo'lsa yaxshila): {current[:1500]}\n"
               f"Shu biznesning o'z statistikasi (shundan o'rgan, nusxa ko'chirma):\n{insights_brief(business, platform)}\n"
-              'JSON: {"variants":["to\'liq tayyor matn 1","to\'liq tayyor matn 2","to\'liq tayyor matn 3"],"hashtags":[],"why":"nega shunday (1 jumla)"}')
+              'JSON: {"variants":["taklif 1","taklif 2","taklif 3"],"hashtags":[],"why":"nega shunday (1 jumla)"}' + SUGGEST_ONLY)
     res, _ = generate(TaskType.LONG_UZ, prompt, business=business, kind="caption", user=user, schema=J, router=router)
     return res.data or {}
 

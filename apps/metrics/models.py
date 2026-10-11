@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 
@@ -180,7 +181,27 @@ class DailyStat(models.Model):
     saves = models.BigIntegerField(default=0)
     story_views = models.BigIntegerField(default=0)
     link_clicks = models.IntegerField(default=0)
+    leads = models.IntegerField(default=0)
 
     class Meta:
         unique_together = [("business", "account", "day")]
         indexes = [models.Index(fields=["business", "day"])]
+
+
+class Lead(models.Model):
+    """Lid (ariza): qo'lda, Excel'dan yoki havola orqali kelgan."""
+    STATUS = [("new", "Yangi"), ("contacted", "Aloqa qilindi"), ("won", "Sotuv bo'ldi"), ("lost", "Yo'qotildi")]
+    SOURCES = [("manual", "Qo'lda"), ("telegram", "Telegram"), ("instagram", "Instagram"), ("youtube", "YouTube"), ("link", "Qisqa havola"), ("other", "Boshqa")]
+    business = models.ForeignKey("businesses.Business", on_delete=models.CASCADE, related_name="leads")
+    name = models.CharField(max_length=160, blank=True)
+    phone = models.CharField(max_length=40, blank=True)
+    source = models.CharField(max_length=12, choices=SOURCES, default="manual")
+    content_item = models.ForeignKey("content.ContentItem", null=True, blank=True, on_delete=models.SET_NULL, related_name="leads")
+    note = models.CharField(max_length=400, blank=True)
+    status = models.CharField(max_length=10, choices=STATUS, default="new")
+    amount = models.DecimalField(max_digits=14, decimal_places=0, null=True, blank=True)   # sotuv summasi (so'm)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]

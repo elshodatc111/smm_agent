@@ -1,0 +1,9 @@
+{% extends "base.html" %}{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="pg-head"><div><h1>{{ title }}</h1><div class="sub">Pasport savollari shu turdagi barcha bizneslarda ko'rinadi.</div></div><a class="btn" href="{% url 'biztype_list' %}">Orqaga</a></div>
+<form method="post" class="card" style="max-width:900px">{% csrf_token %}
+  {% include "partials/form_card.html" %}
+  <div class="callout"><b>i</b><div>Savol turlari: <code>text</code> — qisqa javob, <code>long</code> — uzun javob, <code>choice</code> — tayyor variantlardan tanlash, <code>number</code> — raqam.</div></div>
+  <div class="row mt"><button class="btn primary">Saqlash</button><a class="btn" href="{% url 'biztype_list' %}">Bekor qilish</a></div>
+</form>
+{% endblock %}

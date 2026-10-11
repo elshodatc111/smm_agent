@@ -1,8 +1,20 @@
 from __future__ import annotations
 
+from django.contrib import messages
 from django.http import Http404
+from django.shortcuts import redirect
 
 from apps.accounts.services import perms
+
+
+def need_business(request, code: str | None = None):
+    """Tanlangan biznesni qaytaradi; tanlanmagan bo'lsa None (view o'zi ro'yxat/yo'naltirishni hal qiladi)."""
+    return getattr(request, "business", None)
+
+
+def ask_pick_business(request, what: str = "Bu sahifa"):
+    messages.info(request, f"{what} uchun yuqoridan bitta biznesni tanlang.")
+    return redirect("dashboard")
 
 
 def get_obj(request, model, pk, code: str, *, business_field: str = "business"):

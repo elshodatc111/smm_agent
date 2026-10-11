@@ -20,10 +20,12 @@ log = logging.getLogger(__name__)
 
 
 def compute_er(m, followers: int | None) -> tuple[float | None, str]:
-    """ER_post = (like+comment+share+save) / maxraj. Maxraj: reach > views > followers."""
+    """ER_post = (like+comment+share+save) / maxraj. Maxraj: reach > views > followers.
+    Himoya: o'zaro ta'sirlar maxrajdan oshib ketsa (ma'lumot nomuvofiq: masalan reach yo'q, views=1) shu maxraj
+    ishonchsiz hisoblanib keyingisiga o'tiladi; natija hech qachon 100% dan oshmaydi."""
     inter = sum(x or 0 for x in (m.likes, m.comments, m.shares, m.saves))
     for basis, den in (("reach", m.reach), ("views", m.views), ("followers", followers)):
-        if den and den > 0:
+        if den and den > 0 and inter <= den:
             return inter / den, basis
     return None, ""
 

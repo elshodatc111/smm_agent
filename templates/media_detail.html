@@ -1,0 +1,40 @@
+{% extends "base.html" %}{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="row sb"><div><h1 style="margin-bottom:2px">{{ m.original_name }}</h1><div class="muted">{{ m.business.name }} · {{ m.size|filesizeformat }} · {{ m.created_at|date:"d.m.Y H:i" }}</div></div>
+  <a class="btn" href="/studiya/?tab=tahlil">← Tahlillar</a></div>
+
+{% if running %}<div class="card">⏳ Tahlil davom etmoqda… (katta videolar bir necha daqiqa oladi). Sahifani birozdan keyin yangilang.</div>{% endif %}
+{% if m.status == "failed" %}<div class="card"><span class="badge bad">Xato</span> Tahlil bajarilmadi. Faylni qayta yuklab ko'ring.</div>{% endif %}
+
+{% if card %}
+<div class="card"><div class="an-top">
+  <div>{% if card.total is not None %}<div class="an-ring" style="--p:{{ card.total }};--c:var(--{{ card.total_cls }})"><div><span><b>{{ card.total }}</b><br><small>/ 100</small></span></div></div>{% endif %}</div>
+  <div>{% if card.verdict %}<div class="an-verdict {{ card.verdict.cls }}">{{ card.verdict.title }}<small>{{ card.verdict.text }}</small></div>{% endif %}
+    {% if card.summary %}<p style="margin:12px 0 0">{{ card.summary }}</p>{% endif %}
+    <div class="an-chips" style="margin-top:10px">
+      {% if card.hook_text %}<span class="an-chip">🪝 Hook: {{ card.hook_text }}</span>{% endif %}
+      <span class="an-chip">📣 CTA: {{ card.cta_text }}</span>{% if card.pacing %}<span class="an-chip">⏱ Sur'at: {{ card.pacing }}</span>{% endif %}</div></div>
+</div></div>
+
+{% if card.scores %}<div class="card"><h2>Mezonlar bo'yicha baho</h2><div class="an-wrap">
+  {% for c in card.scores %}<div class="an-bar"><span>{{ c.label }}</span><div class="an-track"><i class="{{ c.cls }}" style="width:{{ c.pct }}%"></i></div><b>{{ c.v }}</b></div>{% endfor %}</div></div>{% endif %}
+
+{% if card.scenes %}<div class="card"><h2>Video sahna-sahna</h2><div class="muted" style="font-size:13px">Ustun balandligi — tomoshabin e'tibori (qanchalik baland bo'lsa, shunchalik yaxshi).</div>
+  <div class="an-tl">{% for s in card.scenes %}<div class="{{ s.cls }}" style="height:{{ s.h }}px" title="{{ s.t }}: {{ s.what }}"></div>{% endfor %}</div>
+  <div class="an-tlt">{% for s in card.scenes %}<span>{{ s.t }}</span>{% endfor %}</div>
+  <div style="margin-top:10px">{% for s in card.scenes %}<div class="an-scene"><b>{{ s.t }}</b><div>{{ s.what }}{% if s.note %}<div class="muted" style="font-size:13px">{{ s.note }}</div>{% endif %}</div><b class="badge {{ s.cls }}">{{ s.att|floatformat:0 }}</b></div>{% endfor %}</div></div>{% endif %}
+
+{% if card.fit %}<div class="card"><h2>Qaysi platformaga mos?</h2><div class="an-chips">{% for f in card.fit %}<span class="an-chip">{{ f.label }}: <b class="{{ f.cls }}">{{ f.v }}/10</b></span>{% endfor %}</div></div>{% endif %}
+
+<div class="an-2">
+  <div class="card"><h2>👍 Kuchli tomonlari</h2>{% for x in card.strengths %}<div class="an-li">{{ x }}</div>{% empty %}<div class="muted">—</div>{% endfor %}</div>
+  <div class="card"><h2>🛠 Nima tuzatish kerak</h2>{% for x in card.improvements %}<div class="an-li">{% if x.prio %}<span class="badge {{ x.cls }}">{{ x.prio }}</span> {% endif %}{{ x.fix }}</div>{% empty %}<div class="muted">—</div>{% endfor %}</div>
+</div>
+{% if a.degraded %}<div class="hint bad">Qisman tahlil: ba'zi bosqichlar bajarilmadi (AI yoki transkripsiya mavjud emas edi).</div>{% endif %}
+{% elif not running and a %}<div class="card"><span class="badge warn">AI xulosa yo'q</span> Texnik ma'lumot pastda. AI kaliti yoki limitni tekshiring.</div>{% endif %}
+
+<details class="card"><summary><b>Texnik ma'lumot va transkripsiya</b></summary>
+  <div class="grid g2" style="margin-top:10px">{% for k,v in tech %}<div><div class="muted">{{ k }}</div><div>{{ v }}</div></div>{% endfor %}</div>
+  {% if transcript %}<h3>Transkripsiya</h3><div style="white-space:pre-wrap">{{ transcript }}</div>{% endif %}
+  {% if raw %}<h3>Xom AI javobi</h3><pre style="white-space:pre-wrap;font-size:12px;max-height:260px;overflow:auto">{{ raw }}</pre>{% endif %}</details>
+{% endblock %}

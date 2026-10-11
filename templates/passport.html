@@ -1,0 +1,42 @@
+{% extends "base.html" %}{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="hero">
+  <div class="row sb" style="align-items:center">
+    <div><h1>Biznes pasporti</h1><p>{{ b.name }} · {{ b.template.name|default:"turi tanlanmagan" }}. Qancha to'liq to'ldirsangiz, reklama va faktlar bo'yicha takliflar shuncha aniq bo'ladi.</p></div>
+    <div class="ring lg {% if comp.pct >= 80 %}ok{% elif comp.pct < 50 %}bad{% else %}warn{% endif %}" style="--p:{{ comp.pct }}"><div><span><b>{{ comp.pct }}%</b><small>to'liqlik</small></span></div></div>
+  </div>
+</div>
+{% if not comp.ok_for_ai %}<div class="callout warn"><b>!</b><div>Pasport <b>{{ comp.pct }}%</b> to'ldirilgan. 50% dan past bo'lsa AI takliflari «ma'lumot yetarli emas» deb belgilanadi. Quyidagi savollarga javob bering.</div></div>{% endif %}
+<form method="post">{% csrf_token %}
+<div class="grid g1-2" style="align-items:start">
+  <div class="card" style="position:sticky;top:78px">
+    <h2>Bo'limlar</h2>
+    {% for s in comp.sections %}<div style="margin:12px 0"><div class="row sb sm"><a href="#sec-{{ s.id }}"><b>{{ s.title }}</b></a><span class="muted">{{ s.filled }}/{{ s.total }}</span></div>
+      <div class="meter {% if s.pct >= 80 %}ok{% elif s.pct < 40 %}bad{% else %}warn{% endif %}" style="margin-top:6px"><i style="width:{{ s.pct }}%"></i></div></div>{% endfor %}
+    <div class="divider"></div>
+    <label>Biznes turi</label>
+    <select name="template" {% if not can_edit %}disabled{% endif %}>{% for t in types %}<option value="{{ t.pk }}" {% if b.template_id == t.pk %}selected{% endif %}>{{ t.name }}</option>{% endfor %}</select>
+    <div class="help">Turni almashtirsangiz, savollar ham almashadi (avvalgi javoblar saqlanib qoladi). Yangi tur qo'shish: <a href="{% url 'biztype_list' %}">Sozlamalar → Biznes turlari</a>.</div>
+    {% if can_edit %}<div class="mt"><button class="btn primary" style="width:100%">Pasportni saqlash</button></div>{% endif %}
+    <div class="mt"><a class="btn" style="width:100%" href="{% url 'business_detail' b.pk %}">Biznes sahifasiga</a></div>
+  </div>
+  <div>
+    {% for s in secs %}
+    <div class="card" id="sec-{{ s.id }}"><div class="cardhead"><h2>{{ s.title }}</h2></div>
+      <div class="field-grid">
+      {% for f in s.fields %}
+        <div class="{% if f.kind == 'long' %}full{% endif %}">
+          <label for="{{ f.section }}__{{ f.key }}">{{ f.label }}{% if not f.value %} <span class="badge warn">bo'sh</span>{% endif %}</label>
+          {% if f.kind == "long" %}<textarea id="{{ f.section }}__{{ f.key }}" name="{{ f.section }}__{{ f.key }}" rows="3" {% if not can_edit %}disabled{% endif %}>{{ f.value }}</textarea>
+          {% elif f.kind == "choice" %}<select id="{{ f.section }}__{{ f.key }}" name="{{ f.section }}__{{ f.key }}" {% if not can_edit %}disabled{% endif %}><option value="">— tanlang —</option>{% for c in f.choices %}<option value="{{ c }}" {% if f.value == c %}selected{% endif %}>{{ c }}</option>{% endfor %}</select>
+          {% else %}<input id="{{ f.section }}__{{ f.key }}" name="{{ f.section }}__{{ f.key }}" value="{{ f.value }}" {% if f.kind == "number" %}inputmode="decimal"{% endif %} {% if not can_edit %}disabled{% endif %}>{% endif %}
+          {% if f.help %}<div class="help">{{ f.help }}</div>{% endif %}
+        </div>
+      {% endfor %}</div>
+    </div>
+    {% endfor %}
+    {% if can_edit %}<div class="row"><button class="btn primary lg">Pasportni saqlash</button></div>{% endif %}
+  </div>
+</div>
+</form>
+{% endblock %}

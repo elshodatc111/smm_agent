@@ -1,0 +1,42 @@
+{% extends "base.html" %}{% load webtags %}{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="hero {% if p.state == 'behind' or p.state == 'missed' %}dark{% endif %}">
+  <div class="row sb" style="align-items:center;gap:24px">
+    <div style="min-width:240px;flex:1"><div class="plat" style="color:#fff"><i class="{{ g.account.platform|platdot }}"></i>{{ g.account.get_platform_display }} · {{ g.account.name }}</div>
+      <h1>{{ g.get_metric_display }}: {{ g.target|gfmt:g.metric }}</h1>
+      <p>{{ p.message }}</p>
+      <div class="row" style="margin-top:12px"><span class="badge {{ p.state_cls }}" style="font-size:13px">{{ p.state_label }}</span><span class="muted">{{ g.start_date|date:"d.m.Y" }} → {{ g.end_date|date:"d.m.Y" }} · {{ p.days_left }} kun qoldi</span></div></div>
+    <div class="ring lg {{ p.ring_cls }}" style="--p:{{ p.pct|clamp100 }}"><div><span><b>{{ p.pct|floatformat:0 }}%</b><small>bajarildi</small></span></div></div>
+  </div>
+</div>
+<div class="grid g4" style="margin-bottom:18px">
+  <div class="card kpi"><div class="v">{{ p.baseline|gfmt:g.metric }}</div><div class="l">Boshlang'ich qiymat</div></div>
+  <div class="card kpi"><div class="v">{{ p.current|gfmt:g.metric }}</div><div class="l">Hozirgi qiymat</div></div>
+  <div class="card kpi"><div class="v">{{ p.remaining|gfmt:g.metric }}</div><div class="l">Maqsadgacha qoldi</div></div>
+  <div class="card kpi"><div class="v">{% if g.metric == 'er' %}—{% else %}{{ p.required_per_day|floatformat:1 }}{% endif %}</div><div class="l">Kerakli tezlik (kuniga) · hozir {{ p.rate_per_day|floatformat:1 }}</div></div>
+</div>
+<div class="card"><div class="cardhead"><h2>Vaqt va progress</h2><span class="muted sm">Chiziq — kutilgan o'rin ({{ p.expected_pct|floatformat:0 }}%)</span></div>
+  <div class="meter {{ p.ring_cls }}" style="height:14px"><i style="width:{{ p.pct|clamp100 }}%"></i><span class="mark" style="left:{{ p.expected_pct|clamp100 }}%"></span></div>
+  {% if p.confidence == 'low' %}<div class="help mt">Ishonch: past — ma'lumot hali kam, baho taxminiy.</div>{% endif %}
+</div>
+<div class="grid g2-1">
+  <div class="card"><h2>Reja va haqiqat</h2><div id="gchart"></div></div>
+  <div class="card"><h2>Haftalik chegaralar</h2><div class="tbl"><table><tr><th>Hafta</th><th>Sana</th><th>Reja</th><th>Haqiqiy</th></tr>
+  {% for m in ms %}<tr><td>{{ m.week }}</td><td>{{ m.date|date:"d.m" }}</td><td>{{ m.plan|gfmt:g.metric }}</td><td>{% if m.actual is not None %}<span class="badge {{ m.status }}">{{ m.actual|gfmt:g.metric }}</span>{% elif m.future %}<span class="muted">—</span>{% else %}<span class="muted">ma'lumot yo'q</span>{% endif %}</td></tr>{% endfor %}</table></div></div>
+</div>
+{% if can_edit and g.status == 'active' %}
+<div class="grid g2">
+<form method="post" action="{% url 'goal_edit' g.pk %}" class="card">{% csrf_token %}<h2>Maqsadni o'zgartirish</h2><div class="field-grid">
+  <div><label>Nishon ({{ unit }})</label><input name="target" value="{{ g.target|floatformat:'-1' }}" inputmode="decimal"></div>
+  <div><label>Muddat</label><input type="date" name="end_date" value="{{ g.end_date|date:'Y-m-d' }}"></div>
+  <div class="full"><label>Izoh</label><input name="note" value="{{ g.note }}"></div>
+  <div class="full"><label>O'zgartirish sababi</label><input name="reason" placeholder="Masalan: reklama boshlandi, nishonni oshirdik"></div></div>
+  <div class="mt"><button class="btn primary">Saqlash</button></div></form>
+<div class="card"><h2>Maqsadni yopish</h2><p class="muted">Muddatdan oldin yopmoqchi bo'lsangiz. Yopilgan maqsad o'zgarmaydi, natija tarixda qoladi.</p>
+  <div class="row"><form method="post" action="{% url 'goal_close' g.pk %}">{% csrf_token %}<input type="hidden" name="status" value="achieved"><button class="btn">Bajarildi deb belgilash</button></form>
+  <form method="post" action="{% url 'goal_close' g.pk %}" onsubmit="return confirm('Maqsad bekor qilinsinmi?')">{% csrf_token %}<input type="hidden" name="status" value="cancelled"><button class="btn danger">Bekor qilish</button></form></div></div>
+</div>
+{% endif %}
+{% if revisions %}<div class="card"><h2>O'zgarishlar tarixi</h2><div class="timeline">{% for r in revisions %}<div><b>{{ r.at|date:"d.m.Y H:i" }}</b> · {{ r.user.display|default:"tizim" }}<div class="muted sm">Nishon: {{ r.old_target|gfmt:g.metric }} → {{ r.new_target|gfmt:g.metric }} · Muddat: {{ r.old_end|date:"d.m.Y" }} → {{ r.new_end|date:"d.m.Y" }}{% if r.reason %} · {{ r.reason }}{% endif %}</div></div>{% endfor %}</div></div>{% endif %}
+{% endblock %}
+{% block scripts %}{{ chart|json_script:"gdata" }}<script>window.addEventListener('load',()=>{const c=JSON.parse(document.getElementById('gdata').textContent);lineChart('gchart',c.labels,c.series,['#9AA3B8','#E11D2E']);});</script>{% endblock %}

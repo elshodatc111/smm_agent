@@ -29,6 +29,8 @@ INSTALLED_APPS = [
     "apps.studio",
     "apps.media_analysis",
     "apps.ads",
+    "apps.goals",
+    "apps.facts",
     "apps.links",
     "apps.reports",
     "apps.tgbot",
@@ -41,7 +43,6 @@ MIDDLEWARE = [
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
-    "apps.web.spa.SpaNavigationMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
@@ -61,6 +62,7 @@ TEMPLATES = [{
         "django.template.context_processors.request",
         "django.contrib.auth.context_processors.auth",
         "django.contrib.messages.context_processors.messages",
+        "apps.web.context.ui_context",
     ]},
 }]
 
@@ -100,7 +102,6 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 SESSION_COOKIE_AGE = 12 * 3600
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = False
-CSRF_FAILURE_VIEW = "apps.web.spa.csrf_failure"
 DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 

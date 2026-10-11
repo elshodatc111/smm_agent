@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import os
 from datetime import date, datetime, time, timedelta
 
 from django.conf import settings
@@ -53,10 +54,10 @@ def collect_data(report) -> dict:
 
 
 def extra_data(report, since, until) -> dict:
-    """Mijoz hisoboti uchun qo'shimcha: platformalar kesimi, kunlik statistika, nashrlar, stories."""
+    """Mijoz hisoboti uchun qo'shimcha: platformalar kesimi, kunlik statistika, lidlar, nashrlar, stories."""
     from apps.metrics import analytics as an
     from apps.metrics.daily import rollup_business
-    from apps.metrics.models import DailyStat, Post, Story
+    from apps.metrics.models import DailyStat, Lead, Post, Story
     b = report.business
     # platformalar kesimi
     per = []
@@ -80,17 +81,23 @@ def extra_data(report, since, until) -> dict:
         except Exception:  # noqa: BLE001
             rows = []
     daily = [{"day": r.day.isoformat(), "followers": r.followers, "delta": r.followers_delta, "views": r.views, "posts": r.posts, "stories": r.stories,
-              "clicks": r.link_clicks, "story_views": r.story_views} for r in rows]
+              "leads": r.leads, "clicks": r.link_clicks, "story_views": r.story_views} for r in rows]
+    # lidlar
+    ls = Lead.objects.filter(business=b, created_at__gte=since, created_at__lt=until)
+    pl = Lead.objects.filter(business=b, created_at__gte=since - (until - since), created_at__lt=since).count()
+    src = {}
+    for l in ls:
+        src[l.get_source_display()] = src.get(l.get_source_display(), 0) + 1
+    won = [l for l in ls if l.status == "won"]
+    leads = {"total": ls.count(), "prev": pl, "won": len(won), "amount": int(sum(l.amount or 0 for l in won)), "sources": sorted(src.items(), key=lambda t: -t[1])}
     clicks = sum(r["clicks"] for r in daily)
-    daily_total = {"days": len(daily), "followers_delta": sum(r["delta"] or 0 for r in daily), "views": sum(r["views"] for r in daily),
-                   "posts": sum(r["posts"] for r in daily), "stories": sum(r["stories"] for r in daily), "clicks": clicks}
     # nashrlar ro'yxati
     pubs = []
     for p in Post.objects.filter(business=b, published_at__gte=since, published_at__lt=until).select_related("account").order_by("-published_at")[:40]:
         pubs.append({"when": p.published_at.astimezone(tz()).strftime("%d.%m %H:%M"), "platform": p.platform, "type": p.media_type, "text": (p.text or "")[:80].replace("\n", " "), "url": p.url})
     st = Story.objects.filter(business=b, published_at__gte=since, published_at__lt=until)
     sv = sum(((h.views or 0) if (h := s.history.order_by("-is_final", "-taken_at").first()) else 0) for s in st)
-    return {"per_platform": per, "daily": daily, "daily_total": daily_total, "clicks": clicks, "publications": pubs, "stories": {"count": st.count(), "views": sv}}
+    return {"per_platform": per, "daily": daily, "leads": leads, "clicks": clicks, "publications": pubs, "stories": {"count": st.count(), "views": sv}}
 
 
 def ai_summary(report, data: dict, router=None) -> dict:
@@ -153,8 +160,10 @@ def build_xlsx(report, data: dict, summary: dict) -> bytes:
     sheet("Turlar", ["Tur", "Soni", "O'rtacha ko'rish", "O'rtacha ER"], [[t["type"], t["count"], t["avg_views"], t["avg_er"]] for t in data["by_type"]])
     sheet("Obunachilar", ["Sana", "Obunachi"], [[s["date"], s["followers"]] for s in data["series"]])
     sheet("Raqobatchilar", ["Nomi", "Tarmoq", "Obunachi", "O'sish"], [[c["name"], c["platform"], c["followers"], c["growth"]] for c in data["competitors"]])
-    sheet("Kunlik", ["Sana", "Obunachi", "O'sish", "Postlar", "Stories", "Ko'rish", "Story ko'rish", "Havola bosish"],
-          [[x["day"], x["followers"], x["delta"], x["posts"], x["stories"], x["views"], x["story_views"], x["clicks"]] for x in data.get("daily", [])])
+    sheet("Kunlik", ["Sana", "Obunachi", "O'sish", "Postlar", "Stories", "Ko'rish", "Story ko'rish", "Havola bosish", "Lid"],
+          [[x["day"], x["followers"], x["delta"], x["posts"], x["stories"], x["views"], x["story_views"], x["clicks"], x["leads"]] for x in data.get("daily", [])])
+    ld = data.get("leads") or {}
+    sheet("Lidlar", ["Ko'rsatkich", "Qiymat"], [["Jami lid", ld.get("total", 0)], ["Oldingi davr", ld.get("prev", 0)], ["Sotuv", ld.get("won", 0)], ["Sotuv summasi", ld.get("amount", 0)]] + [[f"Manba: {a}", b] for a, b in ld.get("sources", [])])
     sheet("Platformalar", ["Platforma", "Obunachi", "O'sish", "Postlar", "Ko'rish", "Layk", "ER"],
           [[x["name"], x["kpi"]["followers"], x["kpi"]["followers_delta"], x["kpi"]["posts"], x["kpi"]["views"], x["kpi"]["likes"], x["kpi"]["er"]] for x in data.get("per_platform", [])])
     sheet("Tavsiyalar", ["Tavsiya"], [[r] for r in summary["recommendations"]])
@@ -167,7 +176,7 @@ def generate_report(report, router=None) -> None:
     try:
         data = collect_data(report)
         summary = ai_summary(report, data, router)
-        report.data = {**{k: v for k, v in data.items() if k in ("kpi", "delta", "top", "frequency", "per_platform", "daily", "daily_total", "clicks", "publications", "stories", "by_type", "competitors")}, "summary": summary}
+        report.data = {**{k: v for k, v in data.items() if k in ("kpi", "delta", "top", "frequency", "per_platform", "daily", "leads", "clicks", "publications", "stories", "by_type", "competitors")}, "summary": summary}
         report.summary_text = summary["summary"] + "\n\n" + "\n".join("• " + r for r in summary["recommendations"])
         stamp = f"{report.business_id}_{report.kind}_{report.period_end:%Y%m%d}"
         report.pdf.save(f"{stamp}.pdf", ContentFile(build_pdf(report, data, summary)), save=False)

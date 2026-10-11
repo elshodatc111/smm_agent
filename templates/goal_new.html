@@ -1,0 +1,28 @@
+{% extends "base.html" %}{% load webtags %}{% block title %}Yangi maqsad{% endblock %}
+{% block content %}
+<div class="pg-head"><div><h1>Yangi maqsad</h1><div class="sub">1) akkaunt va ko'rsatkichni tanlang · 2) tizim taklif qilgan nishonlardan birini tanlang yoki o'zingiz yozing.</div></div><a class="btn" href="{% url 'goals_home' %}">Orqaga</a></div>
+<form method="get" class="card"><div class="field-grid">
+  <div><label>Akkaunt</label><select name="account" onchange="this.form.submit()"><option value="">— tanlang —</option>
+    {% for a in accounts %}<option value="{{ a.pk }}" {% if acc.pk == a.pk %}selected{% endif %}>{{ a.business.name }} · {{ a.get_platform_display }} · {{ a.name }}</option>{% endfor %}</select></div>
+  <div><label>Qaysi ko'rsatkich bo'yicha</label><select name="metric" onchange="this.form.submit()">{% for k, v in metrics %}<option value="{{ k }}" {% if metric == k %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></div>
+</div><noscript><button class="btn mt">Davom etish</button></noscript></form>
+{% if acc %}
+<form method="post" class="card">{% csrf_token %}<input type="hidden" name="account" value="{{ acc.pk }}"><input type="hidden" name="metric" value="{{ metric }}">
+  {% if existing %}<div class="callout warn"><b>!</b><div>Bu ko'rsatkich uchun faol maqsad allaqachon bor: <a href="{% url 'goal_detail' existing.pk %}">{{ existing }}</a>.</div></div>{% endif %}
+  <div class="kvx"><div><div class="k">Hozirgi qiymat</div><div class="v">{{ sug.baseline|gfmt:metric }}</div></div><div><div class="k">Akkaunt</div><div class="v">{{ acc.get_platform_display }} · {{ acc.name }}</div></div><div><div class="k">Ishonch darajasi</div><div class="v">{% if sug.confidence == 'medium' %}O'rtacha{% else %}Past: ma'lumot kam{% endif %}</div></div></div>
+  {% for n in sug.notes %}<div class="help" style="margin-top:6px">{{ n }}</div>{% endfor %}
+  <h2 class="mt">Nishon tanlang</h2>
+  <div class="grid g3">{% for o in sug.options %}
+    <label class="card link" style="cursor:pointer;margin:0"><input type="radio" name="choice" value="{{ o.value }}" {% if forloop.counter == 2 %}checked{% endif %} style="float:right">
+      <div class="muted sm">{{ o.label }}</div><div style="font-size:28px;font-weight:780;letter-spacing:-.02em">{{ o.value|gfmt:metric }}</div>
+      <div class="up sm">+{{ o.gain|gfmt:metric }} {{ unit }}</div><div class="help">{{ o.hint }}</div></label>{% endfor %}</div>
+  <div class="field-grid mt">
+    <div><label>Yoki o'zingiz yozing ({{ unit }})</label><input name="custom" inputmode="decimal" placeholder="Masalan: 150"></div>
+    <div><label>Muddat (sukut: 90 kun)</label><input type="date" name="end_date" value="{{ default_end }}"></div>
+    <div class="full"><label>Izoh (ixtiyoriy)</label><input name="note" placeholder="Masalan: yangi yil aksiyasigacha"></div>
+  </div>
+  <div class="callout"><b>i</b><div>Nishonlar taxminiy: akkaunt hajmi va o'tgan 30 kunlik o'sishingizga qarab hisoblangan. Maqsadni keyin o'zgartirish mumkin, har o'zgarish tarixga yoziladi.</div></div>
+  <div class="row mt"><button class="btn primary lg" name="create" value="1">Maqsadni qo'yish</button></div>
+</form>
+{% endif %}
+{% endblock %}

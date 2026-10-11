@@ -63,6 +63,7 @@ def comment(item: ContentItem, user, text: str) -> bool:
 
 
 def assign_task(item: ContentItem, user, *, assignee, due_at, brief: str) -> None:
+    changed_assignee = (assignee.pk if assignee else None) != item.assignee_id
     item.assignee, item.due_at, item.brief = assignee, due_at, (brief or "").strip()
     item.design_status = "todo" if assignee else ""
     item.save(update_fields=["assignee", "due_at", "brief", "design_status", "updated_at"])

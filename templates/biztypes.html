@@ -1,0 +1,15 @@
+{% extends "base.html" %}{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="pg-head"><div><h1>Biznes turlari</h1><div class="sub">Har bir tur o'z pasport savollari, faktlar mavzulari va maslahatlariga ega. Kerakli tur bo'lmasa, o'zingiz qo'shing.</div></div>
+{% if can %}<a class="btn primary" href="{% url 'biztype_new' %}">+ Yangi tur</a>{% endif %}</div>
+<div class="row" style="margin-bottom:14px"><a class="pill" href="{% url 'settings_home' %}">← Sozlamalar</a></div>
+<div class="grid g3">
+{% for r in rows %}<div class="card">
+  <div class="row sb"><b style="font-size:16px">{{ r.t.name }}</b>{% if r.t.is_system %}<span class="badge blue">tizim</span>{% else %}<span class="badge violet">sizniki</span>{% endif %}</div>
+  <div class="muted sm" style="margin:4px 0 10px">{{ r.t.description|default:r.t.config.advice|truncatechars:110 }}</div>
+  <div class="tagrow"><span class="tag">{{ r.n_fields }} ta savol</span><span class="tag">{{ r.n_biz }} ta biznes</span><span class="tag">{{ r.t.topics|length }} ta mavzu</span></div>
+  {% if can %}<div class="row mt"><a class="btn sm" href="{% url 'biztype_edit' r.t.pk %}">Tahrirlash</a>
+  {% if not r.t.is_system and not r.n_biz %}<form method="post" action="{% url 'biztype_delete' r.t.pk %}" onsubmit="return confirm('O\'chirilsinmi?')">{% csrf_token %}<button class="btn sm danger">O'chirish</button></form>{% endif %}</div>{% endif %}
+</div>{% endfor %}
+</div>
+{% endblock %}

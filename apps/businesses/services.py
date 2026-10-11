@@ -4,38 +4,25 @@ from apps.core.audit import audit
 
 from .models import Business, BrandProfile
 
-TEMPLATES = {
-    "oquv_markaz": {"name": "O'quv markaz", "config": {
-        "key_metrics": ["lead", "royxatga_olish", "kurs_tolovi"],
-        "content_types": ["reels", "natijalar", "o'qituvchi tanishuvi", "aksiya", "savol-javob"],
-        "seasonality": "Sentabr va yanvarda qabul avjida; yozda pasayish",
-        "defaults": {"ctr": 0.012, "click_to_lead": 0.06, "cpm": 25000},
-        "advice": "Murojaat va ro'yxatga olishga e'tibor; ota-onalar uchun ishonch kontenti."}},
-    "shaxsiy_blog": {"name": "Shaxsiy blog (dizayner / SMM)", "config": {
-        "key_metrics": ["obunachi_osishi", "saqlash", "ulashish", "murojaat"],
-        "content_types": ["portfolio ishlar", "oldin-keyin", "jarayon (reels)", "maslahat va dars", "keys (natija bilan)", "shaxsiy hikoya", "mijoz sharhi", "narx va xizmatlar"],
-        "seasonality": "Yangi yil, Navro'z, bayramlar oldidan buyurtma ko'payadi; yozda biroz pasayish",
-        "defaults": {"ctr": 0.012, "click_to_lead": 0.05, "cpm": 22000},
-        "advice": "Shaxsiy brend: ko'proq jarayon va natija ko'rsating, foydali maslahat bering, har 3-4 postdan birida xizmat taklif qiling."}},
-    "kiyim_dokoni": {"name": "Kiyim do'koni", "config": {
-        "key_metrics": ["saqlash", "ulashish", "katalog_kliklari"],
-        "content_types": ["lookbook", "yangi kolleksiya", "aksiya", "mijoz sharhi", "reels (kiyib ko'rish)"],
-        "seasonality": "Mavsum almashuvi, Navro'z, Ramazon/Hayit, Yangi yil",
-        "defaults": {"ctr": 0.015, "click_to_lead": 0.08, "cpm": 20000},
-        "advice": "Vizual kontent va aksiya; mahsulot katalogiga yo'naltirish."}},
-    "kompyuter_xizmatlari": {"name": "Kompyuter xizmatlari", "config": {
-        "key_metrics": ["murojaat", "javob_tezligi", "ishonch"],
-        "content_types": ["ish jarayoni", "maslahat", "oldin-keyin", "B2B keys", "narx ro'yxati"],
-        "seasonality": "Hisobot davrlari (B2B), o'quv yili boshi (B2C)",
-        "defaults": {"ctr": 0.01, "click_to_lead": 0.05, "cpm": 22000},
-        "advice": "Xizmat ishonchi va tez javob; B2B va B2C alohida xabarlar."}},
-}
-
-
 def ensure_templates():
+    """Tizim biznes turlarini yaratadi; mavjudlarini admin tahririni buzmasdan to'ldiradi."""
     from .models import BusinessTemplate
-    for key, t in TEMPLATES.items():
-        BusinessTemplate.objects.get_or_create(key=key, defaults={"name": t["name"], "config": t["config"]})
+    from .types_data import TYPES
+    for key, t in TYPES.items():
+        obj, created = BusinessTemplate.objects.get_or_create(key=key, defaults={
+            "name": t["name"], "config": t["config"], "profile_fields": t["fields"], "topics": t["topics"], "is_system": True, "sort": t.get("sort", 50)})
+        if not created:
+            upd = []
+            if not obj.profile_fields:
+                obj.profile_fields = t["fields"]; upd.append("profile_fields")
+            if not obj.topics and t["topics"]:
+                obj.topics = t["topics"]; upd.append("topics")
+            if not obj.is_system:
+                obj.is_system = True; upd.append("is_system")
+            if not obj.config:
+                obj.config = t["config"]; upd.append("config")
+            if upd:
+                obj.save(update_fields=upd)
 
 
 @transaction.atomic
