@@ -4,7 +4,7 @@ from django.db import models
 
 class Report(models.Model):
     KINDS = [("weekly", "Haftalik"), ("monthly", "Oylik"), ("period", "Tanlangan davr"),
-             ("competitors", "Raqobatchilar bilan solishtirish"), ("plan", "Kontent-plan"), ("ads", "Reklama natijasi")]
+             ("competitors", "Raqobatchilar bilan solishtirish"), ("plan", "Kontent-plan")]
     STATUS = [("generating", "Tayyorlanmoqda"), ("ready", "Tayyor"), ("failed", "Xato"), ("awaiting_approval", "Tasdiq kutilmoqda"), ("sent", "Yuborildi")]
     business = models.ForeignKey("businesses.Business", on_delete=models.CASCADE, related_name="reports")
     kind = models.CharField(max_length=12, choices=KINDS)

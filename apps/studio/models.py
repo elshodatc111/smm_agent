@@ -64,17 +64,6 @@ class Hook(models.Model):
         ordering = ["-created_at"]
 
 
-class CommentSuggestion(models.Model):
-    STATUS = [("draft", "Qoralama"), ("approved", "Tasdiqlandi"), ("sent", "Yuborildi"), ("rejected", "Rad etildi")]
-    comment = models.ForeignKey("metrics.Comment", on_delete=models.CASCADE, related_name="suggestions")
-    draft = models.TextField()
-    final_text = models.TextField(blank=True)
-    status = models.CharField(max_length=10, choices=STATUS, default="draft")
-    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
-    created_at = models.DateTimeField(auto_now_add=True)
-    sent_at = models.DateTimeField(null=True, blank=True)
-
-
 class PostInsight(models.Model):
     post = models.ForeignKey("metrics.Post", on_delete=models.CASCADE, related_name="insights")
     numbers = models.JSONField(default=dict)   # kod hisoblagan raqamli asos

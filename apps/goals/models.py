@@ -5,7 +5,7 @@ from django.db import models
 class Goal(models.Model):
     """Har bir ijtimoiy tarmoq akkaunti uchun (odatda 3 oylik) maqsad. Natija ma'lumotlardan avtomatik hisoblanadi."""
     METRICS = [("followers", "Obunachilar soni"), ("views", "Yangi kontent ko'rishlari"), ("posts", "Chiqarilgan postlar soni"),
-               ("er", "O'rtacha faollik (ER, %)"), ("leads", "Lidlar soni")]
+               ("er", "O'rtacha faollik (ER, %)")]
     STATUS = [("active", "Faol"), ("achieved", "Bajarildi"), ("missed", "Bajarilmadi"), ("cancelled", "Bekor qilindi")]
     business = models.ForeignKey("businesses.Business", on_delete=models.CASCADE, related_name="goals")
     account = models.ForeignKey("connections.SocialAccount", on_delete=models.CASCADE, related_name="goals")

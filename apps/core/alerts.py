@@ -96,21 +96,6 @@ def d_story_drop(b, p):
             yield A(b.pk, f"sd:{timezone.localdate():%G%V}", f"Stories ko'rishlari tushdi: {b.name}", f"Bir story o'rtacha {c:.0f} ko'rish (oldin {o:.0f}). So'rovnoma/stiker qo'shing, soatni almashtiring.", "warn", "/tahlil/", 3)
 
 
-def d_negative(b, p):
-    from apps.metrics.models import Comment
-    n = Comment.objects.filter(business=b, sentiment="negative", created_at__gte=timezone.now() - timedelta(hours=24)).count()
-    if n >= p:
-        yield A(b.pk, f"ng:{timezone.localdate()}", f"Salbiy izohlar ko'paydi ({n} ta / 24 soat): {b.name}", "Izohlarni ko'rib chiqing va javob bering — tez javob obro'ni saqlaydi.", "warn", "/studiya/izohlar/")
-
-
-def d_no_leads(b, p):
-    from apps.metrics.models import Lead
-    if not Lead.objects.filter(business=b).exists():
-        return
-    if not Lead.objects.filter(business=b, created_at__gte=timezone.now() - timedelta(days=p)).exists():
-        yield A(b.pk, f"nl:{timezone.localdate():%G%V}", f"{int(p)} kundan beri yangi lid yo'q: {b.name}", "Kontentdagi CTA va qisqa havolalarni tekshiring, lidlarni «Lidlar» bo'limiga kiritib boring.", "warn", "/lidlar/", 3)
-
-
 def d_stale_collect(b, p):
     now = timezone.now()
     for acc in b.accounts.filter(archived_at__isnull=True, status="active"):
@@ -184,16 +169,6 @@ def g_worker(p):
         yield A(None, "wk", "Fon ishchisi (worker) javob bermayapti", f"Oxirgi signal {last.beat_at:%H:%M}. Rejalashtirilgan postlar chiqmaydi! run.bat ni qayta ishga tushiring.", "critical")
 
 
-def g_link_worker(p):
-    try:
-        from apps.links.models import WorkerStatus
-        s = WorkerStatus.objects.order_by("-checked_at").first()
-    except Exception:  # noqa: BLE001
-        return
-    if s and not s.ok and get_setting("worker.cloudflare_url", ""):
-        yield A(None, "lw", "Qisqa havola Worker ishlamayapti", (s.message or "")[:200], "warn", "/havolalar/")
-
-
 def g_r2(p):
     from django.db.models import Sum
     from apps.content.models import TempObject
@@ -226,8 +201,6 @@ ALERTS = [
     ("stuck_publish", "Nashr vaqti o'tib ketdi", "Rejalashtirilgan post belgilangan daqiqadan beri chiqmagan bo'lsa", ("Daqiqa", 15, "daqiqa"), True, d_stuck_publish, False),
     ("engagement_drop", "Faollik (ER) pasayishi", "Oxirgi postlar ER i oldingi medianadan belgilangan foizga past bo'lsa", ("Pasayish", 30, "%"), True, d_engagement_drop, False),
     ("story_drop", "Stories ko'rishlari tushishi", "Bir story o'rtacha ko'rishi oldingi davrdan belgilangan foizga past bo'lsa", ("Pasayish", 40, "%"), True, d_story_drop, False),
-    ("negative", "Salbiy izohlar ko'payishi", "24 soatda salbiy izohlar soni chegaradan oshsa", ("Soni", 3, "ta"), True, d_negative, False),
-    ("no_leads", "Lid kelmayapti", "Belgilangan kunda yangi lid yozilmasa", ("Kun", 7, "kun"), True, d_no_leads, False),
     ("stale_collect", "Statistika yig'ilmayapti", "Akkaunt ma'lumoti belgilangan soatdan beri yangilanmasa", ("Soat", 36, "soat"), True, d_stale_collect, False),
     ("plan_behind", "Kontent-reja orqada", "Rejadagi postlar chiqqanidan belgilangan sondan ko'p orqada qolsa", ("Post", 3, "ta"), True, d_plan_behind, False),
     ("draft_pile", "Qoralamalar to'planib qoldi", "Vaqti belgilanmagan 7 kundan eski qoralamalar soni chegaradan oshsa", ("Soni", 10, "ta"), True, d_draft_pile, False),
@@ -237,7 +210,6 @@ ALERTS = [
     ("ai", "AI xizmati ishlamayapti", "2 soatda barcha AI so'rovlari xato bersa", ("Xato soni", 5, "ta"), True, g_ai, True),
     ("jobs", "Vazifalar xatosi ko'payishi", "3 soatda xato bilan tugagan vazifalar soni chegaradan oshsa", ("Soni", 5, "ta"), True, g_jobs, True),
     ("worker", "Fon ishchisi o'chib qoldi", "Worker signali belgilangan daqiqadan beri kelmasa", ("Daqiqa", 10, "daqiqa"), True, g_worker, True),
-    ("link_worker", "Havola Worker ishlamayapti", "Cloudflare Worker tekshiruvi muvaffaqiyatsiz bo'lsa", None, True, g_link_worker, True),
     ("r2", "Cloudflare saqlash to'layapti", "Ishlatilgan hajm limitning belgilangan foizidan oshsa", ("Foiz", 80, "%"), True, g_r2, True),
     ("sqlite", "SQLite bazasi katta", "Baza hajmi chegaradan oshsa MySQL'ga o'tishni tavsiya qiladi", ("Hajm", 500, "MB"), True, g_sqlite, True),
 ]

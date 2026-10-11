@@ -15,3 +15,9 @@ Instagram/YouTube/Telegram Bot API/Telethon/Groq/Gemini/OpenRouter/ScrapeCreator
 - Kalendar — ro'yxat ko'rinishida (oy bo'yicha), drag-and-drop yo'q.
 - Telethon o'rnatish Windows'da `pip install telethon` orqali (requirements'da bor).
 - Ko'p tilli interfeys yo'q (faqat o'zbek lotin) — TZ bo'yicha.
+
+## Patch 32 (2026-10)
+- Olib tashlandi: Leadlar, Havolalar (short links), YouTube/Telegram izohlari, ZIP-eksport (biznes to'liq o'chiriladi: /bizneslar/<pk>/ochirish/).
+- AI: faqat OpenAI va Claude (Sozlamalar → AI). Boshqa provayderlar yo'q.
+- Yangi: Murojaatlar (apps/inbox) — Telegram operator akkauntlariga kelgan mijoz xabarlari; tizim hech qachon birinchi yozmaydi; AI faqat skriptdan javob beradi, 15 daqiqa operator javob bermasa qo'shiladi va AI ekanini aytadi; barcha javoblar jurnalda; ma'lumot yetmasa operatorga uzatiladi.
+- Menyu: 4 bo'lim, yig'iladigan; kam ishlatiladiganlar «Ko'proq»da.

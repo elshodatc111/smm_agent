@@ -59,3 +59,41 @@ def business_changed(business: Business, old: dict) -> None:
     """Biznes ma'lumoti o'zgarsa «Brend xotirasini yangilash» taklifi."""
     if any(getattr(business, f) != old.get(f) for f in BUSINESS_PROMPT_FIELDS if f in old):
         Business.objects.filter(pk=business.pk).update(brand_update_suggested=True)
+
+
+def purge_business(business) -> dict:
+    """Biznesni va unga tegishli HAMMA ma'lumotni (postlar, metrikalar, maqsadlar, fayllar...) butunlay o'chiradi. Qaytarib bo'lmaydi."""
+    import os
+
+    from django.db import transaction
+    from django.db.models import FileField
+    files: list[str] = []
+
+    def collect(obj):
+        for f in obj._meta.get_fields():
+            if isinstance(f, FileField):
+                v = getattr(obj, f.name, None)
+                if v:
+                    try:
+                        files.append(v.path)
+                    except Exception:  # noqa: BLE001
+                        pass
+    from django.db.models.deletion import Collector
+    from django.db import router
+    col = Collector(using=router.db_for_write(type(business)))
+    col.collect([business])
+    for model, objs in col.data.items():
+        if any(isinstance(f, FileField) for f in model._meta.get_fields()):
+            for o in objs:
+                collect(o)
+    name, pk = business.name, business.pk
+    with transaction.atomic():
+        business.delete()
+    removed = 0
+    for p in files:
+        try:
+            os.remove(p)
+            removed += 1
+        except OSError:
+            pass
+    return {"name": name, "id": pk, "files_removed": removed}

@@ -136,6 +136,25 @@ def brand_restore(request, pk, vid):
 
 @login_required
 @require_POST
+def business_delete(request, pk):
+    """Biznesni loyihadan butunlay o'chirish: faqat admin, nom va parol bilan tasdiqlanadi."""
+    from django.http import Http404
+    b = get_object_or_404(Business, pk=pk)
+    if not request.user.is_admin:
+        raise Http404
+    if request.POST.get("confirm_name", "").strip() != b.name or not request.user.check_password(request.POST.get("password", "")):
+        messages.error(request, "Tasdiqlanmadi: biznes nomi yoki parol noto'g'ri. Hech narsa o'chirilmadi.")
+        return redirect("business_detail", pk=b.pk)
+    audit("business.purge", user=request.user, business_id=None, target=f"{b.name} (#{b.pk})")
+    res = bsvc.purge_business(b)
+    from apps.accounts.services import bump_permissions
+    bump_permissions()
+    messages.success(request, f"«{res['name']}» butunlay o'chirildi.")
+    return redirect("business_list")
+
+
+@login_required
+@require_POST
 def business_killswitch(request, pk):
     b = _biz_or_404(request, pk, "publish.publish")
     b.autopublish_enabled = not b.autopublish_enabled

@@ -152,6 +152,7 @@ class TempObject(models.Model):
     error = models.CharField(max_length=300, blank=True)
     tags = models.CharField(max_length=300, blank=True)  # vergul bilan: kutubxona tegi
     local_path = models.CharField(max_length=500, blank=True)  # qo'lda yuklangan fayl vaqtincha shu yerda turadi
+    progress = models.PositiveSmallIntegerField(default=0)
 
 
 class ItemComment(models.Model):

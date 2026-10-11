@@ -89,14 +89,14 @@ def ai() -> list[dict]:
     from apps.ai_router.models import AIKey, AIUsageLog
     out = []
     since = timezone.now() - timedelta(days=1)
-    for prov in ("gemini", "groq", "openrouter", "openai", "claude"):
+    for prov in ("openai", "claude"):
         keys = AIKey.objects.filter(provider=prov)
         logs = AIUsageLog.objects.filter(provider=prov, at__gte=since)
         n = logs.count()
         out.append({"name": prov, "keys": keys.count(), "active_keys": keys.filter(enabled=True).count(),
                     "cooldown": keys.filter(cooldown_until__gt=timezone.now()).count(), "requests_24h": n,
                     "errors": logs.filter(ok=False).count(), "tokens": sum(l.tokens_in + l.tokens_out for l in logs[:500]),
-                    "enabled": bool(get_setting("ai.paid.enabled", False)) if prov == "claude" else keys.filter(enabled=True).exists()})
+                    "enabled": keys.filter(enabled=True).exists()})
     return out
 
 
@@ -116,10 +116,8 @@ def r2() -> dict:
 
 
 def worker_link() -> dict:
-    from apps.links.models import WorkerStatus
-    st = WorkerStatus.objects.first()
-    return {"configured": bool(get_setting("worker.cloudflare_url", "")), "ok": st.ok if st else None,
-            "clicks_today": st.clicks_today if st else 0, "limit": 100000, "message": st.message if st else ""}
+    """Cloudflare Worker (vaqtinchalik fayl serveri) sozlanganmi."""
+    return {"configured": bool(get_setting("worker.cloudflare_url", "")), "ok": None, "clicks_today": 0, "limit": 0, "message": ""}
 
 
 def recommendations(snap: dict) -> list[str]:

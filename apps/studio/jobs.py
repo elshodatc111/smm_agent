@@ -11,17 +11,6 @@ def why_worked_job(ctx: JobContext):
     return {"insight_id": ins.pk}
 
 
-@register_handler("classify_comments", "ai")
-def classify_comments_job(ctx: JobContext):
-    from apps.metrics.models import Comment
-    from . import services
-    n = 0
-    for c in Comment.objects.filter(business_id=ctx.payload["business_id"], sentiment="")[:30]:
-        services.classify_comment(c)
-        n += 1
-    return {"classified": n}
-
-
 @register_handler("ai_plan", "ai")
 def plan_job(ctx: JobContext):
     from apps.businesses.models import Business

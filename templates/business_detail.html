@@ -39,6 +39,12 @@
     <div class="card"><h2>Pasport holati</h2>{% for s in comp.sections %}<div style="margin:10px 0"><div class="row sb sm"><span>{{ s.title }}</span><span class="muted">{{ s.filled }}/{{ s.total }}</span></div><div class="meter {% if s.pct >= 80 %}ok{% elif s.pct < 40 %}bad{% else %}warn{% endif %}" style="margin-top:5px"><i style="width:{{ s.pct }}%"></i></div></div>{% endfor %}</div>
     {% if can_pub %}<div class="card"><h2>Avto-nashr</h2><p class="muted sm">Hozir: {% if b.autopublish_enabled %}yoqilgan{% else %}<b>o'chirilgan</b>{% endif %}</p>
       <form method="post" action="/bizneslar/{{ b.pk }}/killswitch/" onsubmit="return confirm('Avto-nashr holatini o\'zgartirasizmi?')">{% csrf_token %}<button class="btn {% if b.autopublish_enabled %}danger{% endif %}">{% if b.autopublish_enabled %}Avto-nashrni o'chirish{% else %}Avto-nashrni yoqish{% endif %}</button></form></div>{% endif %}
+    {% if request.user.is_admin %}<div class="card" style="border-color:var(--bad,#dc2626)"><h2>Xavfli zona</h2>
+      <p class="muted sm">Biznesni butunlay o'chirish: barcha ulanishlar, postlar, statistika, maqsadlar, fayllar va tarix <b>qaytarib bo'lmaydigan</b> tarzda o'chadi.</p>
+      <form method="post" action="/bizneslar/{{ b.pk }}/ochirish/" onsubmit="return confirm('Rostdan ham butunlay o\'chirasizmi? Qaytarib bo\'lmaydi.')">{% csrf_token %}
+        <label class="sm">Tasdiqlash uchun biznes nomini yozing: <b>{{ b.name }}</b></label><input name="confirm_name" required autocomplete="off" style="width:100%;margin:6px 0">
+        <label class="sm">Parolingiz</label><input type="password" name="password" required autocomplete="current-password" style="width:100%;margin:6px 0">
+        <button class="btn danger">Butunlay o'chirish</button></form></div>{% endif %}
   </div>
 </div>
 {% endblock %}

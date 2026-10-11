@@ -163,15 +163,13 @@ def test_client_publish_notice_daily_ideas_alerts(settings, tmp_path):
     new[0].refresh_from_db(); assert new[0].status == "used" and new[0].content_item_id
     # kunlik statistika + lid
     from apps.metrics import daily
-    from apps.metrics.models import DailyStat, Lead
-    c.post("/lidlar/qoshish/", {"name": "Ali", "phone": "+998901112233", "source": "instagram", "note": "story"})
-    assert Lead.objects.filter(name="Ali").exists()
+    from apps.metrics.models import DailyStat
     daily.rollup_all()
     row = DailyStat.objects.filter(business=b, account__isnull=True).first()
-    assert row and row.leads == 1
+    assert row
     assert c.get("/kunlik/").status_code == 200 and "csv" in c.get("/kunlik/").content.decode().lower()
     assert c.get("/kunlik/?csv=1")["Content-Type"].startswith("text/csv")
-    assert c.get("/lidlar/").status_code == 200 and c.get("/lidlar/eksport/").status_code == 200
+    assert c.get("/lidlar/").status_code == 404
     # aqlli ogohlantirishlar
     from apps.core import alerts
     from apps.core.models import Notification
@@ -198,14 +196,14 @@ def test_post_summary_and_openai_mode(settings, tmp_path):
     from apps.ai_router.router import AIRouter
     from apps.ai_router.types import AIRequest, TaskType
     from apps.core.settings_store import set_setting
-    set_setting("ai.mode", "openai_only")
     r = AIRouter(use_fakes=True)
-    assert r._routes(AIRequest(task=TaskType.LONG_UZ, prompt="x")) == [("openai", False)]
-    set_setting("ai.mode", "openai_first")
-    assert r._routes(AIRequest(task=TaskType.LONG_UZ, prompt="x"))[0][0] == "openai"
-    set_setting("ai.mode", "free_first")
+    set_setting("ai.primary", "claude")
+    assert [p for p, _ in r._routes(AIRequest(task=TaskType.LONG_UZ, prompt="x"))] == ["claude", "openai"]
+    set_setting("ai.fallback", "none")
+    assert [p for p, _ in r._routes(AIRequest(task=TaskType.LONG_UZ, prompt="x"))] == ["claude"]
+    set_setting("ai.primary", "openai"); set_setting("ai.fallback", "auto")
     assert c.get("/sozlamalar/?tab=ai").status_code == 200
-    assert "OpenAI Platform holati" in c.get("/sozlamalar/?tab=ai").content.decode()
+    assert "AI holati" in c.get("/sozlamalar/?tab=ai").content.decode()
 
 
 def test_story_deep_collect(settings, monkeypatch):
@@ -237,15 +235,13 @@ def test_client_report_pdf_page_and_share(settings, tmp_path):
     from datetime import date
     from apps.reports.generator import default_period, generate_report
     from apps.reports.models import Report
-    from apps.metrics.models import Lead
-    Lead.objects.create(business=b, name="Vali", phone="9989", source="telegram", status="won", amount=500000, created_at=timezone.now())
     from apps.core.utils import local
     today = local(timezone.now()).date()
     s, e = today - timedelta(days=29), today
     r = Report.objects.create(business=b, kind="monthly", period_start=s, period_end=e, created_by=u)
     generate_report(r)
     r.refresh_from_db()
-    assert r.status == "ready" and r.pdf and r.xlsx and r.data.get("leads", {}).get("total") == 1
+    assert r.status == "ready" and r.pdf and r.xlsx
     assert open(r.pdf.path, "rb").read(4) == b"%PDF"
     if os.environ.get("DUMP_PDF"):
         open(os.environ["DUMP_PDF"], "wb").write(open(r.pdf.path, "rb").read())

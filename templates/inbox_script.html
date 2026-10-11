@@ -1,0 +1,24 @@
+{% extends "base.html" %}{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="pg-head row sb"><div><a class="muted sm" href="{% url 'inbox_home' %}">← Murojaatlar</a><h1 style="margin:2px 0">AI skripti</h1>
+<p class="muted">AI mijozlarga faqat shu skriptdagi ma'lumot bilan javob beradi. Skriptda yo'q narsani o'ylab topmaydi: bilmasa, operatorga uzatadi va savol pastdagi «Skriptda yo'q savollar» ga tushadi.</p></div></div>
+{% if gaps %}<div class="card"><h2>Skriptda yo'q savollar ({{ gaps|length }})</h2>
+{% for g in gaps %}<div style="padding:10px 0;border-bottom:1px solid var(--border)"><div class="row sb"><div><b>{{ g.question|truncatechars:160 }}</b><div class="muted sm">{{ g.business.name }} · {{ g.count }} marta so'ralgan</div></div>
+  {% if can_edit %}<form method="post" action="{% url 'inbox_gap_action' g.pk 'ignore' %}">{% csrf_token %}<button class="btn sm">Kerak emas</button></form>{% endif %}</div>
+  {% if can_edit %}<form method="post" action="{% url 'inbox_gap_action' g.pk 'add' %}" class="mt"><input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}"><textarea name="answer" rows="2" style="width:100%" placeholder="Shu savolga javob yozing: skriptga qo'shiladi"></textarea><button class="btn sm primary mt">Skriptga qo'shish</button></form>{% endif %}</div>{% endfor %}</div>{% endif %}
+{% if can_edit %}<div class="card mt" style="max-width:760px"><h2>{% if edit %}Tahrirlash{% else %}Yangi skript qatori{% endif %}</h2>
+<form method="post" action="{% url 'inbox_script_save' %}">{% csrf_token %}{% if edit %}<input type="hidden" name="id" value="{{ edit.pk }}">{% else %}
+<label>Biznes</label><select name="business" required>{% for b in businesses %}<option value="{{ b.pk }}" {% if cur and cur.pk == b.pk %}selected{% endif %}>{{ b.name }}</option>{% endfor %}</select>{% endif %}
+<label>Turi</label><select name="kind">{% for k, n in kinds %}<option value="{{ k }}" {% if edit and edit.kind == k %}selected{% endif %}>{{ n }}</option>{% endfor %}</select>
+<label>Sarlavha</label><input name="title" required value="{{ edit.title|default:'' }}" placeholder="Masalan: Kurs narxi">
+<label>Mijoz so'rashi mumkin bo'lgan savollar (har qatorda bittadan; «Operatorga uzatish» uchun kalit so'zlar)</label><textarea name="questions" rows="3" style="width:100%">{{ edit.questions|default:'' }}</textarea>
+<label>Javob / qoida matni</label><textarea name="answer" rows="4" style="width:100%">{{ edit.answer|default:'' }}</textarea>
+<div class="row mt"><button class="btn primary">Saqlash</button>{% if edit %}<a class="btn" href="{% url 'inbox_script' %}">Bekor qilish</a>{% endif %}</div></form></div>{% endif %}
+<h2 class="mt2">Skript qatorlari ({{ entries|length }})</h2>
+<div class="card" style="padding:0">{% for e in entries %}<div style="padding:12px 16px;border-bottom:1px solid var(--border)"><div class="row sb"><div><b>{{ e.title }}</b> <span class="tag">{{ e.get_kind_display }}</span>{% if e.source == 'learned' %} <span class="tag">o'rganilgan</span>{% endif %}{% if not e.active %} <span class="tag">o'chiq</span>{% endif %}
+  <div class="muted sm">{{ e.business.name }} · {{ e.uses }} marta ishlatilgan</div></div>
+  {% if can_edit %}<div class="row"><a class="btn sm" href="?edit={{ e.pk }}">Tahrirlash</a><form method="post" action="{% url 'inbox_script_action' e.pk 'toggle' %}">{% csrf_token %}<button class="btn sm">{% if e.active %}O'chirish{% else %}Yoqish{% endif %}</button></form>
+  <form method="post" action="{% url 'inbox_script_action' e.pk 'delete' %}" onsubmit="return confirm('O\'chirilsinmi?')">{% csrf_token %}<button class="btn sm danger">×</button></form></div>{% endif %}</div>
+  <div class="sm" style="margin-top:6px;white-space:pre-line">{{ e.answer|truncatechars:300 }}</div></div>
+{% empty %}<div class="empty" style="padding:30px">Skript bo'sh: AI hech qanday savolga javob bera olmaydi. Birinchi qatorni qo'shing (narx, manzil, ish vaqti, ro'yxatdan o'tish).</div>{% endfor %}</div>
+{% endblock %}

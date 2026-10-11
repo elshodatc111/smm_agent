@@ -1,0 +1,26 @@
+{% extends "base.html" %}{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="pg-head row sb"><div><a class="muted sm" href="{% url 'inbox_home' %}">← Murojaatlar</a><h1 style="margin:2px 0">{{ c.peer_name|default:c.peer_username|default:c.peer_id }}</h1>
+  <div class="tagrow"><span class="tag">{{ c.account.name }}</span><span class="tag">{{ c.business.name }}</span>{% if c.peer_username %}<span class="tag">@{{ c.peer_username }}</span>{% endif %}
+  {% if c.needs_human %}<span class="tag" style="color:var(--bad)">Operator kerak: {{ c.human_reason }}</span>{% endif %}</div></div>
+  {% if can_reply %}<div class="row">
+    <form method="post" action="{% url 'inbox_conv_action' c.pk 'ai' %}">{% csrf_token %}<button class="btn sm">{% if c.ai_enabled %}Bu suhbatda AI ni o'chirish{% else %}AI ni yoqish{% endif %}</button></form>
+    {% if c.needs_human %}<form method="post" action="{% url 'inbox_conv_action' c.pk 'human' %}">{% csrf_token %}<button class="btn sm">AI ga qaytarish</button></form>{% endif %}
+    <form method="post" action="{% url 'inbox_conv_action' c.pk 'close' %}">{% csrf_token %}<button class="btn sm">Yopish</button></form></div>{% endif %}</div>
+{% if waiting and join and c.ai_enabled and c.account.auto_reply and not c.needs_human %}<div class="callout"><b>⏱</b><div>Javob kutilmoqda. Operator javob bermasa, AI yordamchi {{ join|time:"H:i:s" }} dan keyin skript asosida javob beradi.</div></div>{% endif %}
+<div class="g2-1">
+<div class="card chat">
+  {% for m in msgs %}<div class="bub {{ m.sender }}"><div class="bub-in">{{ m.text|linebreaksbr }}</div>
+    <div class="bub-meta">{% if m.sender == 'ai' %}🤖 AI yordamchi{% elif m.sender == 'operator' %}{{ m.by_user.username|default:"Operator" }}{% else %}Mijoz{% endif %} · {{ m.created_at|date:"d.m H:i" }}{% if m.state == 'pending' %} · yuborilmoqda…{% elif m.state == 'failed' %} · <span style="color:var(--bad)">yuborilmadi: {{ m.error }}</span>{% endif %}
+      {% if can_script and m.sender == 'operator' %}<form method="post" action="{% url 'inbox_add_script' c.pk m.pk %}" style="display:inline">{% csrf_token %}<button class="linkbtn">Skriptga qo'shish</button></form>{% endif %}</div></div>
+  {% empty %}<div class="empty">Xabarlar yo'q.</div>{% endfor %}
+</div>
+<div>
+  {% if can_reply %}<div class="card"><h2>Javob yozish</h2><form method="post" action="{% url 'inbox_reply' c.pk %}">{% csrf_token %}<textarea name="text" rows="4" style="width:100%" required placeholder="Mijozga javob..."></textarea><div class="row mt"><button class="btn primary">Yuborish</button></div></form>
+    <form method="post" action="{% url 'inbox_suggest' c.pk %}" class="mt">{% csrf_token %}<button class="btn sm">✨ AI dan javob variantlari</button></form>
+    {% if suggestions %}<div class="mt">{% for s in suggestions %}<div class="card flat" style="margin-bottom:8px"><div class="muted sm">{{ s.label }}</div><div class="sug-text">{{ s.text|linebreaksbr }}</div>
+      <button type="button" class="btn sm" onclick="document.querySelector('textarea[name=text]').value=this.previousElementSibling.innerText;">Matnga qo'yish</button></div>{% endfor %}<div class="muted sm">Variantlar faqat taklif: ko'rib chiqib o'zingiz yuborasiz.</div></div>{% endif %}</div>{% endif %}
+  {% if logs %}<div class="card"><h2>AI qarorlari</h2>{% for l in logs %}<div class="sm" style="padding:6px 0;border-bottom:1px solid var(--border)"><b>{{ l.get_decision_display }}</b> · {{ l.created_at|date:"H:i" }}{% if l.reason %}<div class="muted">{{ l.reason }}</div>{% endif %}</div>{% endfor %}</div>{% endif %}
+</div>
+</div>
+{% endblock %}

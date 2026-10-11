@@ -3,11 +3,11 @@ MODULES = {
     "dashboard": "Boshqaruv paneli", "businesses": "Bizneslar", "connections": "Ulanishlar",
     "competitors": "Raqobatchilar", "analytics": "Tahlil", "calendar": "Kontent kalendar",
     "publish": "Nashr", "approvals": "Tasdiqlash", "ai_studio": "AI studiya", "scripts": "Ssenariylar",
-    "media_analysis": "Media tahlil", "hooks": "Hook bazasi", "comments": "Izohlar",
-    "ads": "Reklama tavsiyalari", "reports": "Hisobotlar", "links": "Havolalar (Worker)",
+    "media_analysis": "Media tahlil", "hooks": "Hook bazasi",
+    "ads": "Reklama tavsiyalari", "reports": "Hisobotlar",
     "notifications": "Bildirishnomalar", "system_health": "Tizim holati", "settings": "Sozlamalar",
     "users": "Foydalanuvchilar", "guides": "Yo'riqnoma",
-    "goals": "Maqsadlar", "facts": "Faktlar va yangiliklar",
+    "goals": "Maqsadlar", "facts": "Faktlar va yangiliklar", "inbox": "Murojaatlar",
 }
 ACTIONS = {
     "view": "Ko'rish", "create": "Yaratish", "edit": "Tahrirlash", "delete": "O'chirish",
@@ -18,6 +18,7 @@ GLOBAL_MODULES = {"settings", "users", "system_health", "guides"}
 # Keyinroq qo'shilgan modullar: mavjud rollarga bir marta beriladigan standart ruxsatlar (bootstrap)
 LATE_MODULES = {
     "goals": {"Menejer": "view,create,edit,delete", "SMM mutaxassis": "view,create,edit", "Targetolog": "view", "Analitik": "view,export", "Kontent-maker": "view"},
+    "inbox": {"Menejer": "view,create,edit,configure", "SMM mutaxassis": "view,create,edit"},
     "facts": {"Menejer": "view,create,edit,delete", "SMM mutaxassis": "view,create,edit", "Analitik": "view", "Kontent-maker": "view"},
 }
 
@@ -39,21 +40,21 @@ def codes(spec: dict[str, str]) -> set[str]:
     return out
 
 
-VIEW_ALL = {m: "view" for m in MODULES if m not in ("settings", "users", "system_health")}  # tizim bo'limlari faqat admin / alohida beriladi
+VIEW_ALL = {m: "view" for m in MODULES if m not in ("settings", "users", "system_health", "inbox")}  # tizim bo'limlari faqat admin / alohida beriladi
 
 PRESET_ROLES = {
-    "Menejer": {**VIEW_ALL, "goals": "view,create,edit,delete", "facts": "view,create,edit,delete", "businesses": "view,create,edit", "connections": "view,create,edit",
+    "Menejer": {**VIEW_ALL, "inbox": "view,create,edit,configure", "goals": "view,create,edit,delete", "facts": "view,create,edit,delete", "businesses": "view,create,edit", "connections": "view,create,edit",
                 "competitors": "view,create,edit,delete", "analytics": "view,export",
                 "calendar": "view,create,edit,delete", "approvals": "view,approve",
                 "publish": "view,publish", "ai_studio": "view,create", "scripts": "view,create,edit",
-                "hooks": "view,create,edit", "comments": "view,edit", "ads": "view,create,edit",
-                "reports": "view,create,export", "links": "view,create,edit", "notifications": "view",
+                "hooks": "view,create,edit", "ads": "view,create,edit",
+                "reports": "view,create,export", "notifications": "view",
                 "media_analysis": "view,create"},
-    "SMM mutaxassis": {**VIEW_ALL, "goals": "view,create,edit", "facts": "view,create,edit", "calendar": "view,create,edit", "competitors": "view",
+    "SMM mutaxassis": {**VIEW_ALL, "inbox": "view,create,edit", "goals": "view,create,edit", "facts": "view,create,edit", "calendar": "view,create,edit", "competitors": "view",
                        "ai_studio": "view,create", "scripts": "view,create,edit", "hooks": "view,create,edit",
-                       "comments": "view,edit", "media_analysis": "view,create", "analytics": "view",
-                       "notifications": "view", "links": "view,create"},
-    "Targetolog": {**VIEW_ALL, "goals": "view", "ads": "view,create,edit", "analytics": "view,export", "links": "view,create,edit",
+                       "media_analysis": "view,create", "analytics": "view",
+                       "notifications": "view"},
+    "Targetolog": {**VIEW_ALL, "goals": "view", "ads": "view,create,edit", "analytics": "view,export",
                    "reports": "view,export", "competitors": "view", "notifications": "view"},
     "Kontent-maker": {"dashboard": "view", "calendar": "view,edit", "media_analysis": "view,create",
                       "notifications": "view", "guides": "view"},

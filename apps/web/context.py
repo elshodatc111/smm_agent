@@ -31,32 +31,32 @@ ICONS = {
 NAV = [
     ("Asosiy", [("dashboard", "Boshqaruv paneli", "dashboard", "dashboard", "home"),
                 ("businesses", "Bizneslar", "business_list", "businesses", "brief"),
-                ("connections", "Ulanishlar", "connection_list", "connections", "link"),
-                ("analytics", "Tahlil", "analytics", "analytics", "chart"),
+                ("inbox", "Murojaatlar", "inbox_home", "inbox", "users"),
+                ("calendar", "Kontent kalendar", "calendar", "calendar", "cal"),
+                ("ai_studio", "AI takliflar", "studio_home", "ai_studio", "spark")]),
+    ("Tahlil", [("analytics", "Tahlil", "analytics", "analytics", "chart"),
                 ("analytics", "Kunlik statistika", "daily_stats", "analytics", "pulse"),
-                ("competitors", "Raqobatchilar", "competitor_list", "competitors", "users")]),
-    ("Kontent", [("calendar", "Kontent kalendar", "calendar", "calendar", "cal"),
+                ("competitors", "Raqobatchilar", "competitor_list", "competitors", "users"),
+                ("media_analysis", "Media tahlil", "media_list", "media_analysis", "film"),
+                ("reports", "Hisobotlar", "report_list", "reports", "file")]),
+    ("Strategiya", [("goals", "Maqsadlar", "goals_home", "goals", "target"),
+                    ("ads", "Reklama tahlili", "ads_home", "ads", "mega"),
+                    ("facts", "Faktlar va yangiliklar", "facts_home", "facts", "bulb"),
+                    ("ai_studio", "G'oyalar banki", "ideas_home", "ai_studio", "bulb")]),
+    ("Ko'proq", [("connections", "Ulanishlar", "connection_list", "connections", "link"),
                  ("calendar", "Vazifalar", "my_tasks", "calendar", "brief"),
                  ("calendar", "Shablonlar", "template_list", "calendar", "scroll"),
                  ("publish", "Nashr jurnali", "publish_log", "publish", "send"),
                  ("publish", "Cloudflare", "cloud_home", "publish", "cloud"),
                  ("calendar", "Savat", "trash_list", "calendar", "trash"),
-                 ("ai_studio", "AI takliflar", "studio_home", "ai_studio", "spark"),
-                 ("ai_studio", "G'oyalar banki", "ideas_home", "ai_studio", "spark"),
-                 ("media_analysis", "Media tahlil", "media_list", "media_analysis", "film")]),
-    ("Strategiya", [("goals", "Maqsadlar", "goals_home", "goals", "target"),
-                    ("ads", "Reklama tahlili", "ads_home", "ads", "mega"),
-                    ("facts", "Faktlar va yangiliklar", "facts_home", "facts", "bulb")]),
-    ("Savdo", [("analytics", "Lidlar", "leads_home", "analytics", "users"),
-               ("reports", "Hisobotlar", "report_list", "reports", "file"),
-               ("links", "Havolalar", "link_list", "links", "tag")]),
-    ("Tizim", [("activity", "Faoliyat jurnali", "activity_log", "businesses", "pulse"),
-               ("notifications", "Aqlli ogohlantirishlar", "alerts_home", "notifications", "bell"),
-               ("system_health", "Tizim holati", "health", "system_health", "pulse"),
-               ("settings", "Sozlamalar", "settings_home", "settings", "gear"),
-               ("users", "Foydalanuvchilar", "user_list", "users", "users"),
-               ("guides", "Yo'riqnoma", "guide_index", "guides", "book")]),
+                 ("activity", "Faoliyat jurnali", "activity_log", "businesses", "pulse"),
+                 ("notifications", "Aqlli ogohlantirishlar", "alerts_home", "notifications", "bell"),
+                 ("system_health", "Tizim holati", "health", "system_health", "pulse"),
+                 ("settings", "Sozlamalar", "settings_home", "settings", "gear"),
+                 ("users", "Foydalanuvchilar", "user_list", "users", "users"),
+                 ("guides", "Yo'riqnoma", "guide_index", "guides", "book")]),
 ]
+CLOSED_BY_DEFAULT = {"Ko'proq"}
 
 
 def ui_context(request):
@@ -81,7 +81,8 @@ def ui_context(request):
             if ok:
                 rows.append({"label": label, "url": reverse(url_name), "icon": ICONS[icon], "active": cur == url_name or (cur or "").startswith(url_name.split("_")[0] + "_"), "key": key})
         if rows:
-            nav.append({"title": sec, "items": rows})
+            nav.append({"title": sec, "items": rows, "has_active": any(r["active"] for r in rows),
+                        "closed": sec in CLOSED_BY_DEFAULT})
     from apps.core.models import Notification
     return {"system_name": get_setting("general.system_name", "SMM Platforma"), "brand_color": get_setting("general.brand_color", "#E11D2E"),
             "default_theme": get_setting("general.theme_default", "light"), "nav": nav, "icons": ICONS,

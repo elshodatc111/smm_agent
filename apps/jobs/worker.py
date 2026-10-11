@@ -21,7 +21,7 @@ POLL = 2.5
 
 def load_handlers() -> None:
     import importlib
-    for mod in ("metrics", "content", "studio", "media_analysis", "ads", "links", "reports", "tgbot", "health", "connections", "goals", "facts"):
+    for mod in ("metrics", "content", "studio", "media_analysis", "reports", "tgbot", "health", "connections", "goals", "facts"):
         try:
             importlib.import_module(f"apps.{mod}.jobs")
         except ModuleNotFoundError as e:
@@ -78,6 +78,8 @@ class Worker:
         if with_bot:
             from apps.tgbot.bot import run_bot_loop
             threads.append(threading.Thread(target=run_bot_loop, args=(self.stop,), daemon=True, name="tgbot"))
+            from apps.inbox.listener import run_inbox_loop
+            threads.append(threading.Thread(target=run_inbox_loop, args=(self.stop,), daemon=True, name="inbox"))
         for t in threads:
             t.start()
         log.info("Worker ishga tushdi: %s oqim", len(threads))

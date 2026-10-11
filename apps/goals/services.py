@@ -5,7 +5,6 @@ import math
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 
-from django.db.models import Avg
 from django.utils import timezone
 
 from apps.core.utils import local, tz
@@ -19,7 +18,7 @@ STATE_UZ = {
     "behind": ("Ortda qolmoqda", "bad"), "starting": ("Boshlanmoqda", "blue"), "missed": ("Bajarilmadi", "bad"),
     "cancelled": ("Bekor qilindi", ""),
 }
-UNIT = {"followers": "ta", "views": "ta", "posts": "ta", "er": "%", "leads": "ta"}
+UNIT = {"followers": "ta", "views": "ta", "posts": "ta", "er": "%"}
 
 
 def today_local() -> date:
@@ -42,7 +41,7 @@ def fmt(v, metric: str) -> str:
 def measure(account, metric: str, start: date, *, as_of: date | None = None) -> float | None:
     """Maqsad boshlangandan (start) buyongi joriy qiymat. Ma'lumot yo'q bo'lsa None."""
     from apps.metrics.analytics import latest_metrics_qs
-    from apps.metrics.models import AccountMetrics, DailyStat, Lead, Post
+    from apps.metrics.models import AccountMetrics, DailyStat, Post
     if metric == "followers":
         am = AccountMetrics.objects.filter(account=account, followers__isnull=False).order_by("-taken_at").first()
         if am:
@@ -58,8 +57,6 @@ def measure(account, metric: str, start: date, *, as_of: date | None = None) -> 
     if metric == "er":
         rows = [r.er for r in latest_metrics_qs(account_id=account.pk, since=since) if r.er is not None]
         return (sum(rows) / len(rows) * 100) if rows else None
-    if metric == "leads":
-        return float(Lead.objects.filter(business_id=account.business_id, source=account.platform, created_at__gte=since).count())
     return None
 
 
@@ -235,7 +232,7 @@ def _growth_30d(account) -> tuple[float | None, int]:
 def suggest_targets(account, metric: str, days: int = DEFAULT_DAYS) -> dict:
     """Uch variant: ehtiyotkor / o'rtacha / shiddatli. Taxminiy: o'z o'sishingiz va akkaunt hajmiga qarab."""
     from apps.metrics.analytics import latest_metrics_qs
-    from apps.metrics.models import Lead, Post
+    from apps.metrics.models import Post
     base = baseline_for(account, metric)
     notes: list[str] = []
     if metric == "followers":
@@ -284,11 +281,9 @@ def suggest_targets(account, metric: str, days: int = DEFAULT_DAYS) -> dict:
         vals = [b * 1.10, b * 1.25, b * 1.5]
         notes.append("ER o'rtacha ko'rsatkich: o'sish nisbiy olinadi.")
         conf = "medium" if base > 0 else "low"
-    else:  # leads
-        l90 = Lead.objects.filter(business_id=account.business_id, source=account.platform, created_at__gte=timezone.now() - timedelta(days=90)).count()
-        vals = [max(5, l90 * 1.2), max(10, l90 * 1.6), max(20, l90 * 2.5)]
-        notes.append(f"So'nggi 90 kunda {l90} ta lid yozilgan.")
-        conf = "medium" if l90 >= 5 else "low"
+    else:
+        vals = [0, 0, 0]
+        conf = "low"
     labels = [("Ehtiyotkor", "Sekin, lekin aniq erishiladigan"), ("O'rtacha", "Muntazam ishlasangiz real"), ("Shiddatli", "Katta kuch va reklamani talab qiladi")]
     opts = []
     for (lab, hint), v in zip(labels, vals):

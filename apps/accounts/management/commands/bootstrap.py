@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 
 from apps.accounts.models import Role
-from apps.accounts.permissions_registry import LATE_MODULES, PRESET_ROLES, codes
+from apps.accounts.permissions_registry import ALL_CODES, LATE_MODULES, PRESET_ROLES, codes
 from apps.accounts.services import set_role_permissions
 from apps.businesses.services import ensure_templates
 
@@ -10,6 +10,7 @@ class Command(BaseCommand):
     help = "Boshlang'ich rollar, andozalar va ruxsatlarni yuklaydi (qayta ishga tushirsa xavfsiz)."
 
     def handle(self, *a, **o):
+        self._purge_stale_codes()
         admin, _ = Role.objects.get_or_create(name="Admin", defaults={"is_system": True, "description": "To'liq huquq"})
         Role.objects.get_or_create(name="Mijoz (faqat bot)", defaults={"is_system": True, "description": "Veb-kirish yo'q; faqat Telegram bot"})
         for name, spec in PRESET_ROLES.items():
@@ -21,6 +22,12 @@ class Command(BaseCommand):
         from apps.facts.engine import ensure_sources
         ensure_sources()
         self.stdout.write(self.style.SUCCESS("Rollar va andozalar tayyor."))
+
+    def _purge_stale_codes(self):
+        """O'chirilgan modullar (havolalar, izohlar...) ruxsat kodlarini bazadan tozalaydi."""
+        from apps.accounts.models import RolePermission, UserPermissionOverride
+        RolePermission.objects.exclude(code__in=ALL_CODES).delete()
+        UserPermissionOverride.objects.exclude(code__in=ALL_CODES).delete()
 
     def _grant_late_modules(self):
         """Keyin qo'shilgan modullar (maqsadlar, faktlar) uchun mavjud rollarga standart ruxsat — faqat bir marta."""

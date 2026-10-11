@@ -256,3 +256,20 @@ def delete_object(obj: TempObject, *, fake: bool = False) -> None:
             break
     obj.status = "deleted"
     obj.save(update_fields=["status"])
+
+
+def worker_status() -> dict:
+    """Cloudflare Worker'ning holatini tekshiradi (sozlamalardagi «Tekshirish» tugmasi uchun)."""
+    from django.conf import settings
+    if settings.USE_FAKES:
+        return {"ok": True, "version": "fake"}
+    base, token = get_setting("worker.cloudflare_url", "").rstrip("/"), get_secret("worker.admin_token")
+    if not base or not token:
+        raise PlatformError("Worker sozlanmagan", user_message_uz="Cloudflare Worker manzili va admin tokeni Sozlamalarda kiritilmagan.")
+    try:
+        r = requests.get(base + "/admin/status", headers={"Authorization": f"Bearer {token}"}, timeout=20)
+    except requests.RequestException as e:
+        raise TransientError(str(e)) from e
+    if r.status_code >= 400:
+        raise PlatformError(f"Worker {r.status_code}: {r.text[:200]}")
+    return r.json() if r.content else {}

@@ -45,30 +45,15 @@ DEFAULTS: dict[str, Any] = {
     "telethon.max_delay_sec": 9,
     "telethon.max_consecutive_errors": 3,
     "telethon.active_hours": ["08:00", "23:00"],
-    "ai.routes": {
-        "long_uz": [["gemini", False], ["openrouter", False], ["groq", False], ["claude", True]],
-        "classify": [["groq", False], ["gemini", False], ["openrouter", False]],
-        "vision": [["gemini", False], ["claude", True]],
-        "stt": [["groq", False], ["gemini", False], ["local_whisper", False]],
-        "brand_profile": [["gemini", False], ["openrouter", False], ["claude", True]],
-        "script_review": [["gemini", False], ["openrouter", False], ["claude", True]],
-        "comment_reply": [["gemini", False], ["groq", False], ["openrouter", False]],
-        "why_worked": [["gemini", False], ["openrouter", False], ["groq", False]],
-        "ad_plan": [["gemini", False], ["openrouter", False], ["claude", True]],
-    },
-    "ai.models": {"gemini": "gemini-flash-latest", "groq": "llama-3.3-70b-versatile",
-                  "openrouter": "meta-llama/llama-3.3-70b-instruct:free", "claude": "claude-sonnet-4-5", "openai": "gpt-4o-mini", "openai_stt": "whisper-1",
-                  "groq_stt": "whisper-large-v3", "gemini_stt": "gemini-flash-latest"},
-    "ai.mode": "free_first",            # free_first | openai_first | openai_only
+    "ai.primary": "openai",              # asosiy provayder: openai | claude
+    "ai.fallback": "auto",               # auto = ikkinchisi zaxira (kaliti bo'lsa) | none
+    "ai.task.long_uz": "auto", "ai.task.classify": "auto", "ai.task.vision": "auto", "ai.task.brand_profile": "auto",
+    "ai.task.script_review": "auto", "ai.task.comment_reply": "auto", "ai.task.why_worked": "auto", "ai.task.ad_plan": "auto",
+    "ai.models": {"claude": "claude-sonnet-4-5", "openai": "gpt-4o-mini", "openai_stt": "whisper-1"},
     "ai.openai.model_complex": "gpt-4o",  # murakkab vazifalar (ssenariy, reja, brend, reklama) uchun kuchliroq model
-    "ai.openai.fallback": True,          # barcha bepul provayder ishlamasa — OpenAI (platform.openai.com) kaliti
-    "ai.openai.monthly_budget_usd": 10,  # 0 = cheklanmagan
-    "ai.paid.enabled": False,
-    "ai.paid.policy": "only_when_free_exhausted",
-    "ai.paid.monthly_budget_usd": 0,
+    "ai.claude.model_complex": "",        # bo'sh = oddiy Claude modeli
     "ai.cache.default_ttl_sec": 86400,
-    "ai.limits": {"gemini": {"rpm": 15, "rpd": 1000}, "groq": {"rpm": 30, "rpd": 14000},
-                  "openrouter": {"rpm": 20, "rpd": 200}},
+    "ai.limits": {},
     "stt.uz_prompt": "Bu o'zbek tilidagi nutq. Lotin alifbosida yozing.",
     "stt.min_confidence": 0.55,
     "publish.use_r2": "auto",
@@ -94,7 +79,6 @@ DEFAULTS: dict[str, Any] = {
     "reports.auto_send_requires_approval": False,
     "media.retention_days": 90,
     "media.local_whisper_model": "small",
-    "ads.score_weights": {"er": 0.4, "engagement": 0.3, "watch": 0.2, "recency": 0.1},
     "ads.min_age_hours": 24,
     "facts.per_topic_per_day": 2,
     "facts.max_age_days": 21,
@@ -120,7 +104,7 @@ DEFAULTS: dict[str, Any] = {
 SECRET_KEYS = {
     "meta.app_secret", "google.client_secret", "telegram.api_hash", "telegram.agency_bot_token",
     "youtube.api_key", "scrapecreators.api_key", "cloudflare.api_token",
-    "r2.secret_access_key", "r2.access_key_id", "ai.paid.claude_key", "worker.admin_token",
+    "r2.secret_access_key", "r2.access_key_id", "worker.admin_token",
 }
 SECRET_PREFIXES = ("ai.keys.",)
 

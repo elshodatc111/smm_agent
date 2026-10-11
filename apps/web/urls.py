@@ -11,6 +11,7 @@ from . import views_growth as g
 from . import views_preview as pv
 from . import views_pwa as pw
 from . import views_ads as ad
+from . import views_inbox as ib
 from . import views_facts as fc
 from . import views_goals as gl
 from . import views_tools as t
@@ -42,6 +43,7 @@ urlpatterns = [
     path("sozlamalar/biznes-turlari/<int:pk>/ochir/", vt.biztype_delete, name="biztype_delete"),
     path("bizneslar/<int:pk>/", b.business_detail, name="business_detail"),
     path("bizneslar/<int:pk>/tahrir/", b.business_edit, name="business_edit"),
+    path("bizneslar/<int:pk>/ochirish/", b.business_delete, name="business_delete"),
     path("bizneslar/<int:pk>/killswitch/", b.business_killswitch, name="business_killswitch"),
     path("bizneslar/<int:pk>/brend/yangi/", b.brand_new, name="brand_new"),
     path("bizneslar/<int:pk>/brend/ai/", b.brand_ai, name="brand_ai"),
@@ -110,11 +112,6 @@ urlpatterns = [
     path("goyalar/<int:pk>/holat/<str:new>/", g.idea_status, name="idea_status"),
     path("goyalar/<int:pk>/ssenariy/", g.idea_script, name="idea_script"),
     path("goyalar/<int:pk>/post/", g.idea_to_post, name="idea_to_post"),
-    path("lidlar/", g.leads_home, name="leads_home"),
-    path("lidlar/qoshish/", g.lead_add, name="lead_add"),
-    path("lidlar/import/", g.lead_import, name="lead_import"),
-    path("lidlar/eksport/", g.leads_export, name="leads_export"),
-    path("lidlar/<int:pk>/holat/<str:new>/", g.lead_status, name="lead_status"),
     path("kunlik/", g.daily_stats, name="daily_stats"),
     path("ogohlantirishlar/", g.alerts_home, name="alerts_home"),
     path("shablonlar/", w.template_list, name="template_list"),
@@ -153,19 +150,12 @@ urlpatterns = [
     path("cloudflare/<int:pk>/ochir/", cl.cloud_delete, name="cloud_delete"),
     path("cloudflare/<int:pk>/qayta/", cl.cloud_retry, name="cloud_retry"),
     path("cloudflare/<int:pk>/havola/", cl.cloud_link, name="cloud_link"),
-    path("reklama/maslahat/", t.ads_advice_view, name="ads_advice_view"),
-    path("reklama/maslahat/yangila/", t.ads_advice_run, name="ads_advice_run"),
     path("reklama/", ad.ads_home, name="ads_home"),
     path("reklama/taklif/yangi/", ad.ads_propose, name="ads_propose"),
     path("reklama/taklif/<int:pk>/", ad.ads_proposal, name="ads_proposal"),
     path("reklama/taklif/<int:pk>/holat/", ad.ads_proposal_status, name="ads_proposal_status"),
     path("reklama/taklif/<int:pk>/qayta/", ad.ads_proposal_redo, name="ads_proposal_redo"),
     path("reklama/taklif/<int:pk>/pdf/", ad.ads_proposal_pdf, name="ads_proposal_pdf"),
-    path("reklama/yangila/", t.ads_refresh, name="ads_refresh"),
-    path("reklama/prognoz/", t.ads_forecast, name="ads_forecast"),
-    path("reklama/tavsiya/<int:pk>/", t.ads_recommendation, name="ads_recommendation"),
-    path("reklama/<int:pk>/", t.ads_campaign, name="ads_campaign"),
-    path("reklama/<int:pk>/natija/", t.ads_result, name="ads_result"),
     # faktlar va yangiliklar
     path("faktlar/", fc.facts_home, name="facts_home"),
     path("faktlar/yangilash/", fc.facts_refresh_now, name="facts_refresh_now"),
@@ -190,11 +180,22 @@ urlpatterns = [
     path("hisobotlar/<int:pk>/havola/", t.report_share, name="report_share"),
     path("h/<str:token>/", t.report_public, name="report_public"),
     path("hisobotlar/<int:pk>/yuborish/", t.report_deliver, name="report_deliver"),
-    # havolalar
-    path("havolalar/", t.link_list, name="link_list"),
-    path("havolalar/yaratish/", t.link_create, name="link_create"),
-    path("havolalar/sinxron/", t.link_sync, name="link_sync"),
-    path("havolalar/<int:pk>/ochir/", t.link_delete, name="link_delete"),
+    # murojaatlar
+    path("murojaatlar/", ib.inbox_home, name="inbox_home"),
+    path("murojaatlar/akkauntlar/", ib.inbox_accounts, name="inbox_accounts"),
+    path("murojaatlar/akkauntlar/qoshish/", ib.inbox_account_add, name="inbox_account_add"),
+    path("murojaatlar/akkauntlar/bekor/", ib.inbox_account_cancel, name="inbox_account_cancel"),
+    path("murojaatlar/akkauntlar/<int:pk>/", ib.inbox_account_edit, name="inbox_account_edit"),
+    path("murojaatlar/skript/", ib.inbox_script, name="inbox_script"),
+    path("murojaatlar/skript/saqlash/", ib.inbox_script_save, name="inbox_script_save"),
+    path("murojaatlar/skript/<int:pk>/<str:action>/", ib.inbox_script_action, name="inbox_script_action"),
+    path("murojaatlar/bo-shliq/<int:pk>/<str:action>/", ib.inbox_gap_action, name="inbox_gap_action"),
+    path("murojaatlar/jurnal/", ib.inbox_log, name="inbox_log"),
+    path("murojaatlar/<int:pk>/", ib.inbox_conv, name="inbox_conv"),
+    path("murojaatlar/<int:pk>/javob/", ib.inbox_reply, name="inbox_reply"),
+    path("murojaatlar/<int:pk>/taklif/", ib.inbox_suggest, name="inbox_suggest"),
+    path("murojaatlar/<int:pk>/<str:action>/", ib.inbox_conv_action, name="inbox_conv_action"),
+    path("murojaatlar/<int:pk>/skriptga/<int:msg_id>/", ib.inbox_add_script, name="inbox_add_script"),
     # tizim
     path("tizim/", s.health, name="health"),
     path("tizim/qism/", s.health_partial, name="health_partial"),

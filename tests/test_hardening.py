@@ -37,21 +37,22 @@ def test_actions_block_renders_label():
 
 
 def test_key_format_hints():
-    assert aip.key_format_problem("groq", "xai-abc") and "xAI" in aip.key_format_problem("groq", "xai-abc")
-    assert aip.key_format_problem("groq", "gsk_abc") is None
-    assert aip.key_format_problem("gemini", "AIzaXYZ") is None
+    assert aip.key_format_problem("openai", "AIzaXYZ") and "sk-" in aip.key_format_problem("openai", "AIzaXYZ")
+    assert aip.key_format_problem("openai", "sk-abc") is None
+    assert aip.key_format_problem("claude", "sk-ant-abc") is None
+    assert aip.key_format_problem("claude", "sk-abc")
 
 
 def test_ai_key_add_rejects_bad_key(monkeypatch):
     c = _admin_client()
-    r = c.post("/sozlamalar/ai-kalit/qoshish/", {"provider": "groq", "alias": "g1", "key": "xai-123"}, follow=True)
+    r = c.post("/sozlamalar/ai-kalit/qoshish/", {"provider": "openai", "alias": "g1", "key": "xai-123"}, follow=True)
     assert not AIKey.objects.exists()
-    assert "xAI" in r.content.decode()
+    assert "sk-" in r.content.decode()
     monkeypatch.setattr(aip, "validate_key", lambda p, k: (False, "rad etildi"))
-    c.post("/sozlamalar/ai-kalit/qoshish/", {"provider": "groq", "alias": "g1", "key": "gsk_abc"})
+    c.post("/sozlamalar/ai-kalit/qoshish/", {"provider": "openai", "alias": "g1", "key": "sk-abc"})
     assert not AIKey.objects.exists()
     monkeypatch.setattr(aip, "validate_key", lambda p, k: (True, "ok"))
-    c.post("/sozlamalar/ai-kalit/qoshish/", {"provider": "groq", "alias": "g1", "key": "gsk_abc"})
+    c.post("/sozlamalar/ai-kalit/qoshish/", {"provider": "openai", "alias": "g1", "key": "sk-abc"})
     assert AIKey.objects.filter(alias="g1").exists()
     k = AIKey.objects.get(alias="g1")
     k.fail_streak = 3
@@ -62,13 +63,13 @@ def test_ai_key_add_rejects_bad_key(monkeypatch):
 
 
 def test_model_autodiscovery_on_404(monkeypatch):
-    k = AIKey(provider="gemini", alias="g")
+    k = AIKey(provider="openai", alias="g")
     k.set_secret("AIzaTEST")
     k.save()
     calls = []
 
     class P(aip._Base):
-        name = "gemini"
+        name = "openai"
 
         def supports(self, t):
             return True
@@ -80,12 +81,12 @@ def test_model_autodiscovery_on_404(monkeypatch):
             return aip.RawAIResponse("Salom dunyo, bu sinov javobi.", 1, 1)
 
     from apps.core.settings_store import get_setting, set_setting
-    set_setting("ai.models", {"gemini": "eski-model"})
+    set_setting("ai.models", {"openai": "eski-model"})
     monkeypatch.setattr("apps.ai_router.router.discover_model", lambda p, k: "yangi-model")
-    r = AIRouter(providers={"gemini": P()}, use_fakes=False)
+    r = AIRouter(providers={"openai": P()}, use_fakes=False)
     res = r.run(AIRequest(task=TaskType.CLASSIFY, prompt="salom"))
     assert calls == ["eski-model", "yangi-model"] and res.model == "yangi-model"
-    assert get_setting("ai.models")["gemini"] == "yangi-model"
+    assert get_setting("ai.models")["openai"] == "yangi-model"
 
 
 def test_ai_unavailable_friendly_message():

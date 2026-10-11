@@ -31,6 +31,7 @@ INSTALLED_APPS = [
     "apps.ads",
     "apps.goals",
     "apps.facts",
+    "apps.inbox",
     "apps.links",
     "apps.reports",
     "apps.tgbot",

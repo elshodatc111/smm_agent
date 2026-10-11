@@ -16,7 +16,7 @@ from apps.metrics.models import AccountMetrics, Post, PostMetricsHistory
 
 
 def fake_router(*script):
-    return AIRouter(providers={n: FakeAIProvider(n, list(script) if n == "gemini" else []) for n in ("gemini", "groq", "openrouter", "claude", "local_whisper")}, use_fakes=True)
+    return AIRouter(providers={n: FakeAIProvider(n, list(script) if n == "openai" else []) for n in ("openai", "claude")}, use_fakes=True)
 
 
 def mkpost(acc, i, *, days=5, text=None, views=100, reach=None, likes=5, comments=0, shares=0, saves=0, mtype="image", dur=None, avg_dur=None, er=None):
@@ -150,7 +150,7 @@ def test_goal_suggestions_for_tiny_account(biz, acc_tg):
     s = gs.suggest_targets(acc_tg, "followers")
     vals = [o["value"] for o in s["options"]]
     assert vals == sorted(vals) and vals[0] > 3 and s["confidence"] == "low"
-    for m in ("views", "posts", "er", "leads"):
+    for m in ("views", "posts", "er"):
         assert len(gs.suggest_targets(acc_tg, m)["options"]) == 3
 
 
@@ -273,7 +273,7 @@ def test_confidence_low_with_few_posts(biz, acc_tg):
 def test_create_proposal_rules_when_ai_fails(biz, acc_tg, boss):
     from apps.ads import proposals as pr
     seed_tg_posts(acc_tg)
-    broken = AIRouter(providers={n: FakeAIProvider(n, [RuntimeError("x")] * 5) for n in ("gemini", "groq", "openrouter", "claude", "local_whisper")}, use_fakes=True)
+    broken = AIRouter(providers={n: FakeAIProvider(n, [RuntimeError("x")] * 5) for n in ("openai", "claude")}, use_fakes=True)
     p = pr.create_proposal(biz, acc_tg, "subscribers", user=boss, router=broken)
     assert p.source == "rules" and p.result["picks"] and p.result["verdict"] in ("advertise", "improve_first")
     assert p.result["guide_key"] == "telegram_subscribers" and p.version == 1
@@ -440,7 +440,7 @@ def test_engine_untranslated_fallback_without_ai(biz, topic):
     from apps.facts.models import FactSuggestion
     a = mk_source("Official Blog", "A", "https://a.com/feed")
     mk_item(a, "https://a.com/1", "Instagram tests longer Reels", "Instagram is testing Reels up to 3 minutes.")
-    broken = AIRouter(providers={n: FakeAIProvider(n, [RuntimeError("x")] * 5) for n in ("gemini", "groq", "openrouter", "claude", "local_whisper")}, use_fakes=True)
+    broken = AIRouter(providers={n: FakeAIProvider(n, [RuntimeError("x")] * 5) for n in ("openai", "claude")}, use_fakes=True)
     assert engine.generate_for_topic(topic, router=broken) == 1
     s = FactSuggestion.objects.get()
     assert not s.by_ai and "tarjima" in s.angle.lower()
@@ -505,3 +505,27 @@ def test_all_new_nav_pages_render(adminc, biz, acc_tg):
         assert r.status_code == 200, (u, r.status_code)
         html = r.content.decode()
         assert "Maqsadlar" in html and "Faktlar va yangiliklar" in html and "Reklama tahlili" in html or u != "/"
+
+
+# ------------------------------------------------------------------ biznesni butunlay o'chirish
+def test_business_purge_requires_admin_name_and_password(adminc, biz, acc_tg, admin):
+    from apps.businesses.models import Business
+    from apps.connections.models import SocialAccount
+    mkpost(acc_tg, 1)
+    admin.set_password("Parol#12345"); admin.save()
+    adminc.force_login(admin)
+    r = adminc.post(f"/bizneslar/{biz.pk}/ochirish/", {"confirm_name": biz.name, "password": "xato"})
+    assert r.status_code == 302 and Business.objects.filter(pk=biz.pk).exists()
+    r = adminc.post(f"/bizneslar/{biz.pk}/ochirish/", {"confirm_name": "boshqa nom", "password": "Parol#12345"})
+    assert Business.objects.filter(pk=biz.pk).exists()
+    r = adminc.post(f"/bizneslar/{biz.pk}/ochirish/", {"confirm_name": biz.name, "password": "Parol#12345"})
+    assert r.status_code == 302 and not Business.objects.filter(pk=biz.pk).exists()
+    assert not SocialAccount.objects.filter(pk=acc_tg.pk).exists() and not Post.objects.filter(business_id=biz.pk).exists()
+
+
+def test_business_purge_not_for_non_admin(client, biz):
+    from apps.businesses.models import Business
+    u = User.objects.create_user("oddiy", password="Oddiy#2026test!")
+    client.force_login(u)
+    r = client.post(f"/bizneslar/{biz.pk}/ochirish/", {"confirm_name": biz.name, "password": "x"})
+    assert r.status_code in (403, 404) and Business.objects.filter(pk=biz.pk).exists()

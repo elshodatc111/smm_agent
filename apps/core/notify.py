@@ -7,12 +7,13 @@ from .models import Notification, NotificationPref
 from .settings_store import get_setting
 
 TYPES = {
+    "inbox.new": "Yangi murojaat", "inbox.handoff": "Operator kerak",
     "task.assigned": "Yangi vazifa", "approval.requested": "Tasdiqlash so'rovi",
     "content.status_changed": "Kontent holati o'zgardi", "publish.success": "Nashr muvaffaqiyatli",
     "publish.failed": "Nashr xatosi", "publish.missed_window": "Nashr vaqti o'tib ketdi",
     "quota.warning": "Kvota ogohlantirishi", "quota.exhausted": "Kvota tugadi",
     "token.expiring": "Token tugayapti", "anomaly.detected": "Anomaliya",
-    "comment.negative": "Salbiy izoh", "report.ready": "Hisobot tayyor",
+    "report.ready": "Hisobot tayyor",
     "provider.switched": "Provayder almashdi", "r2.full": "R2 to'lgan",
     "job.failed": "Vazifa xatosi", "activity.digest": "Kunlik xulosa", "content.ready": "Kontent tayyor", "competitor.hit": "Raqobatchi posti yaxshi chiqdi", "alert.smart": "Aqlli ogohlantirish", "idea.new": "Yangi g'oya", "design.status": "Dizayner vazifasi", "post.insight": "Post natijasi xulosasi", "connection.error": "Ulanish xatosi", "client.issue": "Mijoz xabari", "goal.behind": "Maqsad ortda qolmoqda", "goal.achieved": "Maqsadga erishildi", "goal.missed": "Maqsad muddati tugadi", "facts.new": "Yangi fakt/yangilik takliflari",
 }

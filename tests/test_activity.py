@@ -130,7 +130,7 @@ def test_asset_manage_ready_studio_and_media_card(settings, tmp_path):
                                                          "strengths": ["a"], "improvements": ["b"], "scenes": [{"t": "0-3s", "what": "kirish", "attention": 7}], "platform_fit": {"shorts": 8}})
     h = c.get(f"/media/{m.pk}/").content.decode()
     assert "an-ring" in h and "Nima tuzatish kerak" in h and "Video sahna-sahna" in h and "Shorts" in h
-    assert "Qisqa havola nima uchun kerak" in c.get("/havolalar/").content.decode()
+    assert c.get("/havolalar/").status_code == 404
     assert "Dushanba" in c.get("/hisobotlar/").content.decode()
 
 

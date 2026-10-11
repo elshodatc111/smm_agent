@@ -1,0 +1,30 @@
+{% extends "base.html" %}{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="pg-head row sb"><div><a class="muted sm" href="{% url 'inbox_home' %}">← Murojaatlar</a><h1 style="margin:2px 0">Operator akkauntlari</h1></div></div>
+<div class="callout warn"><b>!</b><div><b>Xavfsizlik:</b> avtomatik javob berilganda Telegram akkauntni spam deb cheklashi mumkin. Shuning uchun tizim faqat mijoz yozgan suhbatga javob beradi, javobdan oldin «yozmoqda…» kechikishi qo'yadi va soatlik limitga amal qiladi. Imkon bo'lsa, ish uchun alohida raqam ishlating. Telegram API ID/Hash Sozlamalarda kiritilgan bo'lishi kerak.</div></div>
+<div class="grid g2">
+{% for a in accs %}<div class="card"><div class="row sb"><div><b>{{ a.name }}</b>{% if a.ai_name %} · <span class="tag">AI {{ a.ai_name }}</span>{% endif %}<div class="muted sm">{{ a.business.name }}{% if a.operator %} · operator: {{ a.operator.username }}{% endif %} · {{ a.phone|default:"—" }}</div></div>
+  <span class="tag" style="color:{% if a.active and not a.last_error %}var(--ok){% else %}var(--bad){% endif %}">{% if not a.active %}To'xtatilgan{% elif a.last_error %}Xato{% else %}Faol{% endif %}</span></div>
+  {% if a.last_error %}<div class="sm" style="color:var(--bad);margin-top:6px">{{ a.last_error }}</div>{% endif %}
+  {% if can_manage %}<form method="post" action="{% url 'inbox_account_edit' a.pk %}" class="mt">{% csrf_token %}<input type="hidden" name="action" value="save">
+    <div class="row"><label class="sm">AI ismi<input name="ai_name" value="{{ a.ai_name }}" maxlength="40" placeholder="Alisa" style="width:110px"></label><label class="sm">Operator kutish (daq.)<input type="number" name="wait_minutes" value="{{ a.wait_minutes }}" min="1" max="240" style="width:80px"></label>
+    <label class="sm">AI davomiy javob (soniya)<input type="number" name="ai_delay_seconds" value="{{ a.ai_delay_seconds }}" min="5" max="600" style="width:80px"></label>
+    <label class="sm">AI rejimi (daq.)<input type="number" name="ai_session_minutes" value="{{ a.ai_session_minutes }}" min="5" max="1440" style="width:80px"></label>
+    <label class="sm">AI soatlik limit<input type="number" name="hourly_limit" value="{{ a.hourly_limit }}" min="1" max="200" style="width:80px"></label><button class="btn sm">Saqlash</button></div></form>
+  <div class="row mt">
+    <form method="post" action="{% url 'inbox_account_edit' a.pk %}">{% csrf_token %}<input type="hidden" name="action" value="auto"><button class="btn sm">AI avto-javob: {% if a.auto_reply %}yoqilgan (o'chirish){% else %}o'chiq (yoqish){% endif %}</button></form>
+    <form method="post" action="{% url 'inbox_account_edit' a.pk %}">{% csrf_token %}<input type="hidden" name="action" value="active"><button class="btn sm">{% if a.active %}To'xtatish{% else %}Yoqish{% endif %}</button></form>
+    <form method="post" action="{% url 'inbox_account_edit' a.pk %}" onsubmit="return confirm('Akkaunt va uning barcha suhbatlari o\'chiriladi. Davom etasizmi?')">{% csrf_token %}<input type="hidden" name="action" value="delete"><button class="btn sm danger">O'chirish</button></form></div>{% endif %}</div>
+{% empty %}<div class="card"><div class="empty">Hali akkaunt ulanmagan.</div></div>{% endfor %}
+</div>
+{% if can_manage %}<div class="card mt" style="max-width:640px"><h2>Akkaunt ulash</h2>
+<form method="post" action="{% url 'inbox_account_add' %}">{% csrf_token %}
+{% if not tl %}
+  <label>Biznes</label><select name="business" required>{% for b in businesses %}<option value="{{ b.pk }}" {% if cur and cur.pk == b.pk %}selected{% endif %}>{{ b.name }}</option>{% endfor %}</select>
+  <label>Operator (shu akkaunt egasi)</label><select name="operator"><option value="">—</option>{% for u in operators %}<option value="{{ u.pk }}">{{ u.username }}</option>{% endfor %}</select>
+  <label>Nom</label><input name="name" value="Operator-1" required><label>AI ismi (mijozga «Men AI … man» deb tanishtiriladi)</label><input name="ai_name" placeholder="Masalan: Alisa yoki Bobur"><label>Telefon (+998…)</label><input name="phone" required>
+{% elif tl.need_password %}<label>2 bosqichli parol</label><input type="password" name="password" required autofocus>
+{% else %}<label>Telegramga kelgan kod</label><input name="code" required autofocus>{% endif %}
+<div class="row mt"><button class="btn primary">Davom etish</button></div></form>
+{% if tl %}<form method="post" action="{% url 'inbox_account_cancel' %}" class="mt">{% csrf_token %}<button class="btn sm">Bekor qilish</button></form>{% endif %}</div>{% endif %}
+{% endblock %}

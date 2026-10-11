@@ -129,8 +129,7 @@ def test_business_and_content_flow(demo):
     it.refresh_from_db()
     assert it.status == "scheduled" and it.scheduled_at.isoformat().startswith("2030-01-01T05:00")   # Toshkent 10:00 = UTC 05:00
     assert c.get(f"/kalendar/{it.pk}/").status_code == 200
-    # havola, hisobot
-    assert c.post("/havolalar/yaratish/", {"target_url": "https://example.com/x", "utm_source": "tg"}).status_code == 302
+    # hisobot
     assert c.post("/hisobotlar/yaratish/", {"kind": "weekly"}).status_code == 302
 
 
@@ -165,10 +164,10 @@ def test_calendar_grid_and_new_ai_pages(demo):
     html = c.get("/kalendar/").content.decode()
     assert 'class="cg"' in html and "/kalendar/yangi/?date=" in html
     assert c.get("/kalendar/yangi/?date=2030-05-06").status_code == 200
-    for u in ("/raqobatchilar/", "/studiya/", "/reklama/", "/reklama/maslahat/"):
+    for u in ("/raqobatchilar/", "/studiya/", "/reklama/"):
         assert c.get(u).status_code == 200, u
     # POST'lar 500 bermasligi (AI yo'q bo'lsa ham xabar bilan qaytadi)
-    for u in ("/raqobatchilar/xulosa/", "/studiya/mavzular/", "/reklama/maslahat/yangila/"):
+    for u in ("/raqobatchilar/xulosa/", "/studiya/mavzular/"):
         assert c.post(u, {}).status_code in (302, 200), u
 
 
@@ -184,14 +183,12 @@ def test_business_limit_and_no_approval_ui(demo):
 
 def test_ai_features_with_fakes(demo):
     from apps.studio import services as st
-    from apps.ads import services as ads
     from apps.content.models import ContentItem
     b = Business.objects.first()
     g = st.design_topics(b, "", 4, user=User.objects.get(username="boss"))
     assert g.kind == "design_topics"
     n = st.load_topics_to_calendar(g, None)
     assert n == len((g.data or {}).get("topics", [])) and (n == 0 or ContentItem.objects.filter(business=b, ai_draft=True, status="draft").exists())
-    assert ads.ads_advice(b).kind == "ads_advice"
     try:
         st.competitor_summary(b)
     except ValueError:

@@ -1,4 +1,4 @@
-"""O'sish bo'limlari: G'oyalar banki, Lidlar, Kunlik statistika, Aqlli ogohlantirishlar."""
+"""O'sish bo'limlari: G'oyalar banki, Kunlik statistika, Aqlli ogohlantirishlar."""
 from __future__ import annotations
 
 import csv
@@ -19,7 +19,7 @@ from apps.core import alerts
 from apps.core.audit import audit
 from apps.core.utils import fmt_dt, tz
 from apps.metrics import daily
-from apps.metrics.models import DailyStat, Lead
+from apps.metrics.models import DailyStat
 from apps.studio import ideas as idea_svc
 from apps.studio.models import Idea
 from . import ui
@@ -179,123 +179,9 @@ def idea_to_post(request, pk):
     return redirect("content_edit", pk=item.pk)
 
 
-# ===================================================================== LIDLAR
-class LeadForm(forms.Form):
-    name = forms.CharField(label="Ism", required=False, max_length=160)
-    phone = forms.CharField(label="Telefon", required=False, max_length=40)
-    source = forms.ChoiceField(label="Manba", choices=Lead.SOURCES)
-    amount = forms.IntegerField(label="Sotuv summasi (so'm, ixtiyoriy)", required=False, min_value=0)
-    note = forms.CharField(label="Izoh", required=False, max_length=400)
-    when = forms.DateField(label="Sana (bo'sh = bugun)", required=False, widget=forms.DateInput(attrs={"type": "date"}))
-
-
-@login_required
-@require_permission("analytics.view")
-def leads_home(request):
-    ids = _biz_ids(request, "analytics.view")
-    qs = Lead.objects.filter(business_id__in=ids).select_related("business", "content_item")
-    can_add = bool(request.business) and perms.can(request.user, "links.create", request.business)
-    now = timezone.now()
-    n30 = qs.filter(created_at__gte=now - timedelta(days=30)).count()
-    n7 = qs.filter(created_at__gte=now - timedelta(days=7)).count()
-    won = qs.filter(status="won")
-    s = sum(x.amount or 0 for x in won)
-    blocks = [ui.kv("Qisqacha", [("Jami lid", qs.count()), ("So'nggi 7 kun", n7), ("So'nggi 30 kun", n30), ("Sotuv bo'lgan", won.count()), ("Sotuv summasi", f"{int(s):,} so'm".replace(",", " "))])]
-    by_src = {}
-    for x in qs.filter(created_at__gte=now - timedelta(days=30)):
-        by_src[x.get_source_display()] = by_src.get(x.get_source_display(), 0) + 1
-    if by_src:
-        blocks.append(ui.table("Manbalar (30 kun)", ["Manba", "Soni"], [[k, v] for k, v in sorted(by_src.items(), key=lambda t: -t[1])]))
-    rows = []
-    for x in qs[:150]:
-        acts = [ui.btn(lbl, f"/lidlar/{x.pk}/holat/{k}/", "sm") for k, lbl in (("contacted", "Aloqa"), ("won", "Sotuv"), ("lost", "Yo'q")) if x.status != k] if can_add else []
-        rows.append([x.created_at.astimezone(tz()).strftime("%d.%m.%Y"), x.name or "—", x.phone or "—", x.get_source_display(), x.business.name if not request.business else (ui.link(x.content_item.title or "post", f"/kalendar/{x.content_item_id}/") if x.content_item_id else "—"),
-                     ui.badge(x.get_status_display(), {"new": "pending", "contacted": "approved", "won": "ok", "lost": "failed"}.get(x.status)), (f"{int(x.amount):,}".replace(",", " ") if x.amount else "—"), acts[0] if acts else "—", acts[1] if len(acts) > 1 else "—"])
-    blocks.append(ui.table("Lidlar ro'yxati", ["Sana", "Ism", "Telefon", "Manba", "Biznes / post", "Holat", "Summa", "", ""], rows, empty="Hali lid kiritilmagan."))
-    if can_add:
-        blocks.append(ui.form_block(LeadForm(), "Lid qo'shish", "Qo'shish", action="/lidlar/qoshish/"))
-        blocks.append({"type": "html", "title": "Excel/CSV'dan yuklash", "html": '<form method="post" action="/lidlar/import/" enctype="multipart/form-data">' + _csrf_input(request) + '<input type="file" name="file" accept=".csv" required> <button class="btn">Yuklash</button></form><div class="hint">Ustunlar: ism, telefon, manba, summa, izoh, sana (YYYY-MM-DD). Birinchi qator — sarlavha.</div>'})
-    tb = [{"label": "⬇ CSV", "url": "/lidlar/eksport/", "cls": ""}] if perms.can(request.user, "analytics.export", request.business) or request.user.is_admin else []
-    return ui.page(request, "Lidlar", blocks, subtitle="Kontentdan kelgan arizalar — kunlik statistikaga avtomatik qo'shiladi", toolbar=tb)
-
-
 def _csrf_input(request) -> str:
     from django.middleware.csrf import get_token
     return f'<input type="hidden" name="csrfmiddlewaretoken" value="{get_token(request)}">'
-
-
-@login_required
-@require_POST
-def lead_add(request):
-    if not request.business or not perms.can(request.user, "links.create", request.business):
-        messages.error(request, "Avval biznesni tanlang (yoki ruxsat yo'q).")
-        return redirect("leads_home")
-    f = LeadForm(request.POST)
-    if f.is_valid():
-        d = f.cleaned_data
-        when = datetime.combine(d["when"], datetime.min.time().replace(hour=12), tzinfo=tz()) if d.get("when") else timezone.now()
-        l = Lead.objects.create(business=request.business, name=d["name"], phone=d["phone"], source=d["source"], note=d["note"], amount=d.get("amount"), created_by=request.user, created_at=when)
-        audit("lead.add", user=request.user, business_id=l.business_id, target=f"lead:{l.pk}", detail={"name": l.name})
-        messages.success(request, "Lid qo'shildi.")
-    else:
-        messages.error(request, "Ma'lumot noto'g'ri: " + "; ".join(sum((list(v) for v in f.errors.values()), [])))
-    return redirect("leads_home")
-
-
-@login_required
-@require_POST
-def lead_status(request, pk, new):
-    l = get_obj(request, Lead, pk, "links.create")
-    if new in dict(Lead.STATUS):
-        l.status = new
-        l.save(update_fields=["status"])
-        audit("lead.update", user=request.user, business_id=l.business_id, target=f"lead:{l.pk}", detail={"status": new})
-    return redirect("leads_home")
-
-
-@login_required
-@require_POST
-def lead_import(request):
-    if not request.business or not perms.can(request.user, "links.create", request.business):
-        messages.error(request, "Avval biznesni tanlang.")
-        return redirect("leads_home")
-    f = request.FILES.get("file")
-    if not f:
-        return redirect("leads_home")
-    raw = f.read().decode("utf-8-sig", errors="replace")
-    rd = csv.reader(io.StringIO(raw), delimiter=";" if raw.count(";") > raw.count(",") else ",")
-    next(rd, None)
-    n = 0
-    srcs = {v.lower(): k for k, v in Lead.SOURCES}
-    srcs.update({k: k for k, _ in Lead.SOURCES})
-    for r in rd:
-        r = [c.strip() for c in r] + [""] * 6
-        if not (r[0] or r[1]):
-            continue
-        try:
-            when = datetime.combine(date.fromisoformat(r[5]), datetime.min.time().replace(hour=12), tzinfo=tz()) if r[5] else timezone.now()
-        except ValueError:
-            when = timezone.now()
-        amt = int(r[3].replace(" ", "")) if r[3].replace(" ", "").isdigit() else None
-        Lead.objects.create(business=request.business, name=r[0][:160], phone=r[1][:40], source=srcs.get(r[2].lower(), "other"), amount=amt, note=r[4][:400], created_by=request.user, created_at=when)
-        n += 1
-    audit("lead.add", user=request.user, business_id=request.business.pk, detail={"import": n})
-    messages.success(request, f"{n} ta lid yuklandi.")
-    return redirect("leads_home")
-
-
-@login_required
-@require_permission("analytics.export")
-def leads_export(request):
-    ids = _biz_ids(request, "analytics.export")
-    out = io.StringIO()
-    w = csv.writer(out)
-    w.writerow(["sana", "biznes", "ism", "telefon", "manba", "holat", "summa", "izoh"])
-    for x in Lead.objects.filter(business_id__in=ids).select_related("business"):
-        w.writerow([x.created_at.astimezone(tz()).strftime("%Y-%m-%d"), x.business.name, x.name, x.phone, x.get_source_display(), x.get_status_display(), x.amount or "", x.note])
-    r = HttpResponse("﻿" + out.getvalue(), content_type="text/csv; charset=utf-8")
-    r["Content-Disposition"] = 'attachment; filename="lidlar.csv"'
-    return r
 
 
 # ===================================================================== KUNLIK STATISTIKA
@@ -314,26 +200,24 @@ def daily_stats(request):
     if request.GET.get("csv") == "1":
         out = io.StringIO()
         w = csv.writer(out)
-        w.writerow(["sana", "obunachi", "o'sish", "postlar", "stories", "ko'rish", "reach", "layk", "izoh", "ulashish", "saqlash", "story ko'rish", "havola bosish", "lid"])
+        w.writerow(["sana", "obunachi", "o'sish", "postlar", "stories", "ko'rish", "reach", "layk", "izoh", "ulashish", "saqlash", "story ko'rish"])
         for r in rows:
-            w.writerow([r.day, r.followers, r.followers_delta, r.posts, r.stories, r.views, r.reach, r.likes, r.comments, r.shares, r.saves, r.story_views, r.link_clicks, r.leads])
+            w.writerow([r.day, r.followers, r.followers_delta, r.posts, r.stories, r.views, r.reach, r.likes, r.comments, r.shares, r.saves, r.story_views])
         resp = HttpResponse("﻿" + out.getvalue(), content_type="text/csv; charset=utf-8")
         resp["Content-Disposition"] = f'attachment; filename="kunlik-{b.pk}.csv"'
         return resp
     labels = [r.day.strftime("%d.%m") for r in rows]
     charts = [{"id": "ds1", "kind": "line", "labels": labels, "series": [{"name": "Obunachi", "data": [r.followers or 0 for r in rows]}]},
-              {"id": "ds2", "kind": "bar", "labels": labels, "series": [{"name": "Lid", "data": [r.leads for r in rows]}, {"name": "Havola bosish", "data": [r.link_clicks for r in rows]}]},
-              {"id": "ds3", "kind": "bar", "labels": labels, "series": [{"name": "Ko'rish", "data": [r.views for r in rows]}, {"name": "Story ko'rish", "data": [r.story_views for r in rows]}]}]
-    tbl = [[r.day.strftime("%d.%m.%Y"), r.followers if r.followers is not None else "—", f"{r.followers_delta:+d}" if r.followers_delta else "0", r.posts, r.stories, r.views, r.likes, r.comments, r.story_views, r.link_clicks, r.leads]
+              {"id": "ds2", "kind": "bar", "labels": labels, "series": [{"name": "Ko'rish", "data": [r.views for r in rows]}, {"name": "Story ko'rish", "data": [r.story_views for r in rows]}]}]
+    tbl = [[r.day.strftime("%d.%m.%Y"), r.followers if r.followers is not None else "—", f"{r.followers_delta:+d}" if r.followers_delta else "0", r.posts, r.stories, r.views, r.likes, r.comments, r.story_views]
            for r in reversed(rows)]
-    tot_l = sum(r.leads for r in rows)
     pills = "".join(f'<a class="pill" style="{"background:#2563eb;color:#fff" if days == d else ""}" href="?days={d}">{d} kun</a> ' for d in (7, 30, 90, 180))
     blocks = [{"type": "html", "html": f'<div class="row sb"><div>{pills}</div><a class="btn sm" href="?days={days}&csv=1">⬇ CSV</a></div>'},
               ui.kv(f"Oxirgi {days} kun", [("Obunachi (hozir)", rows[-1].followers if rows and rows[-1].followers is not None else "—"), ("O'sish", f"{sum(r.followers_delta for r in rows):+d}"),
-                                          ("Lidlar", tot_l), ("Havola bosishlar", sum(r.link_clicks for r in rows)), ("Postlar", sum(r.posts for r in rows)), ("Stories", sum(r.stories for r in rows))]),
-              {"type": "chart", "title": "Obunachilar (kun bo'yicha)", "id": "ds1"}, {"type": "chart", "title": "Lid va havola bosishlar", "id": "ds2"}, {"type": "chart", "title": "Ko'rishlar", "id": "ds3"},
-              ui.table("Kun bo'yicha jadval (har kun saqlanib boradi)", ["Sana", "Obunachi", "O'sish", "Postlar", "Stories", "Ko'rish", "Layk", "Izoh", "Story ko'rish", "Havola", "Lid"], tbl, empty="Hali ma'lumot yo'q — birinchi kechada to'ldiriladi.")]
-    return ui.page(request, "Kunlik statistika", blocks, subtitle=b.name + " · obunachi, lid va faollik har kuni saqlanadi", charts=charts)
+                                          ("Postlar", sum(r.posts for r in rows)), ("Stories", sum(r.stories for r in rows))]),
+              {"type": "chart", "title": "Obunachilar (kun bo'yicha)", "id": "ds1"}, {"type": "chart", "title": "Ko'rishlar", "id": "ds2"},
+              ui.table("Kun bo'yicha jadval (har kun saqlanib boradi)", ["Sana", "Obunachi", "O'sish", "Postlar", "Stories", "Ko'rish", "Layk", "Izoh", "Story ko'rish"], tbl, empty="Hali ma'lumot yo'q — birinchi kechada to'ldiriladi.")]
+    return ui.page(request, "Kunlik statistika", blocks, subtitle=b.name + " · obunachi va faollik har kuni saqlanadi", charts=charts)
 
 
 # ===================================================================== AQLLI OGOHLANTIRISHLAR

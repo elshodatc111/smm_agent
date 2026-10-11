@@ -1,0 +1,31 @@
+{% extends "base.html" %}{% block title %}Murojaatlar{% endblock %}
+{% block content %}
+<div class="hero">
+  <div class="row sb"><div><h1>Murojaatlar</h1><p>Operatorlarning Telegram akkauntlariga mijozlar yozgan xabarlar. Operator kutish vaqti (standart 15 daqiqa) ichida javob bermasa, AI yordamchi skript asosida javob beradi va mijozga o'zi AI ekanini aytadi.</p></div>
+  <div class="row"><a class="btn" href="{% url 'inbox_script' %}">AI skripti</a><a class="btn" href="{% url 'inbox_log' %}">Javoblar jurnali</a><a class="btn primary" href="{% url 'inbox_accounts' %}">Akkauntlar</a></div></div>
+</div>
+<div class="grid g4" style="margin-bottom:18px">
+  <div class="card stat"><div><div class="v">{{ stat.open }}</div><div class="l">Ochiq suhbatlar</div></div></div>
+  <div class="card stat"><div><div class="v">{{ stat.waiting }}</div><div class="l">Javob kutayotgan</div></div></div>
+  <div class="card stat"><div><div class="v">{{ stat.needs_human }}</div><div class="l">Operator kerak</div></div></div>
+  <div class="card stat"><div><div class="v">{{ stat.ai_today }}</div><div class="l">AI javobi (24 soat)</div></div></div>
+</div>
+<div class="seg" style="margin-bottom:18px">
+  <a href="?tab=all" class="{% if tab == 'all' %}on{% endif %}">Hammasi</a><a href="?tab=waiting" class="{% if tab == 'waiting' %}on{% endif %}">Javob kutayotgan</a>
+  <a href="?tab=human" class="{% if tab == 'human' %}on{% endif %}">Operator kerak</a><a href="?tab=ai" class="{% if tab == 'ai' %}on{% endif %}">AI javob bergan</a>
+</div>
+{% if no_accounts %}<div class="callout warn"><b>!</b><div>Hali Telegram akkaunt ulanmagan. <a href="{% url 'inbox_accounts' %}">Operator akkauntini ulang</a>: mijozlar shu akkauntga yozadi, tizim esa faqat ularga javob beradi (mijozga birinchi bo'lib yozmaydi).</div></div>{% endif %}
+<div class="card" style="padding:0">
+{% for r in rows %}
+<a class="inb-row {% if r.c.unread %}unread{% endif %}" href="{% url 'inbox_conv' r.c.pk %}">
+  <div class="avatar">{{ r.c.peer_name|default:r.c.peer_username|default:"?"|slice:":1"|upper }}</div>
+  <div class="inb-main"><div class="row sb"><b>{{ r.c.peer_name|default:r.c.peer_username|default:r.c.peer_id }}</b><span class="muted sm">{{ r.c.last_message_at|timesince }} oldin</span></div>
+    <div class="muted sm inb-last">{% if r.last.direction == 'out' %}{% if r.last.sender == 'ai' %}🤖 AI: {% else %}Siz: {% endif %}{% endif %}{{ r.last.text|truncatechars:110 }}</div>
+    <div class="tagrow" style="margin-top:6px"><span class="tag">{{ r.c.account.name }}</span><span class="tag">{{ r.c.business.name }}</span>
+      {% if r.state == 'human' %}<span class="tag" style="color:var(--bad)">Operator kerak: {{ r.c.human_reason }}</span>
+      {% elif r.state == 'waiting' %}{% if r.ai_active %}<span class="tag" style="color:var(--brand-2)">AI javob bermoqda</span>{% elif r.c.ai_enabled and r.c.account.auto_reply %}<span class="tag" style="color:var(--warn)">AI {% if r.join_in %}{{ r.join_in }} daqiqadan{% else %}{{ r.join_secs }} soniyadan{% endif %} keyin javob beradi</span>{% else %}<span class="tag">AI o'chiq</span>{% endif %}
+      {% else %}<span class="tag" style="color:var(--ok)">Javob berilgan</span>{% endif %}</div></div>
+</a>
+{% empty %}<div class="empty" style="padding:30px">Hozircha murojaat yo'q.</div>{% endfor %}
+</div>
+{% endblock %}

@@ -1,4 +1,4 @@
-"""AI studiya, media tahlil, reklama, hisobotlar, havolalar."""
+"""AI studiya, media tahlil, hisobotlar."""
 from __future__ import annotations
 
 import hashlib
@@ -17,14 +17,10 @@ from django.views.decorators.http import require_POST
 
 from apps.accounts.decorators import require_permission
 from apps.accounts.services import perms
-from apps.ads import services as ads
-from apps.ads.models import AdCampaign, AdRecommendation
 from apps.connections.base import PlatformError
 from apps.core import settings_store as ss
 from apps.core.audit import audit
 from apps.jobs.queue import enqueue
-from apps.links import services as lsvc
-from apps.links.models import ShortLink, WorkerStatus
 from apps.media_analysis.models import MediaAnalysis, MediaFile
 from apps.reports.generator import default_period
 from apps.reports.models import Report, ReportSchedule
@@ -102,7 +98,7 @@ def studio_home(request):
     elif tab == "ssenariy":
         blocks.append(ui.form_block(mkform({"brief": forms.CharField(label="Qisqa maqsad", widget=forms.Textarea(attrs={"rows": 2})), "fmt": forms.ChoiceField(label="Format", choices=Script.FORMATS)}),
                                     "Ssenariy yozish", "Ssenariy yozish", action="/studiya/ssenariy/", intro="Rejissyor uslubida: hook, sahnalar vaqt bilan, matn, CTA."))
-        sc = {a.script_id: a.score for a in ScriptAnalysis.objects.filter(script__in=scripts[:20]).order_by("created_at")}
+        sc = {a.script_id: a.score for a in ScriptAnalysis.objects.filter(script__in=[s.pk for s in scripts[:20]]).order_by("created_at")}
         blocks.append(ui.table("Ssenariylar", ["Sarlavha", "Format", "Baho", "Sana", ""],
                                [[s.title, s.get_fmt_display(), _score_badge(sc.get(s.pk)), ui.dt(s.created_at), ui.link("Ochish", f"/studiya/ssenariy/{s.pk}/")] for s in scripts[:20]], "Hali ssenariy yo'q."))
     elif tab == "tahlil":
@@ -268,92 +264,6 @@ def media_detail(request, pk):
 
 # ---------------- Reklama ----------------
 @login_required
-@require_permission("ads.view")
-def ads_home(request):
-    b = request.business
-    if not b:
-        messages.info(request, "Reklama uchun biznesni tanlang.")
-        return redirect("dashboard")
-    recs = AdRecommendation.objects.filter(business=b, status="new").select_related("post").order_by("-score")[:10]
-    camps = AdCampaign.objects.filter(business=b).order_by("-created_at")[:15]
-    fq = mkform({"budget": forms.FloatField(label="Byudjet", min_value=0), "platform": forms.ChoiceField(label="Platforma", choices=AdCampaign.PLATFORMS)})
-    blocks = [ui.table("Reklamaga arziydigan postlar", ["Post", "Ball", "Sabab", "Eng yaxshi vaqt", ""],
-                       [[(r.post.text or "")[:70], round(r.score, 2), "; ".join(map(str, r.reasons))[:120], r.best_time, ui.btn("Kampaniya loyihasi", f"/reklama/tavsiya/{r.pk}/", "primary")] for r in recs],
-                       "Hozircha tavsiya yo'q (postlar yetarlicha yoshga yetmagan yoki ma'lumot kam)."),
-              ui.table("Kampaniyalar", ["Nomi", "Platforma", "Byudjet", "Holat", ""], [[c.name, c.get_platform_display(), c.budget, ui.badge(c.get_status_display(), c.status), ui.link("Ochish", f"/reklama/{c.pk}/")] for c in camps]),
-              ui.form_block(fq, "Prognoz kalkulyatori", "Hisoblash", action="/reklama/prognoz/")]
-    blocks.append({"type": "actions", "title": "Tavsiyalar", "buttons": [ui.btn("Tavsiyalarni yangilash", "/reklama/yangila/")]})
-    return ui.page(request, "Reklama", blocks, subtitle=b.name, toolbar=[{"label": "AI maslahat: qayerga reklama berish?", "url": "/reklama/maslahat/", "cls": "primary"}])
-
-
-@login_required
-@require_POST
-@require_permission("ads.edit")
-def ads_refresh(request):
-    n = len(ads.find_candidates(request.business))
-    messages.success(request, f"{n} ta nomzod topildi.")
-    return redirect("ads_home")
-
-
-@login_required
-@require_POST
-@require_permission("ads.view")
-def ads_forecast(request):
-    try:
-        fc = ads.forecast(request.business, float(request.POST.get("budget", 0)), request.POST.get("platform", "telegram_ads"))
-    except ValueError:
-        messages.error(request, "Byudjetni raqam bilan kiriting.")
-        return redirect("ads_home")
-    rows = [[k, v["impressions"], v["clicks"], v["leads"], v["sales"], v["revenue"], v["roi"], v["cost_per_lead"]] for k, v in fc["scenarios"].items()]
-    return ui.page(request, "Prognoz", [ui.table("3 stsenariy", ["Stsenariy", "Ko'rsatuv", "Klik", "Lead", "Sotuv", "Tushum", "ROI", "Lead narxi"], rows),
-                                      ui.table("Taxminlar manbasi", ["Ko'rsatkich", "Qiymat", "Manba", "Namuna"], [[k, v["value"], v["source"], v["sample"]] for k, v in fc["assumptions"].items()]),
-                                      {"type": "text", "title": "Ogohlantirish", "text": fc["disclaimer"] + ("\n" + "\n".join(fc["warnings"]) if fc["warnings"] else "")}],
-                   toolbar=[{"label": "Orqaga", "url": "/reklama/"}])
-
-
-@login_required
-@require_POST
-def ads_recommendation(request, pk):
-    r = get_obj(request, AdRecommendation, pk, "ads.create")
-    bp = _ai_call(request, ads.campaign_blueprint, r.business, "telegram_ads", "lead", float(r.business.monthly_ad_budget or 0), r.post.text or "", request.user, ok="Loyiha tayyor.")
-    if bp:
-        c = AdCampaign.objects.create(business=r.business, name=f"Kampaniya: {(r.post.text or '')[:40]}", platform="telegram_ads", objective="lead", budget=r.business.monthly_ad_budget or 0,
-                                      post=r.post, plan=bp["plan"], forecast=bp["forecast"], created_by=request.user)
-        r.status = "accepted"
-        r.save(update_fields=["status"])
-        return redirect("ads_campaign", pk=c.pk)
-    return redirect("ads_home")
-
-
-@login_required
-def ads_campaign(request, pk):
-    c = get_obj(request, AdCampaign, pk, "ads.view")
-    res = c.results.order_by("-date")[:30]
-    blocks = [{"type": "text", "title": "Kampaniya loyihasi (targetolog kabinetda o'zi yaratadi)", "text": json.dumps(c.plan, ensure_ascii=False, indent=2)},
-              ui.table("Natijalar", ["Sana", "Sarf", "Ko'rsatuv", "Klik", "Lead", "Sotuv", "Tushum"], [[r.date, r.spend, r.impressions, r.clicks, r.leads, r.sales, r.revenue] for r in res]),
-              ui.kv("Reja va fakt farqi", [(k, v) for k, v in ads.campaign_variance(c).get("diff_pct", {}).items()] if c.results.exists() else [("—", "Natija kiritilmagan")])]
-    blocks.append(ui.form_block(mkform({"date": forms.DateField(label="Sana", initial=date.today, widget=forms.DateInput(attrs={"type": "date"})), "spend": forms.FloatField(label="Sarf", initial=0),
-                                        "impressions": forms.IntegerField(label="Ko'rsatuv", initial=0), "clicks": forms.IntegerField(label="Klik", initial=0), "leads": forms.IntegerField(label="Lead", initial=0),
-                                        "sales": forms.IntegerField(label="Sotuv", initial=0), "revenue": forms.FloatField(label="Tushum", initial=0)}),
-                                "Natija kiritish (qo'lda)", "Saqlash", action=f"/reklama/{c.pk}/natija/"))
-    return ui.page(request, c.name, blocks, subtitle=c.business.name, toolbar=[{"label": "Orqaga", "url": "/reklama/"}])
-
-
-@login_required
-@require_POST
-def ads_result(request, pk):
-    c = get_obj(request, AdCampaign, pk, "ads.edit")
-    try:
-        ads.record_result(c, date.fromisoformat(request.POST["date"]), spend=float(request.POST.get("spend") or 0), impressions=int(request.POST.get("impressions") or 0),
-                          clicks=int(request.POST.get("clicks") or 0), leads=int(request.POST.get("leads") or 0), sales=int(request.POST.get("sales") or 0), revenue=float(request.POST.get("revenue") or 0))
-        messages.success(request, "Natija saqlandi. Prognoz modeli moslashadi.")
-    except (ValueError, KeyError):
-        messages.error(request, "Qiymatlarni tekshiring.")
-    return redirect("ads_campaign", pk=c.pk)
-
-
-# ---------------- Hisobotlar ----------------
-@login_required
 @require_permission("reports.view")
 def report_list(request):
     ids = [request.business.pk] if request.business else list(perms.businesses_for(request.user, "reports.view").values_list("pk", flat=True))
@@ -485,72 +395,6 @@ def report_deliver(request, pk):
     return redirect("report_detail", pk=r.pk)
 
 
-# ---------------- Havolalar ----------------
-@login_required
-@require_permission("links.view")
-def link_list(request):
-    ids = [request.business.pk] if request.business else list(perms.businesses_for(request.user, "links.view").values_list("pk", flat=True))
-    rows = []
-    for l in ShortLink.objects.filter(business_id__in=ids).select_related("business").order_by("-created_at")[:60]:
-        rows.append([lsvc.short_url(l), l.target_url[:60], l.business.name, l.clicks.count(), ui.badge("Sinxron" if l.synced else "Kutmoqda", "ok" if l.synced else "warn", l.sync_error[:80] or None),
-                     ui.btn("O'chirish", f"/havolalar/{l.pk}/ochir/", "danger", "Havola o'chirilsinmi?")])
-    ws = WorkerStatus.objects.first()
-    blocks = [{"type": "html", "title": "Qisqa havola nima uchun kerak?", "html": (
-        "<p><b>Muammo:</b> postga uzun havola qo'ysangiz (masalan, <code>sayt.uz/kurslar?utm_source=instagram&utm_campaign=oktabr</code>) u xunuk ko'rinadi va kim bosganini bilib bo'lmaydi.</p>"
-        "<p><b>Yechim:</b> bu yerda uzun havolani qisqa havolaga aylantirasiz (<code>sizning-domen.uz/kurs1</code>). Mijoz uni bosganda o'z saytingizga o'tadi, tizim esa <b>nechta odam bosganini</b> sanaydi.</p>"
-        "<ol><li>«Maqsad URL» — mijoz oxirida borishi kerak bo'lgan sahifa (sayt, Telegram bot, ro'yxatdan o'tish formasi).</li>"
-        "<li>«Slug» — qisqa nom (masalan <code>kurs1</code>). Bo'sh qoldirsangiz tizim o'zi tuzadi.</li>"
-        "<li>utm maydonlari — ixtiyoriy. Qaysi post/platformadan kelganini saytingiz statistikasida ko'rish uchun (masalan utm_source = instagram).</li>"
-        "<li>«Yaratish»dan keyin qisqa havolani nusxalab, postingiz matniga qo'ying.</li></ol>"
-        "<p class='muted'>Eslatma: bu funksiya Cloudflare Worker orqali ishlaydi (Sozlamalar → Kalitlar → Cloudflare Worker). Worker ulanmagan bo'lsa, havola «Kutmoqda» holatida turadi. Kerak bo'lmasa bu bo'limni ishlatmasangiz ham bo'ladi.</p>")},
-              {"type": "html", "html": f"Worker: <b>{'ishlayapti' if ws and ws.ok else 'tekshirilmagan / xato'}</b> {ws.message if ws else ''} · bugungi klik: {ws.clicks_today if ws else 0}"},
-              ui.table(None, ["Qisqa havola", "Maqsad", "Biznes", "Klik", "Holat", ""], rows, "Havola yo'q.")]
-    if request.business and perms.can(request.user, "links.create", request.business):
-        blocks.append(ui.form_block(mkform({"target_url": forms.URLField(label="Maqsad URL"), "slug": forms.SlugField(label="Slug (ixtiyoriy)", required=False),
-                                            "utm_source": forms.CharField(label="utm_source", required=False), "utm_medium": forms.CharField(label="utm_medium", required=False),
-                                            "utm_campaign": forms.CharField(label="utm_campaign", required=False), "note": forms.CharField(label="Izoh", required=False)}),
-                                    "Yangi qisqa havola", "Yaratish", action="/havolalar/yaratish/"))
-    blocks.append({"type": "actions", "title": "Worker", "buttons": [ui.btn("Kliklarni hozir yangilash", "/havolalar/sinxron/")]})
-    return ui.page(request, "Havolalar", blocks)
-
-
-@login_required
-@require_POST
-@require_permission("links.create")
-def link_create(request):
-    utm = {k: request.POST[k] for k in ("utm_source", "utm_medium", "utm_campaign") if request.POST.get(k)}
-    try:
-        l = lsvc.create_link(request.business, request.POST["target_url"], slug=request.POST.get("slug") or None, utm=utm, note=request.POST.get("note", ""))
-        messages.success(request, f"Yaratildi: {lsvc.short_url(l)}")
-        audit("link.create", user=request.user, business_id=request.business.pk, target=f"link:{l.pk}", detail={"url": request.POST["target_url"][:120]})
-    except PlatformError as e:
-        messages.error(request, e.user_message_uz or str(e))
-    except Exception as e:  # noqa: BLE001
-        messages.error(request, f"Xato: {e} (slug band bo'lishi mumkin)")
-    return redirect("link_list")
-
-
-@login_required
-@require_POST
-def link_delete(request, pk):
-    l = get_obj(request, ShortLink, pk, "links.delete")
-    lsvc.remove_link(l)
-    audit("link.delete", user=request.user, business_id=l.business_id, target=f"link:{pk}")
-    return redirect("link_list")
-
-
-@login_required
-@require_POST
-@require_permission("links.view")
-def link_sync(request):
-    try:
-        r = lsvc.sync_clicks()
-        messages.success(request, f"{r['clicks']} ta yangi klik.")
-    except PlatformError as e:
-        messages.error(request, e.user_message_uz or str(e))
-    return redirect("link_list")
-
-
 def _latest_gen(business, kind):
     from apps.ai_router.models import AIGeneration
     return AIGeneration.objects.filter(business=business, kind=kind).exclude(data=None).order_by("-created_at").first()
@@ -591,38 +435,3 @@ def studio_topics_load(request, pk):
     n = st.load_topics_to_calendar(g, request.user)
     messages.success(request, f"{n} ta topshiriq qoralama sifatida kalendarga qo'shildi. Dizayner rasm/video yuklab, vaqt qo'ysa avtomatik rejalashtiriladi.")
     return redirect("calendar")
-
-
-# ---------------- Reklama maslahati ----------------
-@login_required
-@require_POST
-@require_permission("ads.view")
-def ads_advice_run(request):
-    g = _ai_call(request, ads.ads_advice, request.business, request.user, ok="Maslahat tayyor.")
-    return redirect("ads_advice_view") if g else redirect("ads_home")
-
-
-@login_required
-@require_permission("ads.view")
-def ads_advice_view(request):
-    b = request.business
-    if not b:
-        return redirect("dashboard")
-    g = _latest_gen(b, "ads_advice")
-    blocks = []
-    if g:
-        d = g.data or {}
-        blocks.append({"type": "text", "title": f"Xulosa ({ui.dt(g.created_at)})", "text": d.get("summary", "")})
-        blocks.append(ui.table("Qaysi platformaga", ["Platforma", "Ulush %", "Nega", "Auditoriya", "Format"],
-                               [[x.get("name"), x.get("share_percent"), x.get("why"), x.get("audience"), x.get("format")] for x in d.get("platforms", []) if isinstance(x, dict)]))
-        blocks.append(ui.table("Qaysi postlarni reklama qilish", ["Post", "Qayerda", "Nega"],
-                               [[x.get("text"), x.get("where"), x.get("why")] for x in d.get("promote_posts", []) if isinstance(x, dict)]))
-        for t, k in (("Yangi reklama g'oyalari", "new_creatives"), ("Qilmaslik kerak", "avoid")):
-            bl = _bullets(t, d.get(k))
-            if bl:
-                blocks.append(bl)
-        blocks.append({"type": "text", "title": "Boshlang'ich byudjet va test", "text": f"{d.get('start_budget_hint', '')}\n{d.get('test_plan', '')}"})
-    else:
-        blocks.append({"type": "text", "title": "Hali maslahat yo'q", "text": "Tugmani bosing — AI tahlil asosida qaysi platformaga va qaysi postga reklama berishni aytadi. Kabinetga ulanish shart emas."})
-    blocks.append({"type": "actions", "title": "Amallar", "buttons": [ui.btn("Yangi maslahat olish (AI)", "/reklama/maslahat/yangila/", "primary")]})
-    return ui.page(request, "Reklama maslahati", blocks, subtitle=b.name, toolbar=[{"label": "Orqaga", "url": "/reklama/"}])

@@ -93,8 +93,6 @@ def tick(now: datetime | None = None) -> dict:
     if nl.hour >= 8:
         enqueue("activity_digest", {}, dedupe_key=f"ad:{nl.date()}", dedupe_any_status=True)
     enqueue("health_probe", {}, dedupe_key=f"hp:{int(now.timestamp() // 300)}", dedupe_any_status=True)
-    if get_setting("worker.cloudflare_url", ""):
-        enqueue("link_sync", {}, dedupe_key=f"ls:{int(now.timestamp() // 900)}", dedupe_any_status=True)
     if nl.hour >= 3 and nl.minute >= 30 or nl.hour > 3:
         enqueue("backup_db", {}, dedupe_key=f"bk:{nl.date()}", dedupe_any_status=True)
     # g'oyalar banki: har kuni 07:00 dan keyin har bir biznes uchun kamida 1 ta g'oya (tahlildan)

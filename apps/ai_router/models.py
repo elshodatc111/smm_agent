@@ -3,7 +3,7 @@ from django.db import models
 
 from apps.core import crypto
 
-PROVIDERS = [("gemini", "Gemini"), ("groq", "Groq"), ("openrouter", "OpenRouter"), ("claude", "Claude"), ("openai", "OpenAI")]
+PROVIDERS = [("openai", "OpenAI"), ("claude", "Claude")]
 
 
 class AIKey(models.Model):

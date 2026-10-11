@@ -1,0 +1,9 @@
+{% extends "base.html" %}{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="pg-head"><a class="muted sm" href="{% url 'inbox_home' %}">← Murojaatlar</a><h1 style="margin:2px 0">AI javoblar jurnali</h1><p class="muted">AI ning har bir qarori: nima so'raldi, nima deb javob berdi (yoki nega operatorga uzatdi), qaysi model va nechta token.</p></div>
+<div class="seg" style="margin-bottom:14px"><a href="?" class="{% if not dec %}on{% endif %}">Hammasi</a>{% for k, n in decisions %}<a href="?d={{ k }}" class="{% if dec == k %}on{% endif %}">{{ n }}</a>{% endfor %}</div>
+<div class="card" style="padding:0;overflow:auto"><table class="tbl"><tr><th>Vaqt</th><th>Biznes / mijoz</th><th>Qaror</th><th>Savol</th><th>Javob / sabab</th><th>Model</th></tr>
+{% for l in rows %}<tr><td>{{ l.created_at|date:"d.m H:i" }}</td><td>{{ l.business.name }}<div class="muted sm"><a href="{% url 'inbox_conv' l.conversation_id %}">{{ l.conversation }}</a></div></td>
+<td><span class="tag">{{ l.get_decision_display }}</span></td><td class="sm">{{ l.question|truncatechars:120 }}</td><td class="sm">{% if l.answer %}{{ l.answer|truncatechars:200 }}{% else %}{{ l.reason }}{% endif %}</td><td class="sm">{{ l.provider }} {{ l.model }}<div class="muted">{{ l.tokens_in }}+{{ l.tokens_out }} token</div></td></tr>
+{% empty %}<tr><td colspan="6" class="empty">Jurnal bo'sh.</td></tr>{% endfor %}</table></div>
+{% endblock %}

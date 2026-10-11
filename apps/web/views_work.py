@@ -253,7 +253,7 @@ def global_search(request):
     q = (request.GET.get("q") or "").strip()
     u = request.user
     if len(q) < 2:
-        return ui.page(request, "Qidiruv", [{"type": "text", "text": "Kamida 2 ta belgi yozing. Postlar, Cloudflare fayllari, g'oyalar, ssenariylar, raqobatchilar va lidlar bo'yicha qidiriladi."}])
+        return ui.page(request, "Qidiruv", [{"type": "text", "text": "Kamida 2 ta belgi yozing. Postlar, Cloudflare fayllari, g'oyalar, ssenariylar, va raqobatchilar bo'yicha qidiriladi."}])
     ids = [request.business.pk] if request.business else list(perms.businesses_for(u).values_list("pk", flat=True))
     blocks = []
     L = 15
@@ -288,11 +288,6 @@ def global_search(request):
         cs = Competitor.objects.filter(business_id__in=ids).filter(Q(name__icontains=q) | Q(handle__icontains=q))[:L]
         if cs:
             blocks.append(ui.table(f"Raqobatchilar ({len(cs)})", ["Nomi", "Platforma"], [[ui.link(c.name or c.handle, f"/raqobatchilar/{c.pk}/"), c.platform.title()] for c in cs]))
-    if perms.businesses_for(u, "analytics.view").exists():
-        from apps.metrics.models import Lead
-        ls = Lead.objects.filter(business_id__in=ids).filter(Q(name__icontains=q) | Q(phone__icontains=q) | Q(note__icontains=q))[:L]
-        if ls:
-            blocks.append(ui.table(f"Lidlar ({len(ls)})", ["Ism", "Telefon", "Holat"], [[ui.link(l.name or l.phone, "/lidlar/"), l.phone, l.get_status_display()] for l in ls]))
     if not blocks:
         blocks = [{"type": "text", "text": "Hech narsa topilmadi."}]
     return ui.page(request, f"Qidiruv: {q}", blocks)

@@ -13,7 +13,7 @@ from apps.connections.registry import get_connector
 from apps.core.notify import notify
 from apps.core.settings_store import get_setting
 
-from .models import (AccountMetrics, CollectionRun, Comment, CompetitorMetrics, CompetitorPost,
+from .models import (AccountMetrics, CollectionRun, CompetitorMetrics, CompetitorPost,
                      CompetitorPostMetric, Post, PostMetricsHistory, Story, StoryMetricsHistory)
 
 log = logging.getLogger(__name__)
@@ -127,18 +127,6 @@ def collect_account(acc: SocialAccount, *, mode: str = "regular", days: int | No
                     items += 1
                 if progress:
                     progress(50 + int(45 * min(i + 20, len(ids)) / max(1, len(ids))))
-        # izohlar (yangi postlar uchun)
-        if Capability.COMMENTS in conn.capabilities and mode == "regular":
-            for p in [p for p in qs if (now - p.published_at) <= timedelta(days=7)][:15]:
-                try:
-                    for c in conn.fetch_comments(p.external_id, now - timedelta(days=8)).items:
-                        _, created = Comment.objects.get_or_create(
-                            post=p, external_id=c.external_id,
-                            defaults=dict(business=acc.business, account=acc, author=c.author_name or "", text=c.text,
-                                          created_at=c.created_at, like_count=c.like_count))
-                        items += created
-                except PlatformError as e:
-                    log.info("izoh yig'ib bo'lmadi %s: %s", p.external_id, e)
         acc.last_collect_at, acc.last_error = timezone.now(), ""
         if acc.status == "error":
             acc.status = "active"

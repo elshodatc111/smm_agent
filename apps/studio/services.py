@@ -13,7 +13,7 @@ from apps.businesses.services import save_brand_version
 from apps.core.notify import notify
 from apps.core.utils import tz
 
-from .models import (CommentSuggestion, ContentPlan, Hook, PostInsight, Script, ScriptAnalysis)
+from .models import (ContentPlan, Hook, PostInsight, Script, ScriptAnalysis)
 
 J = {"json": True}  # response_schema belgisi: JSON kutiladi
 
@@ -40,27 +40,6 @@ def generate_brand_profile(business, user=None, router: AIRouter | None = None):
     bp = save_brand_version(business, content, user=user, structured={k: v for k, v in d.items() if k != "prompt"},
                             note="AI yozdi — ko'rib chiqing va tasdiqlang", ai=True)
     return bp
-
-
-def classify_comment(comment, router=None):
-    prompt = ('Izohni tasnifla. JSON: {"sentiment":"positive|neutral|negative","kind":"question|complaint|sales|praise|other"}\n'
-              f"Izoh: {comment.text[:500]}")
-    res, _ = generate(TaskType.CLASSIFY, prompt, business=None, kind="classify", schema=J, router=router, require_lang=None)
-    d = res.data or {}
-    comment.sentiment = d.get("sentiment") if d.get("sentiment") in ("positive", "neutral", "negative") else "neutral"
-    comment.kind = {"sales": "sales"}.get(d.get("kind"), d.get("kind")) if d.get("kind") in ("question", "complaint", "sales", "praise", "other") else "other"
-    comment.save(update_fields=["sentiment", "kind"])
-    if comment.sentiment == "negative" or comment.kind == "complaint":
-        notify("comment.negative", f"Salbiy izoh: {comment.post.account.name}", comment.text[:200], business_id=comment.business_id,
-               severity="warn", dedupe_key=f"negc:{comment.pk}", link="/studiya/izohlar/")
-    return comment
-
-
-def suggest_reply(comment, user=None, router=None) -> CommentSuggestion:
-    prompt = (f"Quyidagi izohga brend ohangida qisqa, iliq va aniq JAVOB QORALAMASINI yoz (1-3 gap). Narx/telefonni o'ylab topma.\n"
-              f"Post matni: {comment.post.text[:300]}\nIzoh ({comment.sentiment}/{comment.kind}): {comment.text}")
-    res, _ = generate(TaskType.COMMENT_REPLY, prompt, business=comment.business, kind="comment_reply", user=user, router=router)
-    return CommentSuggestion.objects.create(comment=comment, draft=res.text or "")
 
 
 def why_worked(post, user=None, router=None) -> PostInsight:

@@ -27,11 +27,6 @@ def test_studio_flows_with_fake_ai(biz, acc_tg, admin):
     p = biz.posts.first()
     ins = st.why_worked(p, admin)
     assert ins.numbers and ins.verdict in ("winner", "average", "weak")
-    from apps.metrics.models import Comment
-    c = Comment.objects.first()
-    st.classify_comment(c)
-    sug = st.suggest_reply(c, admin)
-    assert sug.draft
     assert st.refresh_hook_suggestions(biz) >= 1
 
 
@@ -79,20 +74,6 @@ def test_report_delivery_via_bot(biz, acc_tg, admin):
     ClientBotUser.objects.create(tg_user_id=2, business_ids=[], current_business=None)
     api = bot.FakeBotAPI()
     assert bot.deliver_report(r, api) == 1 and api.docs[0][0] == 1
-
-
-def test_links_roundtrip_with_fake_worker(biz, admin):
-    from apps.links import services as ls
-    from apps.links.models import LinkClick
-    link = ls.create_link(biz, "https://example.com/kurs", utm={"source": "telegram", "campaign": "oktabr"})
-    assert link.synced and ls.FakeWorker.links[link.slug]["url"].startswith("https://example.com/kurs?")
-    assert "utm_source=telegram" in ls.FakeWorker.links[link.slug]["url"]
-    ls.FakeWorker.clicks.append({"id": 1, "slug": link.slug, "t": int(timezone.now().timestamp()), "source": "t.me", "device": "mobile", "country": "UZ"})
-    ls.sync_clicks()
-    ls.sync_clicks()  # dublikat yo'q
-    assert LinkClick.objects.count() == 1
-    ls.remove_link(link)
-    assert link.slug not in ls.FakeWorker.links
 
 
 def test_health_snapshot(biz, acc_tg):

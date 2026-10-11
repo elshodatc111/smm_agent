@@ -2,12 +2,10 @@ from datetime import timedelta
 
 from django.utils import timezone
 
-from apps.ads import services as ads
-from apps.ads.models import AdCampaign, AdResult
 from apps.jobs import scheduler
 from apps.jobs.models import Job
 from apps.metrics import analytics, collector
-from apps.metrics.models import AccountMetrics, Post, PostMetricsHistory, Story, StoryMetricsHistory, Comment
+from apps.metrics.models import AccountMetrics, Post, PostMetricsHistory, Story, StoryMetricsHistory
 from apps.tgbot import bot
 from apps.tgbot.models import ClientBotUser
 
@@ -17,7 +15,7 @@ def test_collect_fake_account(acc_tg):
     assert r["items"] > 0
     assert AccountMetrics.objects.filter(account=acc_tg).count() == 1
     assert Post.objects.filter(account=acc_tg).count() > 0
-    assert PostMetricsHistory.objects.exists() and Comment.objects.exists()
+    assert PostMetricsHistory.objects.exists()
     n = Post.objects.count()
     collector.collect_account(acc_tg)  # dublikat yo'q (platform, external_id)
     assert Post.objects.count() == n
@@ -102,28 +100,6 @@ def test_anomaly_detection(acc_tg):
 
 
 # ---------- reklama ----------
-def test_forecast_transparent_and_ordered(biz):
-    f = ads.forecast(biz, 5_000_000, "telegram_ads")
-    s = f["scenarios"]
-    assert s["past"]["sales"] <= s["ortacha"]["sales"] <= s["yuqori"]["sales"]
-    assert f["assumptions"]["cpm"]["source"] == "industry_template" and f["disclaimer"]
-    assert s["ortacha"]["revenue"] > 0
-
-
-def test_forecast_calibrates_from_results(biz):
-    c = AdCampaign.objects.create(business=biz, name="k", platform="telegram_ads", budget=1000000)
-    for i in range(4):
-        AdResult.objects.create(campaign=c, date=timezone.now().date() - timedelta(days=i), spend=250000, impressions=10000, clicks=400, leads=40, sales=8, revenue=4000000)
-    f = ads.forecast(biz, 1_000_000, "telegram_ads")
-    assert f["assumptions"]["ctr"]["source"] == "calibrated" and f["assumptions"]["ctr"]["sample"] == 4
-
-
-def test_ad_candidates_need_min_age(biz, acc_tg):
-    collector.collect_account(acc_tg)
-    recs = ads.find_candidates(biz)
-    assert recs and all(r.post.published_at < timezone.now() - timedelta(hours=24) for r in recs)
-
-
 # ---------- bot ----------
 def test_bot_invite_flow_and_isolation(biz, biz2, admin):
     code = bot.create_invite([biz.pk], admin, "Mijoz")

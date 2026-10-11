@@ -1,4 +1,4 @@
-"""AI Router (CONTRACTS §4): vazifa -> ketma-ketlik, kalit aylantirish, cooldown, kesh, pullik rejim himoyasi."""
+"""AI Router: vazifa -> provayder (OpenAI yoki Claude) + zaxira, kalit aylantirish, cooldown, kesh."""
 from __future__ import annotations
 
 import hashlib
@@ -8,7 +8,6 @@ import re
 from datetime import timedelta
 from decimal import Decimal
 
-from django.db.models import Sum
 from django.utils import timezone
 
 from apps.connections.base import (AuthError, NotFoundError, PlatformError, QuotaExceededError, RateLimitError, TransientError)
@@ -35,7 +34,7 @@ class AIUnavailable(Exception):
 def _friendly(err) -> str:
     low = str(err).lower()
     if not err:
-        return ("AI kaliti kiritilmagan. Sozlamalar → AI router bo'limida Gemini yoki Groq kalitini qo'shing.")
+        return ("AI kaliti kiritilmagan. Sozlamalar → AI bo'limida OpenAI yoki Claude kalitini qo'shing.")
     if isinstance(err, AuthError) or "api key" in low or "invalid_api_key" in low:
         return "AI kaliti noto'g'ri yoki bekor qilingan. Sozlamalar → AI router → «Tekshirish» tugmasi bilan tekshiring yoki yangi kalit qo'shing."
     if isinstance(err, (RateLimitError, QuotaExceededError)):
@@ -62,53 +61,26 @@ class AIRouter:
         from django.conf import settings
         self.fake = settings.USE_FAKES if use_fakes is None else use_fakes
         self.providers = providers if providers is not None else (
-            {n: FakeAIProvider(n) for n in ("gemini", "groq", "openrouter", "claude", "local_whisper")} if self.fake else build_registry())
+            {n: FakeAIProvider(n) for n in ("openai", "claude")} if self.fake else build_registry())
 
     # ---- yo'nalish ----
     def _routes(self, req: AIRequest) -> list[tuple[str, bool]]:
-        mode = get_setting("ai.mode", "free_first")
-        if mode == "openai_only":      # faqat OpenAI Platform (bepul kalitlar va Claude ishlatilmaydi)
-            return [("openai", False)] if self._openai_ok(force=True) else []
-        routes = [tuple(r) for r in (get_setting("ai.routes", {}) or {}).get(str(req.task), [])]
-        paid_on = bool(get_setting("ai.paid.enabled", False))
-        policy = get_setting("ai.paid.policy", "only_when_free_exhausted")
-        out = []
-        for prov, paid in routes:
-            if paid:
-                if not paid_on or self._budget_exceeded():
-                    continue
-                if policy == "only_complex" and req.task not in COMPLEX_TASKS:
-                    continue
-            out.append((prov, bool(paid)))
-        if paid_on and policy == "always":
-            out.sort(key=lambda r: not r[1])
-        # OpenAI zaxirasi: kaliti bo'lsa va byudjet tugamagan bo'lsa — eng oxirgi urinish sifatida avtomatik qo'shiladi
-        if mode == "openai_first" and self._openai_ok(force=True):
-            out = [r for r in out if r[0] != "openai"]
-            out.insert(0, ("openai", False))
-        elif "openai" not in [r[0] for r in out] and self._openai_ok():
-            out.append(("openai", False))
-        return out
-
-    def _openai_ok(self, force: bool = False) -> bool:
-        if self.fake:
-            return force
-        if not force and not get_setting("ai.openai.fallback", True):
-            return False
-        if not AIKey.objects.filter(provider="openai", enabled=True).exists():
-            return False
-        budget = Decimal(str(get_setting("ai.openai.monthly_budget_usd", 10) or 0))
-        if budget <= 0:
-            return True
-        start = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        spent = AIUsageLog.objects.filter(at__gte=start, provider="openai").aggregate(s=Sum("cost_usd"))["s"] or Decimal(0)
-        return spent < budget
-
-    def _budget_exceeded(self) -> bool:
-        budget = Decimal(str(get_setting("ai.paid.monthly_budget_usd", 0) or 0))
-        start = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        spent = AIUsageLog.objects.filter(at__gte=start).aggregate(s=Sum("cost_usd"))["s"] or Decimal(0)
-        return budget <= 0 or spent >= budget
+        """Vazifa uchun provayderlar ketma-ketligi: tanlangan (yoki asosiy) provayder, so'ng zaxira. Faqat OpenAI va Claude."""
+        task = str(req.task)
+        if req.task == TaskType.STT:        # ovozdan matn faqat OpenAI Whisper
+            order = ["openai"]
+        else:
+            pick = get_setting(f"ai.task.{task}", "auto")
+            primary = get_setting("ai.primary", "openai")
+            first = primary if pick not in ("openai", "claude") else pick
+            if first not in ("openai", "claude"):
+                first = "openai"
+            order = [first]
+            if get_setting("ai.fallback", "auto") != "none":
+                order.append("claude" if first == "openai" else "openai")
+        if not self.fake:
+            order = [p for p in order if AIKey.objects.filter(provider=p, enabled=True).exists()]
+        return [(p, False) for p in order]
 
     def _keys(self, provider: str, force: bool = False) -> list[AIKey]:
         if self.fake:
@@ -184,16 +156,13 @@ class AIRouter:
         last_err: Exception | None = None
         best_bad_lang: AIResult | None = None
         models = get_setting("ai.models", {}) or {}
-        paid_used_after_free_fail = False
-        for idx, (prov, paid) in enumerate(routes):
+        for idx, (prov, _) in enumerate(routes):
             p = self.providers.get(prov)
             if p is None or not p.supports(req.task):
                 continue
-            if paid and get_setting("ai.paid.policy") == "only_when_free_exhausted" and idx == 0 and len(routes) > 1:
-                pass
             model = models.get(f"{prov}_stt" if req.task == TaskType.STT else prov, "")
-            if prov == "openai" and req.task in COMPLEX_TASKS and get_setting("ai.openai.model_complex", ""):
-                model = get_setting("ai.openai.model_complex", "") or model
+            if req.task in COMPLEX_TASKS and get_setting(f"ai.{prov}.model_complex", ""):
+                model = get_setting(f"ai.{prov}.model_complex", "") or model
             for key in self._keys(prov, force=force):
                 attempted = True
                 t0 = timezone.now()
@@ -240,7 +209,7 @@ class AIRouter:
         exc.attempted = attempted
         raise exc
 
-    FALLBACK_MODELS = {"gemini": ["gemini-flash-lite-latest"], "groq": ["llama-3.1-8b-instant"]}
+    FALLBACK_MODELS = {"openai": ["gpt-4o-mini"]}
 
     def _invoke(self, p, prov, req, key, model, system):
         """Bitta chaqiruv: eskirgan model -> avto-aniqlash; band (503) -> qayta urinish -> zaxira model."""
@@ -277,8 +246,6 @@ class AIRouter:
         from apps.core.settings_store import set_setting
         models = dict(get_setting("ai.models", {}) or {})
         models[f"{prov}_stt" if req.task == TaskType.STT else prov] = new_model
-        if prov == "gemini":
-            models["gemini"] = models["gemini_stt"] = new_model
         set_setting("ai.models", models)
 
     def _cost(self, prov: str, raw) -> Decimal:

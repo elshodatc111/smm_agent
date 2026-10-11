@@ -97,12 +97,20 @@ TABS = {
                                    ("scrapecreators.daily_cap", "ScrapeCreators: kunlik limit", "int", ""), ("scrapecreators.monthly_cap", "ScrapeCreators: oylik limit", "int", ""),
                                    ("scrapecreators.credit_warn_threshold", "Kredit ogohlantirish chegarasi", "int", ""), ("telethon.daily_request_cap", "Telethon: kunlik so'rov limiti", "int", "Ban'dan himoya"),
                                    ("telethon.min_delay_sec", "Telethon: min kutish (s)", "int", ""), ("telethon.max_delay_sec", "Telethon: max kutish (s)", "int", "")]),
-    "ai": ("AI router", [("ai.mode", "AI rejimi", "choice:free_first,openai_first,openai_only", "free_first = avval bepul kalitlar; openai_first = avval OpenAI; openai_only = FAQAT OpenAI Platform (barqaror va sifatli, pullik)"),
-                         ("ai.openai.model_complex", "OpenAI: murakkab vazifalar modeli", "text", "Ssenariy, reja, brend, reklama uchun (masalan: gpt-4o). Oddiy vazifalar «Modellar» dagi openai modelini ishlatadi"),
-                         ("ai.routes", "Vazifa → provayder yo'nalishi (JSON)", "json", "[provayder, pullik_mi]"), ("ai.models", "Modellar (JSON)", "json", ""),
-                         ("ai.openai.fallback", "OpenAI zaxirasi (bepul AI ishlamasa)", "bool", "AI kalitlari bo'limida «openai» kaliti qo'shilgan bo'lsa ishlaydi"), ("ai.openai.monthly_budget_usd", "OpenAI oylik byudjet ($, 0 = cheklanmagan)", "int", "Standart: 10"),
-                         ("ai.paid.enabled", "Pullik AI (Claude) yoqilgan", "bool", "Standart: O'CHIQ"), ("ai.paid.policy", "Pullik AI siyosati", "choice:only_when_free_exhausted,quality_tasks,always", ""),
-                         ("ai.paid.monthly_budget_usd", "Pullik AI oylik byudjet ($)", "int", ""), ("ai.paid.claude_key", "Claude API kaliti", "secret", ""), ("stt.min_confidence", "STT minimal ishonch", "text", "")]),
+    "ai": ("AI", [("ai.primary", "Asosiy AI provayder", "choice:openai,claude", "Hamma vazifalar shu provayderdan boshlanadi (pastdagi vazifa sozlamasi o'zgartirmasa)"),
+                         ("ai.fallback", "Zaxira", "choice:auto,none", "auto = asosiy ishlamasa ikkinchisiga o'tadi (kaliti qo'shilgan bo'lsa); none = o'tmaydi"),
+                         ("ai.task.long_uz", "Vazifa: Matn (post, reja, ssenariy)", "choice:auto,openai,claude", "auto = asosiy provayder"),
+                         ("ai.task.classify", "Vazifa: Tasnif (izoh/xabar turi)", "choice:auto,openai,claude", "auto = asosiy provayder"),
+                         ("ai.task.vision", "Vazifa: Rasm/video tahlili", "choice:auto,openai,claude", "auto = asosiy provayder"),
+                         ("ai.task.brand_profile", "Vazifa: Brend profili", "choice:auto,openai,claude", "auto = asosiy provayder"),
+                         ("ai.task.script_review", "Vazifa: Ssenariy bahosi", "choice:auto,openai,claude", "auto = asosiy provayder"),
+                         ("ai.task.comment_reply", "Vazifa: Mijozga javob", "choice:auto,openai,claude", "auto = asosiy provayder"),
+                         ("ai.task.why_worked", "Vazifa: Nega ishladi tahlili", "choice:auto,openai,claude", "auto = asosiy provayder"),
+                         ("ai.task.ad_plan", "Vazifa: Reklama tahlili", "choice:auto,openai,claude", "auto = asosiy provayder"),
+                         ("ai.models", "Modellar (JSON)", "json", '{"openai": "gpt-4o-mini", "claude": "claude-sonnet-4-5", "openai_stt": "whisper-1"}'),
+                         ("ai.openai.model_complex", "OpenAI: murakkab vazifalar modeli", "text", "Ssenariy, reja, brend, reklama uchun (masalan: gpt-4o)"),
+                         ("ai.claude.model_complex", "Claude: murakkab vazifalar modeli", "text", "Bo'sh = oddiy Claude modeli"),
+                         ("stt.min_confidence", "Ovozdan matn: minimal ishonch", "text", "")]),
     "nashr": ("Nashr", [("publish.use_r2", "Vaqtinchalik hosting", "choice:auto,worker_kv,r2", "auto: avval Worker KV, kerak bo'lsa R2"), ("publish.late_policy_min", "Kechikish siyosati (daqiqa)", "int", ""),
                         ("publish.max_attempts", "Maksimal urinish", "int", ""), ("youtube.upload_daily_cap", "YouTube kunlik yuklash limiti", "int", "10 000 kvotada ~6"), ("publish.r2.max_gb", "R2 hajm chegarasi (GB)", "int", "")]),
     "zaxira": ("Zaxira", [("backup.keep_days", "Zaxira saqlash (kun)", "int", ""), ("backup.dir", "Zaxira papkasi", "text", ""), ("media.retention_days", "Media saqlash (kun)", "int", "")]),
@@ -194,7 +202,7 @@ def settings_home(request):
         if can_edit:
             blocks.append(ui.form_block(forms.Form(), None))
             f = type("KF", (forms.Form,), {"provider": forms.ChoiceField(label="Provayder", choices=[(p, p) for p, _ in AIKey._meta.get_field("provider").choices]),
-                                           "alias": forms.CharField(label="Nom (masalan: gemini-1)"), "key": forms.CharField(label="Kalit", widget=forms.PasswordInput)})()
+                                           "alias": forms.CharField(label="Nom (masalan: openai-1)"), "key": forms.CharField(label="Kalit", widget=forms.PasswordInput)})()
             blocks[-1] = ui.form_block(f, "AI kalit qo'shish", "Qo'shish va tekshirish", action="/sozlamalar/ai-kalit/qoshish/")
     if tab == "kalitlar" and can_edit:
         blocks.append({"type": "actions", "title": "Ulanishni tekshirish", "buttons": [ui.btn("Cloudflare Worker", "/sozlamalar/tekshir/worker/"), ui.btn("ScrapeCreators", "/sozlamalar/tekshir/scrapecreators/"),
@@ -263,12 +271,8 @@ def setting_test(request, what):
     import requests
     try:
         if what == "worker":
-            from apps.links.services import client, sync_clicks
-            r = client().status()
-            try:
-                sync_clicks()   # Tizim holati sahifasidagi Worker holatini ham yangilaydi
-            except Exception:  # noqa: BLE001
-                pass
+            from apps.content.temphost import worker_status
+            r = worker_status()
             messages.success(request, f"Worker ishlayapti (versiya {r.get('version')}).") if r.get("ok") else messages.error(request, "Worker javob berdi, lekin ok=false.")
         elif what == "youtube":
             key = ss.get_secret("youtube.api_key")
@@ -503,24 +507,23 @@ def client_user_toggle(request, pk):
 
 
 def _openai_block() -> dict:
-    from datetime import timedelta
-    from decimal import Decimal
+    """AI holati: asosiy/zaxira provayder, kalitlar, shu oy so'rovlar va taxminiy sarf (tokenlardan hisoblangan)."""
     from django.db.models import Count, Sum
     from django.utils import timezone
     from apps.ai_router.models import AIUsageLog
     start = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    q = AIUsageLog.objects.filter(at__gte=start)
-    rows = list(q.values("provider").annotate(n=Count("id"), c=Sum("cost_usd")).order_by("-n"))
-    budget = Decimal(str(ss.get_setting("ai.openai.monthly_budget_usd", 10) or 0))
-    oa = next((r for r in rows if r["provider"] == "openai"), None)
-    spent = (oa["c"] or Decimal(0)) if oa else Decimal(0)
-    mode = ss.get_setting("ai.mode", "free_first")
-    has_key = AIKey.objects.filter(provider="openai", enabled=True).exists()
-    lines = [f"<b>Joriy rejim:</b> {dict(free_first='Avval bepul kalitlar', openai_first='Avval OpenAI', openai_only='Faqat OpenAI Platform')[mode] if mode in ('free_first', 'openai_first', 'openai_only') else mode}",
-             f"<b>OpenAI kaliti:</b> {'qo`shilgan ✅' if has_key else 'YO`Q ❌ — pastdagi «AI kalit qo`shish» da provayder = openai tanlang'}",
-             f"<b>Shu oy OpenAI xarajati:</b> ${spent:.2f}" + (f" / ${budget} byudjet ({float(spent / budget * 100):.0f}%)" if budget > 0 else " (byudjet cheklanmagan)")]
-    if rows:
-        lines.append("<b>Shu oy so'rovlar:</b> " + ", ".join(f"{r['provider']}: {r['n']}" for r in rows))
-    if mode == "openai_only" and not has_key:
-        lines.append("<span style='color:#dc2626'><b>Diqqat:</b> rejim «faqat OpenAI», lekin kalit yo'q — AI ishlamaydi!</span>")
-    return {"type": "html", "title": "OpenAI Platform holati", "html": "<br>".join(lines).replace("`", "&#x27;")}
+    rows = {r["provider"]: r for r in AIUsageLog.objects.filter(at__gte=start).values("provider").annotate(
+        n=Count("id"), tin=Sum("tokens_in"), tout=Sum("tokens_out"), c=Sum("cost_usd"))}
+    primary = ss.get_setting("ai.primary", "openai")
+    lines = [f"<b>Asosiy provayder:</b> {primary} · <b>Zaxira:</b> {'o`chiq' if ss.get_setting('ai.fallback', 'auto') == 'none' else 'avtomatik'}"]
+    for prov in ("openai", "claude"):
+        n_keys = AIKey.objects.filter(provider=prov, enabled=True).count()
+        r = rows.get(prov)
+        txt = f"<b>{prov}:</b> kalit {'✅ ' + str(n_keys) + ' ta' if n_keys else '❌ yo`q'}"
+        if r:
+            txt += f" · shu oy {r['n']} so'rov, {(r['tin'] or 0) + (r['tout'] or 0):,} token, taxminiy ${(r['c'] or 0):.2f}"
+        lines.append(txt)
+    if not AIKey.objects.filter(enabled=True).exists():
+        lines.append("<span style='color:#dc2626'><b>Diqqat:</b> hech qanday AI kaliti yo'q: pastdagi «AI kalit qo'shish» dan OpenAI yoki Claude kalitini kiriting.</span>")
+    lines.append("<span class='muted'>Qoldiq mablag'ni platform.openai.com va console.anthropic.com kabinetidan ko'rasiz; bu yerda faqat tokenlardan taxminiy sarf ko'rsatiladi.</span>")
+    return {"type": "html", "title": "AI holati", "html": "<br>".join(lines).replace("`", "&#x27;")}

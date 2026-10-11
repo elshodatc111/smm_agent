@@ -26,7 +26,6 @@ def brand() -> str:
 
 def kpi_cards(data: dict) -> list[dict]:
     k, d = data["kpi"], data["delta"]
-    lead = data.get("leads") or {}
     er = f"{(k.get('er') or 0) * 100:.1f}%"
     return [
         {"label": "Obunachilar", "value": fmt_num(k["followers"]), "sub": f"{k['followers_delta']:+d} davr ichida", "delta": k.get("followers_growth_pct")},
@@ -34,7 +33,6 @@ def kpi_cards(data: dict) -> list[dict]:
         {"label": "Qamrov", "value": fmt_num(k["reach"]), "sub": "noyob foydalanuvchilar", "delta": d.get("reach")},
         {"label": "Postlar", "value": str(k["posts"]), "sub": f"{(data.get('stories') or {}).get('count', 0)} ta stories", "delta": d.get("posts")},
         {"label": "Faollik (ER)", "value": er, "sub": f"{fmt_num(k['likes'])} layk · {fmt_num(k['comments'])} izoh", "delta": d.get("er")},
-        {"label": "Lidlar", "value": str(lead.get("total", 0)), "sub": f"{data.get('clicks', 0)} havola bosish", "delta": ((lead.get("total", 0) - lead.get("prev", 0)) / lead["prev"] * 100) if lead.get("prev") else None},
     ]
 
 
@@ -82,12 +80,10 @@ def html_context(report) -> dict:
     d = {**d, "top": [{**p, "type_uz": TYPE_UZ.get(p["type"], p["type"]), "er_pct": f"{(p.get('er') or 0) * 100:.1f}%", "views": fmt_num(p.get("views"))} for p in d.get("top", [])],
          "publications": [{**p, "type_uz": TYPE_UZ.get(p["type"], p["type"])} for p in d.get("publications", [])],
          "per_platform": [{**x, "kpi": {**x["kpi"], "er_pct": f"{(x['kpi'].get('er') or 0) * 100:.1f}%", "followers": fmt_num(x["kpi"]["followers"]), "views": fmt_num(x["kpi"]["views"]), "likes": fmt_num(x["kpi"]["likes"]),
-                                         "followers_delta": f"{x['kpi']['followers_delta']:+d}"}} for x in d.get("per_platform", [])],
-         "leads": {**(d.get("leads") or {}), "amount": fmt_num((d.get("leads") or {}).get("amount"))}}
+                                         "followers_delta": f"{x['kpi']['followers_delta']:+d}"}} for x in d.get("per_platform", [])]}
     return {"report": report, "business": report.business, "brand": col, "system_name": get_setting("general.system_name", "SMM Platforma"), "d": d,
             "cards": kpi_cards(d) if d.get("kpi") else [], "summary": s.get("summary") or report.summary_text, "recs": s.get("recommendations") or [],
             "chart_followers": svg_line([x["followers"] or 0 for x in daily], labels, col), "chart_views": svg_bars([x["views"] for x in daily], labels, col),
-            "chart_leads": svg_bars([x["leads"] for x in daily], labels, "#16a34a"), "chart_clicks": svg_bars([x["clicks"] for x in daily], labels, "#2563eb"),
             "plat_color": PLAT_COLOR, "type_uz": TYPE_UZ, "has_daily": bool(daily)}
 
 
@@ -178,7 +174,7 @@ def build_pdf(report, data: dict, summary: dict) -> bytes:
         t.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 0.6, line), ("BACKGROUND", (0, 0), (-1, -1), soft), ("LEFTPADDING", (0, 0), (-1, -1), 8), ("TOPPADDING", (0, 0), (-1, -1), 7),
                                ("BOTTOMPADDING", (0, 0), (-1, -1), 7), ("LINEBEFORE", (0, 0), (0, -1), 3, brand_c)]))
         return t
-    grid = Table([[card(cards[0]), card(cards[1]), card(cards[2])], [card(cards[3]), card(cards[4]), card(cards[5])]], colWidths=[CW / 3] * 3, rowHeights=None)
+    grid = Table([[card(cards[0]), card(cards[1]), card(cards[2])], [card(cards[3]), card(cards[4]), ""]], colWidths=[CW / 3] * 3, rowHeights=None)
     grid.setStyle(TableStyle([("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 4 * mm), ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 4 * mm), ("VALIGN", (0, 0), (-1, -1), "TOP")]))
     story += [Spacer(1, 2 * mm), grid]
 
@@ -239,21 +235,6 @@ def build_pdf(report, data: dict, summary: dict) -> bytes:
         t = Table([[norm(c) for c in r] for r in rows], colWidths=[CW * 0.22, CW * 0.14, CW * 0.12, CW * 0.12, CW * 0.16, CW * 0.12, CW * 0.12])
         t.setStyle(_tbl_style(f, fb, brand_c, line, soft))
         story += [Paragraph("Platformalar bo'yicha", H2), t]
-
-    # lidlar
-    ld = data.get("leads") or {}
-    if ld.get("total") or ld.get("prev"):
-        txt = f"Davr ichida <b>{ld.get('total', 0)}</b> ta lid keldi (oldingi davrda {ld.get('prev', 0)} ta). Sotuvga aylangani: <b>{ld.get('won', 0)}</b>"
-        if ld.get("amount"):
-            txt += f", jami <b>{fmt_num(ld['amount'])} so'm</b>."
-        story += [Paragraph("Lidlar", H2), Paragraph(norm(txt), P)]
-        if ld.get("sources"):
-            t = Table([["Manba", "Soni"]] + [[norm(a), str(b)] for a, b in ld["sources"]], colWidths=[CW * 0.7, CW * 0.3])
-            t.setStyle(_tbl_style(f, fb, brand_c, line, soft))
-            story += [Spacer(1, 3 * mm), t]
-        lv = [x["leads"] for x in daily]
-        if daily and any(lv):
-            story += [Spacer(1, 3 * mm), bar_chart(lv, "#16a34a")]
 
     # top postlar
     if data.get("top"):
