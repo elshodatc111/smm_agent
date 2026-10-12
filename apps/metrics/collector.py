@@ -235,6 +235,18 @@ def _followers_from(data) -> int | None:
     return None
 
 
+def _txt(v) -> str:
+    """Matn ba'zan dict/list bo'lib keladi (masalan caption: {"text": ...}); doim str qaytaradi."""
+    if isinstance(v, str):
+        return v
+    if isinstance(v, dict):
+        for k in ("text", "title", "caption", "content"):
+            if isinstance(v.get(k), str):
+                return v[k]
+        return ""
+    return "" if v is None else str(v)
+
+
 def collect_competitor(comp: Competitor, depth: str = "light") -> dict:
     """Raqobatchi: light = profil, full = profil + postlar. Hammasi ProviderRouter orqali (kvota/kredit himoyasi)."""
     from apps.providers.base import DataKind, DataRequest, NoProviderAvailable
@@ -260,7 +272,7 @@ def collect_competitor(comp: Competitor, depth: str = "light") -> dict:
             for d in _extract_posts(comp.platform, pr.data):
                 cp, _ = CompetitorPost.objects.update_or_create(
                     competitor=comp, external_id=d["id"],
-                    defaults=dict(business_id=comp.business_id, text=d["text"][:4000], published_at=d["published_at"], media_type=str(d["type"])[:12],
+                    defaults=dict(business_id=comp.business_id, text=_txt(d["text"])[:4000], published_at=d["published_at"], media_type=str(d["type"])[:12],
                                   views=d["views"], likes=d["likes"], comments=d["comments"]))
                 CompetitorPostMetric.objects.create(post=cp, taken_at=timezone.now(), views=d["views"], likes=d["likes"], comments=d["comments"])
                 items += 1

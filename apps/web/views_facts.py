@@ -149,7 +149,7 @@ def facts_sources(request):
                 audit("facts.source", user=request.user, target=d["name"])
                 messages.success(request, "Manba qo'shildi. «Tekshirish» tugmasi bilan ishlashini sinab ko'ring.")
             return redirect("facts_sources")
-    return render(request, "facts_sources.html", {"title": "Manbalar katalogi", "sources": FactSource.objects.all(), "form": form, "can": can})
+    return render(request, "facts_sources.html", {"title": "Manbalar katalogi", "sources": FactSource.objects.all(), "off": FactSource.objects.filter(is_active=False), "form": form, "can": can})
 
 
 @login_required
@@ -161,10 +161,15 @@ def facts_source_action(request, pk, action):
     if action == "toggle":
         s.is_active = not s.is_active
         s.save(update_fields=["is_active"])
+        messages.success(request, f"«{s.name}» " + ("qayta yoqildi." if s.is_active else "ro'yxatdan olib tashlandi (pastdagi «O'chirilganlar» bo'limida turadi)."))
     elif action == "test":
         r = engine.refresh_source(s)
         messages.success(request, f"«{s.name}» ishlayapti: {r['new']} ta yangi material.") if r["ok"] else messages.error(request, f"«{s.name}» ishlamadi: {r['error']}")
-    elif action == "delete" and not s.is_system:
-        s.delete()
+    elif action == "delete":
+        if s.is_system:   # tizim manbasi qayta tiklanib qolmasin: faqat o'chiriladi
+            s.is_active = False
+            s.save(update_fields=["is_active"])
+        else:
+            s.delete()
         messages.success(request, "Manba o'chirildi.")
     return redirect("facts_sources")
