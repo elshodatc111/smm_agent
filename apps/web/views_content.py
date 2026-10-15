@@ -492,6 +492,9 @@ def content_detail(request, pk):
     if item.status in ("draft", "failed") and not item.scheduled_at and perms.can(u, "calendar.edit", item.business):
         acts.append({"t": "⚡ Eng yaxshi vaqtga qo'yish", "post": f"{base}/avto-vaqt/", "cls": "blue"})
     acts.append({"t": "Qoidalarni tekshirish", "post": f"{base}/tekshir/", "cls": ""})
+    if (item.rule_status == "block" or item.targets.filter(status="blocked").exists()) and item.status != "published" and perms.can(u, "publish.publish", item.business):
+        acts.append({"t": "⚠ Xatolarga qaramay nashr qilish", "post": f"{base}/majburan/", "cls": "danger",
+                     "confirm": "Qoidalar xato topgan (masalan, tasdiqlanmagan telefon yoki chegirma). Siz mas'uliyatni o'z zimmangizga olib, postni baribir nashr qilasizmi?"})
     if item.status != "publishing" and perms.can(u, "calendar.delete", item.business):
         acts.append({"t": "O'chirish (savatga)", "post": f"{base}/ochir/", "cls": "danger",
                      "confirm": "Post savatga o'tadi (30 kun ichida tiklash mumkin)." + (" Platformada chiqqan post o'chmaydi." if item.status == "published" else "")})
@@ -650,6 +653,29 @@ def content_override(request, pk):
         messages.success(request, "Ogohlantirish asoslab o'tkazildi (jurnalga yozildi).")
     except (PermissionError, ValueError) as e:
         messages.error(request, str(e))
+    return redirect("content_detail", pk=item.pk)
+
+
+@login_required
+@require_POST
+def content_force(request, pk):
+    """Qoidalar to'sgan postni mas'uliyatni o'ziga olib, baribir nashr qiladi (jurnalga yoziladi)."""
+    item = get_obj(request, ContentItem, pk, "publish.publish")
+    try:
+        csvc.override_warnings(item, request.user, "Qoidalar xatosiga qaramay qo'lda nashr qilindi.")
+    except (PermissionError, ValueError) as e:
+        messages.error(request, str(e))
+        return redirect("content_detail", pk=item.pk)
+    n = csvc.retry_failed(item, request.user)
+    if not n and item.status in ("draft", "scheduled"):
+        item.scheduled_at = timezone.now() + timedelta(minutes=1)
+        item.save(update_fields=["scheduled_at"])
+        if item.status == "draft":
+            res = state.auto_schedule(item, request.user)
+            if res != "scheduled":
+                messages.error(request, f"Rejalashtirib bo'lmadi: {res or 'maqsad (platforma) tanlanmagan'}")
+                return redirect("content_detail", pk=item.pk)
+    messages.success(request, "Qoidalar chetlab o'tildi: post 1 daqiqa ichida nashr qilinadi.")
     return redirect("content_detail", pk=item.pk)
 
 

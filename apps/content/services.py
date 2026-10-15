@@ -54,7 +54,7 @@ def ensure_ready_to_schedule(item: ContentItem) -> None:
     if not item.targets.exists():
         raise NotReady("Hech bir tarmoq tanlanmagan.")
     res = check_item(item)
-    if res["status"] == "block":
+    if res["status"] == "block" and not item.rule_override_by_id:
         raise NotReady("Qoida bo'yicha nashr to'xtatildi.", res["platforms"])
 
 
@@ -62,10 +62,7 @@ def override_warnings(item: ContentItem, user, reason: str) -> None:
     from apps.accounts.services import perms
     if not perms.can(user, "publish.publish", item.business):
         raise PermissionError("Ogohlantirishni chetlab o'tishga ruxsat yo'q.")
-    if not reason.strip():
-        raise ValueError("Sabab kiritilishi shart.")
-    if item.rule_status == "block":
-        raise PermissionError("«To'xtatildi» holatini chetlab o'tib bo'lmaydi.")
+    reason = (reason or "").strip() or "Muallif qoida natijasini ko'rib, nashrga ruxsat berdi."
     item.rule_override_by, item.rule_override_reason = user, reason[:300]
     item.save(update_fields=["rule_override_by", "rule_override_reason"])
     audit("content.rule_override", user=user, business_id=item.business_id, target=f"item:{item.pk}", detail={"reason": reason})
@@ -186,7 +183,7 @@ def publish_target(item_id: int, target_id: int) -> dict:
         _fail(item, target, "To'sildi: " + "; ".join(reasons), retryable=False, status="blocked")
         return {"blocked": reasons}
     chk = check_item(item)
-    if chk["status"] == "block":
+    if chk["status"] == "block" and not item.rule_override_by_id:
         _fail(item, target, "Qoidalar nashrni to'xtatdi", retryable=False, status="blocked")
         return {"blocked": "rules"}
     late = int(get_setting("publish.late_policy_min", 30))

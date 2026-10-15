@@ -91,6 +91,7 @@ urlpatterns = [
     path("kalendar/<int:pk>/holat/<str:new>/", c.content_transition, name="content_transition"),
     path("kalendar/<int:pk>/tekshir/", c.content_check, name="content_check"),
     path("kalendar/<int:pk>/override/", c.content_override, name="content_override"),
+    path("kalendar/<int:pk>/majburan/", c.content_force, name="content_force"),
     path("kalendar/<int:pk>/qayta/", c.content_retry, name="content_retry"),
     path("kalendar/<int:pk>/ai-korildi/", c.content_ai_reviewed, name="content_ai_reviewed"),
     path("kalendar/<int:pk>/fayl/", c.content_asset, name="content_asset"),
