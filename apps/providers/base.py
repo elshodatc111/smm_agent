@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from enum import StrEnum
+from apps.core.compat import StrEnum
 from typing import Any, Protocol
 
 from apps.connections.base import Platform

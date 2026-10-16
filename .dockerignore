@@ -1,0 +1,6 @@
+.env
+.git
+logs
+data
+*.bat
+*.ps1

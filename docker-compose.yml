@@ -1,0 +1,57 @@
+services:
+  smm-db:
+    image: mysql:8.0
+    restart: unless-stopped
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_ROOT_PASSWORD: 2ef1b9fe798efbbe1400bf8e5a0ec294
+      MYSQL_DATABASE: smm_platform
+      MYSQL_USER: smm
+      MYSQL_PASSWORD: 5ba2ac819ce4ffefc50b480457864019
+    volumes:
+      - smm-db-data:/var/lib/mysql
+    networks: [internal]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      retries: 10
+
+  smm-web:
+    build: .
+    image: smm-agent:latest
+    restart: unless-stopped
+    command: python manage.py serve
+    env_file: .env
+    depends_on:
+      smm-db:
+        condition: service_healthy
+    volumes:
+      - ./data/media_store:/app/media_store
+      - ./data/media_tmp:/app/media_tmp
+      - ./data/logs:/app/logs
+      - ./data/backups:/app/backups
+    networks: [internal, web]
+
+  smm-worker:
+    build: .
+    image: smm-agent:latest
+    restart: unless-stopped
+    command: python manage.py worker
+    env_file: .env
+    depends_on:
+      smm-db:
+        condition: service_healthy
+    volumes:
+      - ./data/media_store:/app/media_store
+      - ./data/media_tmp:/app/media_tmp
+      - ./data/logs:/app/logs
+      - ./data/backups:/app/backups
+    networks: [internal]
+
+volumes:
+  smm-db-data:
+
+networks:
+  internal:
+  web:
+    external: true
