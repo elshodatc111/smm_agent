@@ -306,7 +306,11 @@ def carousel_home(request):
     b = request.business
     pb = playbook_for(b)
     f = mkform({
-        "topic": forms.CharField(label="Karusel mavzusi", widget=forms.Textarea(attrs={"rows": 2}), help_text="Masalan: «Mijoz birinchi marta kelgandan natijagacha». Mavzu aniq bo'lsa, hikoya ham aniq chiqadi."),
+        "mode": forms.ChoiceField(label="Qanday yozaylik?", initial="topic", widget=forms.RadioSelect, choices=[
+            ("topic", "Mavzu bo'yicha — mavzuni o'zim yozaman"),
+            ("analysis", "Biznesni tahlil qilib — AI pasport, statistika va mavsumga qarab eng mos mavzuni o'zi tanlaydi va ssenariy yozadi")]),
+        "topic": forms.CharField(label="Karusel mavzusi (tahlil rejimida bo'sh qoldirish mumkin)", required=False, widget=forms.Textarea(attrs={"rows": 2}),
+                                 help_text="Masalan: «Mijoz birinchi marta kelgandan natijagacha». Tahlil rejimida bo'sh qolsa AI o'zi tanlaydi; yozsangiz, shu yo'nalishni hisobga oladi."),
         "size": forms.ChoiceField(label="Hajmi", choices=cs.SIZES, initial="auto", help_text="Slayd soni qotirilmagan. Ko'p bo'lsa avtomatik 1-qism, 2-qism… ga bo'linadi (har qismda ko'pi bilan 10 ta)."),
         "angle": forms.ChoiceField(label="Hikoya yo'li", choices=_angle_choices(b), required=False),
         "platform": forms.ChoiceField(label="Tarmoq", choices=[("instagram", "Instagram"), ("telegram", "Telegram")]),
@@ -317,6 +321,8 @@ def carousel_home(request):
                   f'<input type="hidden" name="size" value="auto"><input type="hidden" name="platform" value="instagram"><button class="btn sm" style="margin:3px">{escape(x["topic"])}</button></form>' for x in ideas)
     blocks = [ui.form_block(f, "Yangi karusel ssenariy", "Ssenariyni yozish", action="/karusel/yaratish/",
                             intro="Biznesingizga asoslangan kichik hikoya: har slaydda juda qisqa matn va dizayner uchun vizual vazifa. AI 30–60 soniya ishlashi mumkin.")]
+    sug = (f'<form method="post" action="/karusel/yaratish/" style="display:inline">{_csrf(request)}<input type="hidden" name="mode" value="analysis"><input type="hidden" name="size" value="auto">'
+           '<input type="hidden" name="platform" value="instagram"><button class="btn primary" style="margin:3px">🔎 Biznesni tahlil qilib, AI o\'zi yozsin</button></form><br>') + sug
     if sug:
         blocks.append({"type": "html", "title": f"{b.template.name if b.template else 'Biznes'} uchun tayyor mavzular (bir bosishda)", "html": sug})
     rows = [[ui.link(c.title, f"/karusel/{c.pk}/"), len(c.slides), f"{len(c.parts)} qism", c.get_status_display(), ui.dt(c.created_at)] for c in Carousel.objects.filter(business=b)[:30]]
@@ -331,8 +337,12 @@ def carousel_create(request):
     if not _need(request):
         return redirect("dashboard")
     size = request.POST.get("size", "auto")
+    mode = "analysis" if request.POST.get("mode") == "analysis" else "topic"
+    if mode == "topic" and not request.POST.get("topic", "").strip():
+        messages.error(request, "Mavzuni yozing yoki «Biznesni tahlil qilib» rejimini tanlang.")
+        return redirect("carousel_home")
     try:
-        c = cs.generate_carousel(request.business, request.POST.get("topic", ""), size=size if size in dict(cs.SIZES) else "auto", angle=request.POST.get("angle", ""),
+        c = cs.generate_carousel(request.business, request.POST.get("topic", ""), mode=mode, size=size if size in dict(cs.SIZES) else "auto", angle=request.POST.get("angle", ""),
                                  extra=request.POST.get("extra", ""), platform=request.POST.get("platform", "instagram"), user=request.user)
     except Exception as ex:  # noqa: BLE001
         messages.error(request, getattr(ex, "user_message_uz", None) or f"Karusel yozilmadi: {ex}")
@@ -368,6 +378,10 @@ def carousel_view(request, pk):
     items = [("Hikoya", sty.get("logline") or c.topic), ("Qahramon", sty.get("hero") or "—"), ("Hikoya yo'li", c.angle or "—"),
              ("Jami", f"{len(c.slides)} slayd → {len(c.parts)} ta post"), ("Nega shuncha slayd", sty.get("size_reason") or "—"), ("Dizayn uslubi", cs.style_text(c) or "—")]
     blocks = [ui.kv(c.title, items)]
+    an = sty.get("analysis")
+    if an:
+        blocks.append(ui.kv("🔎 Biznes tahlili (AI shu asosda mavzuni tanladi)", [("Tahlil", an.get("summary") or "—"), ("Mijoz haqida xulosa", an.get("audience_insight") or "—"),
+                                                                                  ("Tanlangan mavzu", an.get("chosen_topic") or c.topic), ("Nega aynan shu", an.get("why") or "—")]))
     if sty.get("source") == "andoza":
         blocks.append({"type": "html", "html": '<div class="muted">⚠ Bu AI yozmagan andoza skelet. [to\'ldiring] joylarini to\'ldiring yoki «Qayta yozish»ni bosing.</div>'})
     form_open = f'<form method="post" action="/karusel/{c.pk}/amal/">{_csrf(request)}<input type="hidden" name="total" value="{len(c.slides)}">'
@@ -431,7 +445,7 @@ def carousel_action(request, pk):
         c.refresh_from_db()
     elif kind == "rewrite":
         try:
-            nc = cs.generate_carousel(c.business, c.topic or c.title, extra=P.get("instruction", ""), platform=c.platform, user=request.user, plan=c.plan, plan_entry=c.plan_entry)
+            nc = cs.generate_carousel(c.business, c.topic or c.title, mode=(c.story or {}).get("mode", "topic"), extra=P.get("instruction", ""), platform=c.platform, user=request.user, plan=c.plan, plan_entry=c.plan_entry)
             return redirect(f"/karusel/{nc.pk}/")
         except Exception as ex:  # noqa: BLE001
             messages.error(request, getattr(ex, "user_message_uz", None) or f"Xato: {ex}")

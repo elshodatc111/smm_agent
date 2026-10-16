@@ -162,3 +162,22 @@ def business_killswitch(request, pk):
     audit("business.killswitch", user=request.user, business_id=b.pk, detail={"enabled": b.autopublish_enabled})
     messages.warning(request, "Avto-nashr " + ("yoqildi." if b.autopublish_enabled else "O'CHIRILDI: hech narsa avtomatik chiqmaydi."))
     return redirect("business_detail", pk=b.pk)
+
+
+@login_required
+def business_logo(request, pk):
+    """Biznes logotipi (MEDIA_URL yo'q, shuning uchun faylni shu yerdan beramiz; kirish huquqi tekshiriladi)."""
+    import mimetypes
+
+    from django.http import FileResponse, Http404
+    b = get_object_or_404(Business, pk=pk)
+    if not perms.has_business(request.user, b.pk) or not b.logo:
+        raise Http404
+    try:
+        f = b.logo.open("rb")
+    except (FileNotFoundError, ValueError, OSError):
+        raise Http404
+    ctype = mimetypes.guess_type(b.logo.name)[0] or "image/png"
+    r = FileResponse(f, content_type=ctype)
+    r["Cache-Control"] = "private, max-age=300"
+    return r

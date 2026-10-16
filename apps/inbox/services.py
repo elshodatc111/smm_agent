@@ -24,6 +24,15 @@ MAX_AI_STREAK = 6          # operator yozmaguncha ketma-ket AI javoblari chegara
 
 
 # ------------------------------------------------------------------ yordamchilar
+_GREET = re.compile(r"^\s*(assalomu\s+alaykum|salom|hayrli\s+(kun|tong|kech))[\s!,.:;—-]*", re.I)
+
+
+def strip_greeting(text: str) -> str:
+    """Tanishtiruvda salomlashuv bor: AI javobining boshidagi takroriy «Assalomu alaykum!» olib tashlanadi."""
+    out = _GREET.sub("", text or "", count=1).lstrip()
+    return (out[:1].upper() + out[1:]) if out else text
+
+
 def disclosure(acc) -> str:
     """Birinchi AI javobidagi tanishtiruv: «Men AI Alisaman (operator emasman)…» (ism akkauntda kiritiladi)."""
     n = (getattr(acc, "ai_name", "") or "").strip()
@@ -319,7 +328,7 @@ def auto_reply(conv: Conversation, *, now=None, router=None) -> dict:
     if not _grounded(answer, entries, conv):
         return _handoff(conv, question, "javobdagi raqam skriptda yo'q (o'ylab topilgan bo'lishi mumkin)", res, question)
     answer = answer[:900]
-    text = answer if conv.ai_disclosed else disclosure(acc) + answer
+    text = answer if conv.ai_disclosed else disclosure(acc) + strip_greeting(answer)
     queue_outbound(conv, text, sender="ai", when=now)
     if not conv.ai_disclosed:
         conv.ai_disclosed = True

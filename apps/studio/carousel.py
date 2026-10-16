@@ -95,14 +95,33 @@ def build_parts(title: str, slides: list[dict], caption: str, hashtags: list[str
     return parts
 
 
-def _prompt(business, topic: str, size: str, angle: str, extra: str, platform: str) -> str:
+def _analysis_block(business, platform: str) -> str:
+    """Tahlil rejimi: AI mavzuni o'zi tanlashi uchun kontekst (statistika, mavsum, oldingi karusellar, andoza g'oyalari)."""
+    from apps.content.insights import insights_brief
+    pb = playbook_for(business)
+    month = datetime.now(tz()).month
+    prev = list(Carousel.objects.filter(business=business).values_list("title", flat=True)[:15])
+    ideas = [i["topic"] for i in pb["ideas"] if i["format"] == "carousel"][:6]
+    try:
+        stats = insights_brief(business, platform)
+    except Exception:  # noqa: BLE001
+        stats = "—"
+    return (f"\nTAHLIL REJIMI. Mavzu berilmagan: avval biznesni o'zing tahlil qil va shu paytda asosiy maqsadga (so'rov, yozilish, ishonch) eng ko'p yordam beradigan "
+            f"BITTA hikoya mavzusini tanla.\n"
+            f"Tahlil uchun ma'lumot:\n- Shu biznesning o'z statistikasi: {stats}\n- Mavsum (hozirgi oy): {(pb.get('seasonality') or {}).get(month) or 'maxsus yo‘q'}\n"
+            f"- Bu tur uchun sinalgan karusel g'oyalari (ilhom): {ideas}\n- Oldin yozilgan karusellar (TAKRORLAMA): {prev}\n"
+            "Mijozning asosiy og'rig'i, sotib olishdagi to'siq (pasportdagi «Qayerda mijoz yo'qoladi»), ishonch omillari va USP ga tayan. "
+            "JSON'ga qo'shimcha maydon qo'sh: \"analysis\":{\"summary\":\"biznes tahlili 2-3 jumla\",\"audience_insight\":\"mijoz haqida eng muhim xulosa\",\"chosen_topic\":\"tanlangan mavzu\",\"why\":\"nega aynan shu mavzu (1-2 jumla)\"}.\n")
+
+
+def _prompt(business, topic: str, size: str, angle: str, extra: str, platform: str, analysis: bool = False) -> str:
     from apps.businesses import passport
     pb = playbook_for(business)
     angles = "; ".join(f"{a['name']} ({' → '.join(a['arc'])})" for a in pb["angles"])
     return (
         f"Sen {business.name} biznesi uchun karusel (suratlar to'plami) SSENARIYSINI yozayotgan SMM-hikoyachi va art-direktorsan.\n\n"
         f"BIZNES PASPORTI:\n{passport.brief(business, 2400)}\n\n"
-        f"MAVZU: {topic}\n"
+        + (_analysis_block(business, platform) + (f"Egasi istagi (mavzu emas, yo'nalish): {topic}\n" if topic else "") if analysis else f"MAVZU: {topic}\n") +
         f"Hikoya yo'li (tavsiya, kerak bo'lsa moslashtir): {angle or angles}\n"
         f"Qo'shimcha istak: {extra or '—'}\n"
         f"Taqiqlar: {', '.join(pb.get('avoid', []))}\n\n"
@@ -137,12 +156,14 @@ def _fallback(business, topic: str, angle_name: str = "") -> dict:
 
 
 def generate_carousel(business, topic: str, *, size: str = "auto", angle: str = "", extra: str = "", platform: str = "instagram",
-                      user=None, router=None, plan=None, plan_entry: int | None = None) -> Carousel:
-    topic = (topic or "").strip() or "Biznesimiz haqida foydali hikoya"
+                      user=None, router=None, plan=None, plan_entry: int | None = None, mode: str = "topic") -> Carousel:
+    """mode='topic' — egasi mavzu beradi; mode='analysis' — AI biznesni tahlil qilib mavzuni o'zi tanlaydi va ssenariy yozadi."""
+    analysis = mode == "analysis"
+    topic = (topic or "").strip() or ("" if analysis else "Biznesimiz haqida foydali hikoya")
     d, gen, used_ai = None, None, False
     for attempt in range(2):
         try:
-            res, gen = generate(TaskType.LONG_UZ, _prompt(business, topic, size, angle, extra + (" Faqat o'zbek lotin!" if attempt else ""), platform),
+            res, gen = generate(TaskType.LONG_UZ, _prompt(business, topic, size, angle, extra + (" Faqat o'zbek lotin!" if attempt else ""), platform, analysis),
                                 business=business, kind="carousel", user=user, schema=J, router=router)
         except Exception:  # noqa: BLE001
             break
@@ -154,15 +175,19 @@ def generate_carousel(business, topic: str, *, size: str = "auto", angle: str = 
             d["slides"] = sl
             break
     if d is None:
-        d = _fallback(business, topic, angle)
+        d = _fallback(business, topic or (playbook_for(business)["ideas"][0]["topic"]), angle)
         d["slides"] = clean_slides(d["slides"])
     tags = [str(h) if str(h).startswith("#") else f"#{h}" for h in (d.get("hashtags") or []) if isinstance(h, str)][:10]
     title = _words(d.get("title") or topic, 10)
     parts = build_parts(title, d["slides"], str(d.get("caption") or ""), tags, platform=platform)
     story = {k: d.get(k, "") for k in ("logline", "hero", "size_reason")}
+    an = d.get("analysis") if isinstance(d.get("analysis"), dict) else {}
+    if an and is_uzbek_latin(json.dumps(an, ensure_ascii=False)):
+        story["analysis"] = {k: str(an.get(k) or "")[:600] for k in ("summary", "audience_insight", "chosen_topic", "why")}
+    story["mode"] = mode
     story["style"] = d.get("style") if isinstance(d.get("style"), dict) else {}
     story["source"] = "ai" if used_ai else "andoza"
-    return Carousel.objects.create(business=business, platform=platform, title=title, topic=topic[:300], angle=str(d.get("angle") or angle)[:80],
+    return Carousel.objects.create(business=business, platform=platform, title=title, topic=(topic or (story.get("analysis") or {}).get("chosen_topic") or title)[:300], angle=str(d.get("angle") or angle)[:80],
                                    story=story, slides=d["slides"], parts=parts, generation=gen, plan=plan, plan_entry=plan_entry, created_by=user)
 
 

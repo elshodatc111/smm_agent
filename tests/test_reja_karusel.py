@@ -217,3 +217,29 @@ def test_carousel_edit_actions(biz, acc_tg, admin):
     car.refresh_from_db(); assert car.status == "ready"
     c.post(f"/karusel/{car.pk}/amal/", {"act": "delete"})
     assert not Carousel.objects.filter(pk=car.pk).exists()
+
+
+def test_carousel_analysis_mode(biz, admin):
+    from apps.studio import carousel as cs
+    from apps.ai_router.models import AIGeneration
+    d = {"title": "Aziza hikoyasi", "slides": _slides(7), "caption": "c",
+         "analysis": {"summary": "Markaz noldan o'rgatadi.", "audience_insight": "Mijoz tilni o'zi o'rganib qiynaladi.", "chosen_topic": "Noldan boshlash", "why": "Asosiy og'riq shu."}}
+    c = cs.generate_carousel(biz, "", mode="analysis", router=_router(json.dumps(d)))
+    assert c.story["mode"] == "analysis" and c.story["analysis"]["chosen_topic"] == "Noldan boshlash" and c.topic == "Noldan boshlash"
+    assert "TAHLIL REJIMI" in AIGeneration.objects.filter(kind="carousel").first().prompt
+
+
+def test_analysis_mode_web_and_logo(biz, admin, tmp_path, settings):
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    settings.MEDIA_ROOT = str(tmp_path)
+    c = Client(); c.force_login(admin); c.post("/biznes-tanlash/", {"business": biz.pk})
+    assert c.post("/karusel/yaratish/", {"mode": "analysis", "topic": "", "size": "auto", "platform": "instagram"}).status_code == 302
+    from apps.studio.models import Carousel
+    assert Carousel.objects.filter(business=biz).count() == 1
+    assert c.post("/karusel/yaratish/", {"mode": "topic", "topic": ""}).status_code == 302
+    assert Carousel.objects.filter(business=biz).count() == 1
+    png = bytes.fromhex("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360f8cfc0000003010100c9fe92ef0000000049454e44ae426082")
+    biz.logo.save("l.png", SimpleUploadedFile("l.png", png), save=True)
+    r = c.get(f"/bizneslar/{biz.pk}/logo/")
+    assert r.status_code == 200 and r["Content-Type"] == "image/png"
+    assert f"/bizneslar/{biz.pk}/logo/" in c.get(f"/bizneslar/{biz.pk}/").content.decode()

@@ -3,7 +3,7 @@
 <div class="hero">
   <div class="row sb" style="align-items:center;gap:22px">
     <div class="row" style="gap:18px;flex-wrap:nowrap">
-      {% if b.logo %}<img src="{{ b.logo.url }}" alt="" style="width:72px;height:72px;border-radius:20px;object-fit:cover;background:#fff;position:relative;z-index:1">{% else %}<span class="avatar" style="width:72px;height:72px;font-size:28px;border-radius:20px;background:rgba(255,255,255,.2);position:relative;z-index:1">{{ b.name|slice:":1"|upper }}</span>{% endif %}
+      {% if b.logo %}<img src="{% url 'business_logo' b.pk %}" alt="" style="width:72px;height:72px;border-radius:20px;object-fit:cover;background:#fff;position:relative;z-index:1">{% else %}<span class="avatar" style="width:72px;height:72px;font-size:28px;border-radius:20px;background:rgba(255,255,255,.2);position:relative;z-index:1">{{ b.name|slice:":1"|upper }}</span>{% endif %}
       <div><h1>{{ b.name }}</h1><p>{{ b.template.name|default:"Biznes turi tanlanmagan" }}{% if b.region %} · {{ b.region }}{% endif %} · Asosiy maqsad: {{ b.get_main_goal_display }}</p>
         <div class="row" style="margin-top:12px">{% if can_edit %}<a class="btn" href="/bizneslar/{{ b.pk }}/tahrir/">Tahrirlash</a>{% endif %}<a class="btn primary" href="{% url 'passport' b.pk %}">Biznes pasporti</a></div></div>
     </div>

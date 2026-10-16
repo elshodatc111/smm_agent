@@ -1,0 +1,19 @@
+<script>
+(function(){
+  var off=0;
+  function sync(){var n=document.querySelector('[data-now]');if(n){off=parseInt(n.dataset.now,10)-Date.now();}}
+  function fmt(ms){var s=Math.max(0,Math.round(ms/1000)),m=Math.floor(s/60);s=s%60;return (m<10?'0':'')+m+':'+(s<10?'0':'')+s;}
+  function tick(){document.querySelectorAll('[data-join]').forEach(function(e){
+    var j=parseInt(e.dataset.join,10);if(!j){return;}
+    var left=j-(Date.now()+off);
+    e.textContent=left>0?(e.dataset.pre===undefined?'AI ':e.dataset.pre)+fmt(left)+(e.dataset.post||' dan keyin javob beradi'):'AI javob bermoqda…';});}
+  function poll(){if(document.hidden){return;}
+    fetch(location.href,{credentials:'same-origin',headers:{'X-Requested-With':'live'}}).then(function(r){return r.text();}).then(function(t){
+      var d=new DOMParser().parseFromString(t,'text/html');
+      document.querySelectorAll('[data-live]').forEach(function(el){
+        var nu=d.querySelector('[data-live="'+el.dataset.live+'"]');
+        if(nu&&nu.innerHTML!==el.innerHTML){var chat=el.dataset.live==='chat',atEnd=chat&&(el.scrollHeight-el.scrollTop-el.clientHeight<40);el.innerHTML=nu.innerHTML;if(atEnd){el.scrollTop=el.scrollHeight;}}});
+      sync();tick();}).catch(function(){});}
+  sync();tick();setInterval(tick,1000);setInterval(poll,4000);
+})();
+</script>

@@ -41,6 +41,7 @@ urlpatterns = [
     path("sozlamalar/biznes-turlari/yangi/", vt.biztype_edit, name="biztype_new"),
     path("sozlamalar/biznes-turlari/<int:pk>/", vt.biztype_edit, name="biztype_edit"),
     path("sozlamalar/biznes-turlari/<int:pk>/ochir/", vt.biztype_delete, name="biztype_delete"),
+    path("bizneslar/<int:pk>/logo/", b.business_logo, name="business_logo"),
     path("bizneslar/<int:pk>/", b.business_detail, name="business_detail"),
     path("bizneslar/<int:pk>/tahrir/", b.business_edit, name="business_edit"),
     path("bizneslar/<int:pk>/ochirish/", b.business_delete, name="business_delete"),

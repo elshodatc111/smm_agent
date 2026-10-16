@@ -326,3 +326,19 @@ def test_operator_reply_returns_to_operator_wait(acc):
     inbound(acc, "Narxi?", when=now - timedelta(minutes=2), mid=2)
     assert not svc.ai_mode(c)
     assert svc.due_conversations(acc) == []                                   # 2 daqiqa < 15
+
+
+def test_strip_greeting_after_disclosure():
+    from apps.inbox.services import strip_greeting
+    assert strip_greeting("Assalomu alaykum! ATKO 2017-yildan beri.") == "ATKO 2017-yildan beri."
+    assert strip_greeting("Salom, kurs narxi 500 000.") == "Kurs narxi 500 000."
+    assert strip_greeting("Narx 500 000.") == "Narx 500 000."
+
+
+def test_inbox_home_live_countdown(db, settings):
+    from django.test import Client
+    from apps.accounts.models import User
+    u = User.objects.create_user("lv", password="x12345678", is_admin=True)
+    c = Client(); c.force_login(u)
+    html = c.get("/murojaatlar/").content.decode()
+    assert 'data-live="root"' in html and "setInterval(poll" in html
