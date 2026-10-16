@@ -220,6 +220,8 @@ def deliver_report(report, api=None) -> int:
 def run_bot_loop(stop_event) -> None:
     """Worker ichidagi oqim. Token bo'lmasa har 60 soniyada qayta tekshiradi."""
     from django.db import close_old_connections
+    from apps.jobs.worker import Backoff
+    bo = Backoff(10.0, 300.0)
     offset = 0
     while not stop_event.is_set():
         try:
@@ -234,8 +236,8 @@ def run_bot_loop(stop_event) -> None:
                     handle_update(upd, api)
                 except Exception:  # noqa: BLE001
                     log.exception("bot handler xatosi")
-        except Exception:  # noqa: BLE001
-            log.exception("bot loop xatosi")
-            stop_event.wait(10)
+            bo.ok()
+        except Exception as e:  # noqa: BLE001
+            stop_event.wait(bo.fail("bot loop (Telegram bilan aloqa)", e))
         finally:
             close_old_connections()

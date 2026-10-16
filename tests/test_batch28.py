@@ -68,17 +68,15 @@ def test_system_types_have_fields():
     ts = BusinessTemplate.objects.filter(is_system=True)
     assert ts.count() >= 12
     assert all(t.profile_fields for t in ts)
-    assert BusinessTemplate.objects.get(key="shaxsiy_blog").topics
 
 
 def test_custom_business_type_via_settings(adminc):
-    r = adminc.post("/sozlamalar/biznes-turlari/yangi/", {"name": "Gul do'koni", "key": "gul_dokoni", "description": "Gul savdosi", "topics": "floristry, wedding flowers",
-                                                          "domains": "ecommerce, fashion", "fields_text": "gul_turlari | Qaysi gullar sotiladi | long\nyetkazish | Yetkazib berish | choice | Bor;Yo'q;Pulli | izoh",
+    r = adminc.post("/sozlamalar/biznes-turlari/yangi/", {"name": "Gul do'koni", "key": "gul_dokoni", "description": "Gul savdosi", 
+                                                          "fields_text": "gul_turlari | Qaysi gullar sotiladi | long\nyetkazish | Yetkazib berish | choice | Bor;Yo'q;Pulli | izoh",
                                                           "advice": "Vizual kontent", "content_types": "lookbook, aksiya"})
     assert r.status_code == 302, r.content.decode()[:600]
     t = BusinessTemplate.objects.get(key="gul_dokoni")
     assert not t.is_system and len(t.profile_fields) == 2 and t.profile_fields[1]["choices"] == ["Bor", "Yo'q", "Pulli"]
-    assert t.config["domains"] == ["ecommerce", "fashion"]
     assert adminc.get("/sozlamalar/biznes-turlari/").status_code == 200
     assert adminc.get(f"/sozlamalar/biznes-turlari/{t.pk}/").status_code == 200
     # noto'g'ri qatorlar
@@ -339,172 +337,13 @@ def test_proposal_isolated_between_businesses(biz, biz2, acc_tg, boss):
     assert c.get(f"/reklama/taklif/{p.pk}/pdf/").status_code in (403, 404)
 
 
-# ------------------------------------------------------------------ faktlar
-RSS = b"""<?xml version="1.0"?><rss version="2.0"><channel><title>X</title>
-<item><title>Instagram tests 3 minute Reels</title><link>https://ex.com/1</link><pubDate>Mon, 05 Oct 2026 08:00:00 +0000</pubDate><description>&lt;p&gt;Instagram is testing Reels up to 3 minutes.&lt;/p&gt;</description></item>
-</channel></rss>"""
-ATOM = b"""<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><entry><title>Atom title</title><link rel="alternate" href="https://ex.com/atom1"/><updated>2026-10-05T08:00:00Z</updated><summary>Atom body</summary></entry></feed>"""
-
-
-def test_feed_parsing_and_safety():
-    from apps.facts import fetcher
-    it = fetcher.parse_feed(RSS)
-    assert it[0]["title"].startswith("Instagram") and "<p>" not in it[0]["snippet"] and it[0]["published_at"].year == 2026
-    assert fetcher.parse_feed(ATOM)[0]["url"] == "https://ex.com/atom1"
-    with pytest.raises(fetcher.FeedError):
-        fetcher.parse_feed(b'<?xml version="1.0"?><!DOCTYPE x [<!ENTITY a "b">]><rss></rss>')
-    with pytest.raises(fetcher.FeedError):
-        fetcher.check_url("ftp://x.com/feed")
-    with pytest.raises(fetcher.FeedError):
-        fetcher.check_url("http://127.0.0.1/feed")
-
-
-def test_verify_numbers_and_quotes():
-    from apps.facts import verify
-    src_t, src_s = "Designers adopt AI", "A survey of 1,200 designers found 64% use AI tools weekly."
-    ok = verify.check_point("64% dizaynerlar AI dan haftasiga foydalanadi", "found 64% use AI tools weekly", src_t, src_s)
-    assert ok["verified"] and ok["has_numbers"]
-    wrong_num = verify.check_point("70% dizaynerlar", "found 64% use AI tools weekly", src_t, src_s)
-    assert not wrong_num["verified"]
-    fake_quote = verify.check_point("64% dizaynerlar", "this sentence is not in the source at all", src_t, src_s)
-    assert not fake_quote["verified"]
-    assert verify.numbers("1,200 va 64%") == {"1200", "64"}
-
-
-def mk_source(name, tier, feed):
-    from apps.facts.models import FactSource
-    return FactSource.objects.create(name=name, url="https://" + name.lower().replace(" ", "") + ".com", feed_url=feed, tier=tier, domains=["education", "smm"], is_system=True)
-
-
-def mk_item(src, url, title, snippet, days=1):
-    from apps.facts.models import FactItem
-    return FactItem.objects.create(source=src, url=url, title=title, snippet=snippet, published_at=timezone.now() - timedelta(days=days))
-
-
-def ai_json(item_id, claim, quote, title="Instagram yangi reels formati"):
-    return json.dumps({"suggestions": [{"kind": "news", "title": title, "angle": "Yangilik burchagi", "why": "Sizga foydali", "format": "Reels",
-                                        "points": [{"claim": claim, "item_id": item_id, "quote": quote}]}]})
-
-
-@pytest.fixture
-def topic(biz, acc_tg):
-    from apps.facts.models import FactTopic
-    return FactTopic.objects.create(business=biz, platform="telegram", title="SMM yangiliklari", keywords=["instagram", "reels"], kinds=["news"])
-
-
-def test_engine_keeps_numeric_fact_only_from_tier_a_or_corroborated(biz, topic):
-    from apps.facts import engine
-    from apps.facts.models import FactSuggestion
-    a = mk_source("Official Blog", "A", "https://a.com/feed")
-    b1 = mk_source("News One", "B", "https://b1.com/feed")
-    b2 = mk_source("News Two", "B", "https://b2.com/feed")
-    ia = mk_item(a, "https://a.com/1", "Instagram tests longer Reels", "Instagram is testing Reels up to 3 minutes. Early tests show 27% more watch time.")
-    q = "Early tests show 27% more watch time"
-    n = engine.generate_for_topic(topic, router=fake_router(ai_json(ia.pk, "Sinovda ko'rish vaqti 27% oshdi", q)))
-    assert n == 1
-    s = FactSuggestion.objects.get()
-    assert s.by_ai and s.verified_count == 1 and s.key_points[0]["tier"] == "A" and s.key_points[0]["url"] == "https://a.com/1"
-    FactSuggestion.objects.all().delete()
-    # B manba, raqam bor, tasdiqlovchi ikkinchi manba yo'q -> tashlanadi
-    from apps.ai_router.models import AICache
-    AICache.objects.all().delete()
-    ib = mk_item(b1, "https://b1.com/1", "Instagram extends Reels length", "Instagram extends Reels length. Reels now get 41% more reach in tests.")
-    n = engine.generate_for_topic(topic, router=fake_router(ai_json(ib.pk, "Reels qamrovi 41% oshdi", "Reels now get 41% more reach in tests", title="Reels qamrovi")))
-    assert n == 0
-    # ikkinchi mustaqil manba ham 41% desa -> tasdiqlanadi
-    AICache.objects.all().delete()
-    mk_item(b2, "https://b2.com/9", "Reels length extended by Instagram", "Report: Reels extended; reach grew 41% in tests, Instagram says.")
-    n = engine.generate_for_topic(topic, router=fake_router(ai_json(ib.pk, "Reels qamrovi 41% oshdi", "Reels now get 41% more reach in tests", title="Reels qamrovi 2")))
-    assert n == 1
-
-
-def test_engine_drops_invented_quote_and_dedupes(biz, topic):
-    from apps.facts import engine
-    from apps.facts.models import FactSuggestion
-    a = mk_source("Official Blog", "A", "https://a.com/feed")
-    ia = mk_item(a, "https://a.com/1", "Instagram tests longer Reels", "Instagram is testing Reels up to 3 minutes.")
-    bad = engine.generate_for_topic(topic, router=fake_router(ai_json(ia.pk, "Instagram 10 daqiqalik reels chiqardi", "Instagram launched ten minute Reels worldwide today")))
-    assert bad == 0 and FactSuggestion.objects.count() == 0
-    from apps.ai_router.models import AICache
-    AICache.objects.all().delete()
-    good = engine.generate_for_topic(topic, router=fake_router(ai_json(ia.pk, "Instagram 3 daqiqalik Reels sinayapti", "Instagram is testing Reels up to 3 minutes")))
-    assert good == 1
-    # materiallar ishlatilgan: takroriy taklif yaratilmaydi
-    AICache.objects.all().delete()
-    again = engine.generate_for_topic(topic, router=fake_router(ai_json(ia.pk, "Instagram 3 daqiqalik Reels sinayapti", "Instagram is testing Reels up to 3 minutes")))
-    assert again == 0
-
-
-def test_engine_untranslated_fallback_without_ai(biz, topic):
-    from apps.facts import engine
-    from apps.facts.models import FactSuggestion
-    a = mk_source("Official Blog", "A", "https://a.com/feed")
-    mk_item(a, "https://a.com/1", "Instagram tests longer Reels", "Instagram is testing Reels up to 3 minutes.")
-    broken = AIRouter(providers={n: FakeAIProvider(n, [RuntimeError("x")] * 5) for n in ("openai", "claude")}, use_fakes=True)
-    assert engine.generate_for_topic(topic, router=broken) == 1
-    s = FactSuggestion.objects.get()
-    assert not s.by_ai and "tarjima" in s.angle.lower()
-
-
-def test_refresh_all_with_fake_feeds_and_default_topics(biz, acc_tg, settings):
-    from apps.facts import engine
-    from apps.facts.models import FactSource, FactTopic
-    settings.USE_FAKES = True
-    engine.ensure_sources()
-    assert FactSource.objects.count() >= 25 and FactSource.objects.filter(tier="A").exists()
-    assert "education" in engine.business_domains(biz) and "smm" in engine.business_domains(biz)
-    res = engine.refresh_all(biz)
-    assert res["sources"] >= 1 and res["new_items"] >= 1 and res["errors"] == 0
-    assert FactTopic.objects.filter(business=biz).exists()     # standart yo'nalish yaratildi
-
-
-def test_facts_job_and_pages(adminc, biz, acc_tg, settings):
-    from apps.facts.jobs import facts_refresh
-    from apps.jobs.queue import JobContext
-    settings.USE_FAKES = True
-    res = facts_refresh(JobContext(job=SimpleNamespace(pk=0), payload={"business_id": biz.pk}))
-    assert "sources" in res
-    for u in ("/faktlar/", "/faktlar/yonalishlar/", "/faktlar/manbalar/", "/faktlar/?status=used&platform=telegram&kind=news"):
-        assert adminc.get(u).status_code == 200, u
-    r = adminc.post("/faktlar/yonalishlar/", {"platform": "telegram", "title": "Dizayn yangiliklari", "keywords_text": "graphic design, branding", "kinds": ["fact", "tip"]})
-    assert r.status_code == 302
-    from apps.facts.models import FactSource, FactTopic
-    t = FactTopic.objects.get(title="Dizayn yangiliklari")
-    assert t.keywords == ["graphic design", "branding"]
-    adminc.post(f"/faktlar/yonalishlar/{t.pk}/toggle/")
-    t.refresh_from_db()
-    assert not t.active
-    adminc.post("/faktlar/manbalar/", {"name": "Mening manba", "url": "https://my.example.org", "feed_url": "https://my.example.org/rss", "language": "en", "domains": "design"})
-    s = FactSource.objects.get(name="Mening manba")
-    assert s.tier == "C" and not s.is_system
-    adminc.post(f"/faktlar/manbalar/{s.pk}/test/")
-    s.refresh_from_db()
-    assert s.last_ok is True                 # USE_FAKES: soxta lenta
-    adminc.post(f"/faktlar/manbalar/{s.pk}/delete/")
-    assert not FactSource.objects.filter(pk=s.pk).exists()
-    assert adminc.post("/faktlar/yangilash/").status_code == 302
-
-
-def test_facts_status_and_isolation(biz, biz2, topic):
-    from apps.facts.models import FactSuggestion
-    s = FactSuggestion.objects.create(business=biz, topic=topic, platform="telegram", kind="news", title="T", key_points=[{"claim": "c", "quote": "q", "source": "S", "tier": "A", "url": "https://a.com"}], verified_count=1)
-    u = User.objects.create_user("u2", password="Aaaa#1234567")
-    UserBusinessAccess.objects.create(user=u, business=biz2, role=Role.objects.get(name="Menejer"))
-    c = client_for(u, "Aaaa#1234567", biz2)
-    assert c.post(f"/faktlar/taklif/{s.pk}/holat/", {"status": "used"}).status_code in (403, 404)
-    s.refresh_from_db()
-    assert s.status == "new"
-    html = c.get("/faktlar/").content.decode()
-    assert "T</h3>" not in html
-
-
 def test_all_new_nav_pages_render(adminc, biz, acc_tg):
-    for u in ("/", "/maqsadlar/", "/maqsadlar/yangi/", "/reklama/", "/faktlar/", f"/bizneslar/{biz.pk}/", f"/bizneslar/{biz.pk}/pasport/", "/sozlamalar/biznes-turlari/",
+    for u in ("/", "/maqsadlar/", "/maqsadlar/yangi/", "/reklama/", f"/bizneslar/{biz.pk}/", f"/bizneslar/{biz.pk}/pasport/", "/sozlamalar/biznes-turlari/",
               "/sozlamalar/biznes-turlari/yangi/", "/sozlamalar/?tab=umumiy"):
         r = adminc.get(u)
         assert r.status_code == 200, (u, r.status_code)
         html = r.content.decode()
-        assert "Maqsadlar" in html and "Faktlar va yangiliklar" in html and "Reklama tahlili" in html or u != "/"
+        assert "Maqsadlar" in html and "Faktlar va yangiliklar" not in html and "Reklama tahlili" in html or u != "/"
 
 
 # ------------------------------------------------------------------ biznesni butunlay o'chirish
@@ -529,3 +368,11 @@ def test_business_purge_not_for_non_admin(client, biz):
     client.force_login(u)
     r = client.post(f"/bizneslar/{biz.pk}/ochirish/", {"confirm_name": biz.name, "password": "x"})
     assert r.status_code in (403, 404) and Business.objects.filter(pk=biz.pk).exists()
+
+
+def test_facts_module_removed(adminc, db):
+    assert adminc.get("/faktlar/").status_code == 404
+    from django.db import connection
+    assert "facts_factsource" not in connection.introspection.table_names()
+    from apps.accounts.permissions_registry import MODULES
+    assert "facts" not in MODULES

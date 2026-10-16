@@ -65,13 +65,9 @@ class TypeForm(forms.Form):
     name = forms.CharField(label="Biznes turi nomi", max_length=120, help_text="Masalan: Gul do'koni, Avtomaktab, Tikuvchilik sexi")
     key = forms.SlugField(label="Kalit (lotin)", max_length=50, help_text="Faqat lotin harf, raqam va _ . Keyin o'zgartirib bo'lmaydi.")
     description = forms.CharField(label="Qisqa izoh", required=False, max_length=300)
-    topics = forms.CharField(label="Faktlar/yangiliklar mavzulari (inglizcha, vergul bilan)", required=False,
-                             help_text="Dunyo bo'yicha yangilik qidirish uchun: masalan «floristry, wedding trends, flower care». Bo'sh bo'lsa faqat o'zingiz belgilagan mavzular ishlatiladi.")
     fields_text = forms.CharField(label="Pasport savollari", required=False, widget=forms.Textarea(attrs={"rows": 10}),
                                   help_text="Har qatorda bitta savol: <code>kalit | Savol | tur | variantlar | izoh</code>. Tur: text, long, choice, number. "
                                             "«choice» uchun variantlarni ; bilan ajrating. Masalan:<br><code>gul_turlari | Qaysi gullar sotiladi | long</code><br><code>yetkazish | Yetkazib berish | choice | Bor;Yo'q;Pulli</code>")
-    domains = forms.CharField(label="Faktlar manbalari sohalari (vergul bilan)", required=False,
-                              help_text="Qaysi sohalardagi manbalardan yangilik olinsin: design, smm, tech, business, education, food, ecommerce, fashion, beauty, health, fitness, realestate, creator. «smm» har doim qo'shiladi.")
     advice = forms.CharField(label="Maslahat (SMM bo'yicha qisqa yo'l-yo'riq)", required=False, widget=forms.Textarea(attrs={"rows": 3}))
     content_types = forms.CharField(label="Tavsiya etilgan kontent turlari (vergul bilan)", required=False)
 
@@ -112,17 +108,16 @@ def biztype_edit(request, pk=None):
     initial = {}
     if inst:
         c = inst.config or {}
-        initial = {"name": inst.name, "key": inst.key, "description": inst.description, "topics": ", ".join(inst.topics or []),
-                   "fields_text": fields_to_text(inst.profile_fields), "domains": ", ".join(c.get("domains") or []), "advice": c.get("advice", ""), "content_types": ", ".join(c.get("content_types") or [])}
+        initial = {"name": inst.name, "key": inst.key, "description": inst.description,
+                   "fields_text": fields_to_text(inst.profile_fields), "advice": c.get("advice", ""), "content_types": ", ".join(c.get("content_types") or [])}
     form = TypeForm(request.POST or None, initial=initial, instance=inst)
     if request.method == "POST" and form.is_valid():
         d = form.cleaned_data
         cfg = dict((inst.config if inst else {}) or {})
         cfg["advice"] = d["advice"]
-        cfg["domains"] = [x.strip().lower() for x in d["domains"].split(",") if x.strip()]
         cfg["content_types"] = [x.strip() for x in d["content_types"].split(",") if x.strip()]
         cfg.setdefault("defaults", {"ctr": 0.012, "click_to_lead": 0.05, "cpm": 22000})
-        vals = dict(name=d["name"], description=d["description"], topics=[x.strip() for x in d["topics"].split(",") if x.strip()],
+        vals = dict(name=d["name"], description=d["description"],
                     profile_fields=form.parsed_fields, config=cfg)
         if inst:
             for k, v in vals.items():

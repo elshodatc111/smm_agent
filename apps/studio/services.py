@@ -23,7 +23,7 @@ SUGGEST_ONLY = (" MUHIM: bu faqat TAKLIF/qoralama g'oya. Biznes egasi uni o'zi q
 
 
 def _biz_brief(b) -> str:
-    return (f"Nomi: {b.name}\nFaoliyat: {b.industry}\nHudud: {b.region}\nTil: {b.languages}\nTavsif: {b.description}\n"
+    return (f"Nomi: {b.name}\nFaoliyat: {b.industry}\nHudud: {b.region}\nKontent tili: faqat o'zbek (lotin)\nTavsif: {b.description}\n"
             f"Mahsulot/xizmatlar: {b.products}\nNarx oralig'i: {b.price_range}\nAuditoriya: {b.audience}\n"
             f"Asosiy maqsad: {b.get_main_goal_display()}\nAloqa: {b.contact_info}")
 
@@ -59,45 +59,16 @@ def why_worked(post, user=None, router=None) -> PostInsight:
 
 
 def monthly_plan(business, platform: str, month: date, user=None, router=None) -> ContentPlan:
-    from apps.metrics.analytics import best_times, by_type, top_posts
-    tops = [{"matn": r.post.text[:120], "tur": r.post.media_type, "er": r.er} for r in top_posts(business, 5)]
-    ctx = {"eng_yaxshi_postlar": tops, "turlar": by_type(business), "vaqtlar": best_times(business)}
-    comp = []
-    from apps.metrics.models import CompetitorPost
-    for cp in CompetitorPost.objects.filter(business_id=business.pk).order_by("-views")[:5]:
-        comp.append(cp.text[:100])
-    tpl = business.template.config if business.template else {}
-    days = monthrange(month.year, month.month)[1]
-    prompt = (f"{month:%Y-%m} oyi uchun {platform} kontent-planini tuz. Oyda {days} kun. Haftasiga 3-5 post. "
-              'JSON: {"summary":"qisqa strategiya","entries":[{"date":"YYYY-MM-DD","format":"post|reel|short|video|story|carousel","topic":"","hook":"","cta":"","goal":"","role":"smm|kontent-maker"}]}\n'
-              f"Tahlil: {json.dumps(ctx, ensure_ascii=False, default=str)[:3000]}\nRaqobatchi g'oyalari (nusxa ko'chirma): {comp}\n"
-              f"Andoza: {json.dumps(tpl, ensure_ascii=False)[:800]}")
-    res, gen = generate(TaskType.LONG_UZ, prompt, business=business, kind="plan", user=user, schema=J, router=router)
-    d = res.data or {}
-    entries = [e for e in d.get("entries", []) if isinstance(e, dict) and re.match(r"\d{4}-\d{2}-\d{2}$", str(e.get("date", "")))]
-    return ContentPlan.objects.create(business=business, platform=platform, month=month.replace(day=1), entries=entries,
-                                      summary=d.get("summary", ""), generation=gen, created_by=user)
+    """Bitta platforma uchun alohida oylik reja (planner.py): darhol andozadan, so'ng AI biznesga moslaydi."""
+    from . import planner
+    p = planner.create_plan(business, platform, month, user)
+    planner.fill_with_ai(p, user, router)
+    return p
 
 
 def load_plan_to_calendar(plan: ContentPlan, user=None) -> int:
-    from apps.content.models import ContentItem, ContentTarget
-    from apps.connections.models import SocialAccount
-    accs = list(SocialAccount.objects.filter(business=plan.business, platform=plan.platform, status="active", archived_at__isnull=True))
-    n = 0
-    for e in plan.entries:
-        d = date.fromisoformat(e["date"])
-        fmt = {"post": "image", "reel": "reel", "short": "short", "video": "video", "story": "story", "carousel": "carousel"}.get(e.get("format", "post"), "image")
-        when = datetime.combine(d, time(19, 0), tzinfo=tz())
-        item = ContentItem.objects.create(business=plan.business, title=(e.get("topic") or "Reja")[:200], text="", media_type=fmt,
-                                          status="draft", scheduled_at=when, plan=plan, hook_idea=e.get("hook", "")[:300],
-                                          cta=e.get("cta", "")[:200], goal=e.get("goal", "")[:100], created_by=user, ai_draft=True,
-                                          notes=f"Reja: {e.get('hook', '')}")
-        for a in accs[:1]:
-            ContentTarget.objects.create(item=item, account=a)
-        n += 1
-    plan.loaded_to_calendar = True
-    plan.save(update_fields=["loaded_to_calendar"])
-    return n
+    from . import planner
+    return planner.load_to_calendar(plan, user)
 
 
 DIRECTOR_SCHEMA = (
@@ -118,16 +89,50 @@ DIRECTOR_SCHEMA = (
     "'Instagram Reels → Audio → Trending' bo'limidan tekshirishni eslat. Hamma matn o'zbek tilida (lotin).")
 
 
-def generate_script(business, brief: str, fmt: str, variants: int = 2, user=None, router=None) -> Script:
-    hooks = list(Hook.objects.filter(business=business, status="saved").values_list("text", flat=True)[:5])
+FMT_GUIDE = {
+    "reel": "Reels/Shorts, 9:16, 20–40 soniya, 5–8 sahna. Birinchi 3 soniyada hook, har 2–4 soniyada kadr almashadi.",
+    "long": "Uzun YouTube video, 16:9, 5–10 daqiqa: hook, kirish, 3–5 bo'lim, xulosa, CTA. Har bo'lim uchun alohida sahnalar.",
+    "ad": "Reklama roligi, 15–30 soniya: muammo → yechim → dalil → CTA. Ochiq qichqiriq emas, ishonchli ohang.",
+    "podcast": "Podkast/suhbat, 10–20 daqiqa: mavzu, 4–6 savol, qisqa xulosa, kliplarga bo'lish joylari.",
+    "stories": "Stories ketma-ketligi, 9:16, 5–8 ta qisqa kadr (har biri 5–10 soniya), oxirida so'rovnoma yoki tugma.",
+}
+
+
+def _script_prompt(business, brief: str, fmt: str, variants: int, hooks: list[str]) -> str:
+    from apps.businesses import passport
+    from apps.businesses.playbooks import playbook_for
     from apps.content.insights import insights_brief
-    prompt = (f"{fmt} formatida video ssenariy yoz. Qisqa maqsad: {brief}\n"
-              f"Biznes yo'nalishi/sohasi: {getattr(business, 'industry', '') or getattr(business, 'description', '') or business.name}\n"
-              f"Ilhom uchun hooklar (nusxa ko'chirma, faqat g'oya): {hooks}\n"
-              f"Tahlil:\n{insights_brief(business)}\n"
-              f"{DIRECTOR_SCHEMA}\nHook variantlari soni: {variants} (A/B).")
-    res, gen = generate(TaskType.LONG_UZ, prompt, business=business, kind="script", user=user, schema=J, router=router)
-    d = res.data or {}
+    pb = playbook_for(business)
+    return (
+        f"Sen {business.name} biznesi uchun tajribali rejissyor va ssenaristsan. Quyidagi ssenariy telefonda, rejissyorsiz suratga olinadi, "
+        "shuning uchun uni hech narsani bilmaydigan odam ham tushunib bajara olishi kerak: oddiy so'zlar, aniq harakatlar, qisqa jumlalar.\n\n"
+        f"BIZNES PASPORTI:\n{passport.brief(business, 2400)}\n\n"
+        f"FORMAT: {fmt} — {FMT_GUIDE.get(fmt, FMT_GUIDE['reel'])}\n"
+        f"MAQSAD / MAVZU: {brief}\n"
+        f"Shu biznesga xos tavsiya etilgan ohang va taqiqlar: {', '.join(pb.get('avoid', []))}\n"
+        f"Ilhom uchun hooklar (nusxa ko'chirma, faqat g'oya): {hooks}\n"
+        f"Statistikadan xulosa:\n{insights_brief(business)}\n\n"
+        "TALAB: ssenariy shu biznesning haqiqiy xizmati, mijozi va joyiga bog'langan bo'lsin (umumiy 'bizning mahsulot' emas). "
+        "Har sahnada: nima ko'rinadi, kamera qayerda, aktyor nima qiladi va nima deydi (so'zma-so'z gap), ekranda qanday yozuv chiqadi. "
+        "Gaplar qisqa va og'zaki o'zbek tilida bo'lsin (kitobiy emas). Sahna vaqtlari ketma-ket va umumiy davomiylikka teng bo'lsin. "
+        "Boshida 'plain_summary' — 4-6 qatorli oddiy tilda reja (1) ... 2) ...), 'checklist' — suratga olishdan oldin tayyorlash ro'yxati.\n"
+        f"{DIRECTOR_SCHEMA}\nHook variantlari soni: {variants} (A/B). "
+        'Qo\'shimcha maydonlar: "plain_summary":["1) ...","2) ..."], "why_it_works":"nega bu ssenariy ishlaydi (1-2 jumla)".'
+        " TIL: faqat o'zbek tili, lotin yozuvida; kirill va rus so'zlari yo'q." + SUGGEST_ONLY)
+
+
+def generate_script(business, brief: str, fmt: str, variants: int = 2, user=None, router=None) -> Script:
+    from .planner import is_uzbek_latin
+    hooks = list(Hook.objects.filter(business=business, status="saved").values_list("text", flat=True)[:5])
+    d, gen = {}, None
+    for attempt in range(2):
+        res, gen = generate(TaskType.LONG_UZ, _script_prompt(business, brief, fmt, variants, hooks) + (" DIQQAT: faqat o'zbek lotin va kamida 4 ta sahna." if attempt else ""),
+                            business=business, kind="script", user=user, schema=J, router=router)
+        cand = res.data or {}
+        if cand.get("scenes") and is_uzbek_latin(json.dumps(cand, ensure_ascii=False)):
+            d = cand
+            break
+        d = d or cand
     return Script.objects.create(business=business, title=d.get("title") or brief[:80], fmt=fmt if fmt in dict(Script.FORMATS) else "reel",
                                  brief=brief, body=d, generation=gen, created_by=user)
 
@@ -207,6 +212,13 @@ def script_text(body: dict) -> str:
     L: list[str] = []
     add = lambda *x: L.append(" ".join(str(i) for i in x if i))
     add("🎬", _s(body.get("title")))
+    ps = body.get("plain_summary") or []
+    if ps:
+        L.append("\nQISQACHA REJA (oddiy tilda):")
+        L += [f"  {x}" for x in ps]
+    scs = [x for x in (body.get("scenes") or []) if isinstance(x, dict)]
+    if scs:
+        add("Sahnalar soni:", len(scs))
     if body.get("concept"):
         add("G'OYA:", body["concept"])
     hv = body.get("hook_variants") or []
@@ -274,6 +286,8 @@ def script_text(body: dict) -> str:
     if body.get("checklist"):
         L.append("\nSURATGA OLISHDAN OLDIN:")
         L += [f"  ☐ {n}" for n in body["checklist"]]
+    if body.get("why_it_works"):
+        L.append("\nNEGA ISHLAYDI: " + str(body["why_it_works"]))
     if body.get("notes"):
         L.append("\nIzoh: " + str(body["notes"]))
     return "\n".join(l for l in L if l is not None).strip()

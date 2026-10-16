@@ -13,8 +13,8 @@ def test_studio_flows_with_fake_ai(biz, acc_tg, admin):
     collector.collect_account(acc_tg)
     # kontent-reja: fake AI bo'sh yozuv beradi -> xatosiz ishlashi kerak
     plan = st.monthly_plan(biz, "telegram", date.today(), admin)
-    assert plan.pk and plan.entries == []
-    plan.entries = [{"date": date.today().isoformat(), "format": "reel", "topic": "Yangi kurs", "hook": "3 soniyada...", "cta": "Yoziling", "goal": "lead"}]
+    assert plan.pk and plan.strategy["ai_state"] == "fallback"
+    plan.entries = [{"date": date.today().isoformat(), "time": "19:00", "format": "reel", "topic": "Yangi kurs", "hook": "3 soniyada...", "cta": "Yoziling", "goal": "lead"}]
     plan.save()
     assert st.load_plan_to_calendar(plan, admin) == 1
     from apps.content.models import ContentItem

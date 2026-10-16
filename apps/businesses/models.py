@@ -7,9 +7,8 @@ class BusinessTemplate(models.Model):
     key = models.SlugField(unique=True)
     name = models.CharField(max_length=120)
     config = models.JSONField(default=dict)  # key_metrics, content_types, seasonality, ctr/conv defaults, notes
-    # Biznes turi sifatida: pasport savollari, faktlar mavzulari, tizim turi belgisi
+    # Biznes turi sifatida: pasport savollari, tizim turi belgisi
     profile_fields = models.JSONField(default=list, blank=True)  # [{key,label,kind,help,choices}]
-    topics = models.JSONField(default=list, blank=True)           # faktlar/yangiliklar qidiruvi uchun kalit so'zlar (inglizcha)
     description = models.CharField(max_length=300, blank=True)
     is_system = models.BooleanField(default=False)
     sort = models.PositiveSmallIntegerField(default=50)

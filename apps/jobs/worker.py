@@ -19,9 +19,30 @@ log = logging.getLogger(__name__)
 POLL = 2.5
 
 
+class Backoff:
+    """Takroriy xatoda kutishni 5s dan 5 daqiqagacha oshiradi va logga bitta qisqa qator yozadi
+    (to'liq traceback faqat birinchi marta va har 50-takrorda) — baza vaqtincha o'chganda log faylni to'ldirib yubormaslik uchun."""
+
+    def __init__(self, base: float = 5.0, cap: float = 300.0):
+        self.base, self.cap, self.n = base, cap, 0
+
+    def fail(self, what: str, exc: BaseException) -> float:
+        self.n += 1
+        if self.n == 1 or self.n % 50 == 0:
+            log.error("%s: %s (takror: %s)", what, exc, self.n, exc_info=(self.n == 1))
+        else:
+            log.warning("%s: %s (takror: %s)", what, str(exc)[:160], self.n)
+        return min(self.cap, self.base * (2 ** min(self.n - 1, 6)))
+
+    def ok(self) -> None:
+        if self.n:
+            log.info("Xato bartaraf bo'ldi (%s urinishdan keyin)", self.n)
+        self.n = 0
+
+
 def load_handlers() -> None:
     import importlib
-    for mod in ("metrics", "content", "studio", "media_analysis", "reports", "tgbot", "health", "connections", "goals", "facts"):
+    for mod in ("metrics", "content", "studio", "media_analysis", "reports", "tgbot", "health", "connections", "goals"):
         try:
             importlib.import_module(f"apps.{mod}.jobs")
         except ModuleNotFoundError as e:
@@ -36,31 +57,35 @@ class Worker:
 
     def _loop(self, queue: str, slot: int):
         close_old_connections()
+        bo = Backoff()
         while not self.stop.is_set():
             try:
                 job = q.claim(f"{self.name}/{queue}{slot}", queue)
+                bo.ok()
                 if job is None:
                     self.stop.wait(POLL)
                     continue
                 q.execute(job)
-            except Exception:  # noqa: BLE001
-                log.exception("worker oqimi xatosi")
-                self.stop.wait(5)
+            except Exception as e:  # noqa: BLE001
+                self.stop.wait(bo.fail(f"worker oqimi ({queue}{slot})", e))
             finally:
                 close_old_connections()
 
     def _housekeeping(self):
         from .scheduler import tick
+        bo, wait = Backoff(10.0, 300.0), 10.0
         while not self.stop.is_set():
             try:
                 WorkerHeartbeat.objects.update_or_create(name=self.name, defaults={"beat_at": timezone.now(), "info": {"pid": os.getpid()}})
                 q.recover_stuck()
                 tick()
-            except Exception:  # noqa: BLE001
-                log.exception("scheduler xatosi")
+                bo.ok()
+                wait = 10.0
+            except Exception as e:  # noqa: BLE001
+                wait = bo.fail("scheduler", e)
             finally:
                 close_old_connections()
-            self.stop.wait(10)
+            self.stop.wait(wait)
 
     def run_forever(self, with_bot: bool = True):
         load_handlers()

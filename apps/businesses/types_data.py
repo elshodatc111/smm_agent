@@ -1,4 +1,4 @@
-"""Tizim biznes turlari: har tur o'z savollari (pasport maydonlari), faktlar uchun mavzular va reklama maslahatlariga ega.
+"""Tizim biznes turlari: har tur o'z savollari (pasport maydonlari), kontent andozasi va reklama maslahatlariga ega.
 Maydon: {key, label, kind: text|long|choice|number, help, choices}. Foydalanuvchi Sozlamalar → Biznes turlari bo'limida yangi tur qo'sha oladi."""
 from __future__ import annotations
 
@@ -29,7 +29,6 @@ def _f(key, label, kind="text", help="", choices=None):
 TYPES: dict[str, dict] = {
     "shaxsiy_blog": {
         "name": "Shaxsiy brend / frilanser (dizayner, SMM, mutaxassis)", "sort": 1,
-        "topics": ["graphic design", "branding", "social media marketing", "freelance", "content creation", "typography", "motion design"],
         "fields": [
             _f("specialty", "Asosiy mutaxassislik", "text", "Masalan: grafik dizayn, SMM, targetolog"),
             _f("services_list", "Xizmatlar ro'yxati va narxi", "long", "Har qatorda bittadan: xizmat — narx"),
@@ -46,7 +45,6 @@ TYPES: dict[str, dict] = {
     },
     "oquv_markaz": {
         "name": "O'quv markaz / kurslar", "sort": 2,
-        "topics": ["online education", "learning", "teaching methods", "edtech", "career skills", "exam preparation"],
         "fields": [
             _f("courses", "Kurslar va davomiyligi", "long", "Har qatorda: kurs — davomiyligi — narxi"),
             _f("group_size", "Guruhdagi o'quvchilar soni", "text"),
@@ -63,7 +61,6 @@ TYPES: dict[str, dict] = {
     },
     "restoran_kafe": {
         "name": "Restoran / kafe / ovqatlanish", "sort": 3,
-        "topics": ["restaurant marketing", "food trends", "cafe business", "hospitality", "recipes", "food photography"],
         "fields": [
             _f("cuisine", "Oshxona turi", "text", "Milliy, fast-food, qahvaxona, desert..."),
             _f("signature", "Eng mashhur taomlar", "long"),
@@ -79,7 +76,6 @@ TYPES: dict[str, dict] = {
     },
     "onlayn_dokon": {
         "name": "Onlayn do'kon / savdo", "sort": 4,
-        "topics": ["ecommerce", "retail marketing", "product photography", "customer experience", "online shopping trends"],
         "fields": [
             _f("catalog", "Mahsulot toifalari", "long"),
             _f("bestsellers", "Eng ko'p sotiladigan mahsulotlar", "long"),
@@ -94,7 +90,6 @@ TYPES: dict[str, dict] = {
     },
     "kiyim_dokoni": {
         "name": "Kiyim do'koni / moda", "sort": 5,
-        "topics": ["fashion trends", "style", "retail fashion", "clothing care", "color trends"],
         "fields": [
             _f("brands", "Brendlar va uslublar", "long"),
             _f("sizes", "O'lchamlar va kolleksiyalar", "text"),
@@ -108,7 +103,6 @@ TYPES: dict[str, dict] = {
     },
     "xizmat_korsatish": {
         "name": "Xizmat ko'rsatish (ta'mirlash, tozalash, logistika, yuridik...)", "sort": 6,
-        "topics": ["small business", "customer service", "service marketing", "local business", "home services"],
         "fields": [
             _f("service_list", "Xizmatlar va narxlar", "long"),
             _f("coverage", "Xizmat hududi", "text"),
@@ -122,7 +116,6 @@ TYPES: dict[str, dict] = {
     },
     "goza_salon": {
         "name": "Go'zallik saloni / barber / spa", "sort": 7,
-        "topics": ["beauty trends", "hair care", "skincare", "salon business", "makeup"],
         "fields": [
             _f("services_price", "Xizmatlar va narxlar", "long"),
             _f("masters", "Ustalar va tajribasi", "long"),
@@ -135,7 +128,6 @@ TYPES: dict[str, dict] = {
     },
     "tibbiyot_klinika": {
         "name": "Tibbiyot / klinika / stomatologiya", "sort": 8,
-        "topics": ["healthcare", "dentistry", "preventive medicine", "wellness", "medical technology"],
         "fields": [
             _f("specialties", "Yo'nalishlar va shifokorlar", "long"),
             _f("license", "Litsenziya va sertifikatlar", "text"),
@@ -148,7 +140,6 @@ TYPES: dict[str, dict] = {
     },
     "it_kompaniya": {
         "name": "IT kompaniya / dasturlash / mobil ilova", "sort": 9,
-        "topics": ["software development", "flutter", "backend", "mobile development", "startups", "ai tools", "cybersecurity"],
         "fields": [
             _f("products_it", "Mahsulot va xizmatlar", "long"),
             _f("stack", "Texnologiyalar", "text", "Python, Flutter, Django..."),
@@ -161,7 +152,6 @@ TYPES: dict[str, dict] = {
     },
     "kochmas_mulk": {
         "name": "Ko'chmas mulk / qurilish", "sort": 10,
-        "topics": ["real estate market", "construction", "interior design", "property investment", "architecture"],
         "fields": [
             _f("objects", "Obyektlar turi", "long"),
             _f("price_range_re", "Narx oralig'i", "text"),
@@ -174,7 +164,6 @@ TYPES: dict[str, dict] = {
     },
     "fitnes_sport": {
         "name": "Fitnes / sport / sog'lom turmush", "sort": 11,
-        "topics": ["fitness", "workout science", "nutrition", "sports training", "wellness habits"],
         "fields": [
             _f("programs", "Dasturlar va abonementlar", "long"),
             _f("trainers", "Murabbiylar", "long"),
@@ -186,7 +175,6 @@ TYPES: dict[str, dict] = {
     },
     "kontent_yaratuvchi": {
         "name": "Bloger / kontent yaratuvchi / media", "sort": 12,
-        "topics": ["content creation", "creator economy", "video editing", "social media growth", "storytelling"],
         "fields": [
             _f("niche", "Asosiy mavzu (niche)", "text"),
             _f("formats", "Asosiy formatlar", "text", "Video, podkast, matn..."),
@@ -198,7 +186,6 @@ TYPES: dict[str, dict] = {
     },
     "boshqa": {
         "name": "Boshqa (o'zim sozlayman)", "sort": 99,
-        "topics": [],
         "fields": [
             _f("what_we_do", "Biznes nima bilan shug'ullanadi", "long"),
             _f("key_numbers", "Muhim raqamlar", "long", "Mijozlar soni, narx, hajm"),
@@ -209,7 +196,6 @@ TYPES: dict[str, dict] = {
     # eski kalit — mavjud bazalar uchun saqlanadi
     "kompyuter_xizmatlari": {
         "name": "Kompyuter xizmatlari", "sort": 13,
-        "topics": ["it support", "hardware", "networking", "cybersecurity basics"],
         "fields": [
             _f("service_list", "Xizmatlar va narxlar", "long"),
             _f("response_time", "Javob tezligi", "text"),

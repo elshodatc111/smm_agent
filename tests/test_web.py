@@ -12,7 +12,7 @@ from apps.businesses.models import Business
 @pytest.fixture
 def demo(db, settings):
     settings.USE_FAKES = True
-    call_command("seed_demo")
+    __import__("tests.demo_seed", fromlist=["seed"]).seed()
     admin = User.objects.create_user("boss", password="Boss#2026test!", is_admin=True)
     return admin
 

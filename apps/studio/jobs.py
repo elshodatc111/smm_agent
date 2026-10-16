@@ -49,3 +49,13 @@ def ideas_daily_job(ctx: JobContext):
     from . import ideas
     b = Business.objects.get(pk=ctx.payload["business_id"])
     return {"created": len(ideas.ensure_daily(b))}
+
+
+@register_handler("plan_fill", "ai")
+def plan_fill_job(ctx: JobContext):
+    from . import planner
+    from .models import ContentPlan
+    p = ContentPlan.objects.filter(pk=ctx.payload["plan_id"]).first()
+    if p is None:
+        return {"skipped": True}
+    return {"filled": planner.fill_with_ai(p)}

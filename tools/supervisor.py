@@ -18,7 +18,24 @@ LOG = ROOT / "logs"
 LOG.mkdir(exist_ok=True)
 
 
+def _rotate(path, limit=20 * 1024 * 1024, keep=3):
+    """Konsol logi cheksiz o'smasligi uchun: limitdan oshsa .1, .2, .3 ga siljitadi (eskisi o'chadi)."""
+    try:
+        if path.exists() and path.stat().st_size > limit:
+            for i in range(keep, 0, -1):
+                old, new = path.with_name(f"{path.name}.{i}"), path.with_name(f"{path.name}.{i + 1}")
+                if old.exists():
+                    if i == keep:
+                        old.unlink()
+                    else:
+                        old.replace(new)
+            path.replace(path.with_name(f"{path.name}.1"))
+    except OSError:
+        pass
+
+
 def start(name):
+    _rotate(LOG / f"{name}.out.log")
     f = open(LOG / f"{name}.out.log", "ab")
     return subprocess.Popen([sys.executable, str(ROOT / "manage.py"), name], cwd=ROOT, stdout=f, stderr=subprocess.STDOUT)
 

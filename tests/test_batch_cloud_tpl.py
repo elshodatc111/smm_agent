@@ -56,8 +56,8 @@ def test_chunked_upload_flow(settings, tmp_path):
     o = TempObject.objects.get(pk=oid)
     assert o.status == "pending" and Job.objects.filter(type="cloud_upload").exists()
     from apps.content.jobs import cloud_upload  # noqa: F401
-    j = c.get("/cloudflare/", HTTP_ACCEPT="application/json").json()
-    assert "config_error" in j and any(r["id"] == oid and "progress" in r for r in j["rows"])
+    html = c.get("/cloudflare/").content.decode()
+    assert "v.mp4" in html and "cl-bar" in html and "upList" in html
     assert c.post("/cloudflare/yuklash/boshlash/", {"name": "x.exe", "size": 5}).status_code == 400
 
 
@@ -67,7 +67,9 @@ def test_stop_and_delete_stuck_post(settings):
     from apps.content.models import ContentItem
     it = ContentItem.objects.get(title="Qotgan")
     ContentItem.objects.filter(pk=it.pk).update(status="publishing")
-    acts = [a["label"] for a in c.get(f"/kalendar/{it.pk}/").json()["acts"]]
+    from apps.content.models import ContentTarget
+    ContentTarget.objects.filter(item=it).update(status="publishing")
+    acts = [a["t"] for a in c.get(f"/kalendar/{it.pk}/").context["acts"]]
     assert "Nashrni to'xtatish" in acts and any("O'chirish" in a for a in acts)
     assert c.post(f"/kalendar/{it.pk}/toxtat/").status_code == 302
     it.refresh_from_db(); assert it.status == "failed"
@@ -89,9 +91,9 @@ def test_template_crud(settings):
     assert not PostTemplate.objects.filter(name="Bad").exists()
     c.post(f"/shablonlar/{t.pk}/saqlash/", {"name": "Dushanba 2", "platform": "telegram", "media_type": "text", "text": "yangi"})
     t.refresh_from_db(); assert t.name == "Dushanba 2" and "weekday" not in t.options
-    j = c.get("/shablonlar/", HTTP_ACCEPT="application/json").json()
-    assert j["kind"] == "templates" and j["rows"][0]["name"] == "Dushanba 2"
+    assert "Dushanba 2" in c.get("/shablonlar/").content.decode()
+    assert c.get("/shablonlar/yangi/").status_code == 200 and c.get(f"/shablonlar/{t.pk}/tahrir/").status_code == 200
     # shablondan forma
-    assert c.get(f"/kalendar/yangi/telegram/?shablon={t.pk}", HTTP_ACCEPT="application/json").status_code == 200
+    assert c.get(f"/kalendar/yangi/telegram/?shablon={t.pk}").status_code == 200
     c.post(f"/shablonlar/{t.pk}/ochir/")
     assert not PostTemplate.objects.filter(pk=t.pk).exists()

@@ -3,12 +3,30 @@ from .env import BASE_DIR, env, env_bool, load_env
 
 load_env()
 
+import os as _os
+from django.core.exceptions import ImproperlyConfigured
+
 SECRET_KEY = env("SECRET_KEY", "dev-insecure-key-change-me")
 DEBUG = env_bool("DEBUG", False)
-ALLOWED_HOSTS = [h.strip() for h in env("ALLOWED_HOSTS", "*").split(",")]
+_hosts = [h.strip() for h in env("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",") if h.strip()]
+ALLOWED_HOSTS = _hosts
 USE_FAKES = env_bool("USE_FAKES", False)
 PUBLIC_BASE_URL = env("PUBLIC_BASE_URL", "http://127.0.0.1:8000")
 FERNET_KEYS = [k.strip() for k in env("FERNET_KEYS", "").split(",") if k.strip()]
+
+# --- Xavfsizlik tekshiruvi: zaif sozlama bilan ishga tushmaydi (testlar/ALLOW_INSECURE bundan mustasno) ---
+_testing = _os.environ.get("DJANGO_SETTINGS_MODULE", "").endswith(("settings_test", "settings_mysql_test"))
+if not DEBUG and not _testing and not env_bool("ALLOW_INSECURE", False):
+    _bad = []
+    if SECRET_KEY in ("", "change-me", "dev-insecure-key-change-me") or len(SECRET_KEY) < 32:
+        _bad.append("SECRET_KEY (kamida 32 belgi, tasodifiy bo'lsin)")
+    if not FERNET_KEYS:
+        _bad.append("FERNET_KEYS (python -c \"from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())\")")
+    if "*" in ALLOWED_HOSTS:
+        _bad.append("ALLOWED_HOSTS ('*' emas, aniq domen/IP yozing)")
+    if _bad:
+        raise ImproperlyConfigured(".env da xavfsiz bo'lmagan sozlamalar: " + "; ".join(_bad)
+                                   + ". (Faqat lokal sinov uchun ALLOW_INSECURE=1.)")
 
 INSTALLED_APPS = [
     "django.contrib.auth",
@@ -102,7 +120,18 @@ MEDIA_TMP = BASE_DIR / "media_tmp"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 SESSION_COOKIE_AGE = 12 * 3600
 SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_HTTPONLY = False
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in env("CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()]
+# HTTPS (Nginx ortida): HTTPS=1 bo'lsa cookie'lar faqat HTTPS orqali, proxy sarlavhasi ishonchli
+if env_bool("HTTPS", False):
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    USE_X_FORWARDED_HOST = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = int(env("HSTS_SECONDS", "31536000") or 0)
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_REFERRER_POLICY = "same-origin"
 DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 

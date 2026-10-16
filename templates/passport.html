@@ -2,7 +2,7 @@
 {% block content %}
 <div class="hero">
   <div class="row sb" style="align-items:center">
-    <div><h1>Biznes pasporti</h1><p>{{ b.name }} · {{ b.template.name|default:"turi tanlanmagan" }}. Qancha to'liq to'ldirsangiz, reklama va faktlar bo'yicha takliflar shuncha aniq bo'ladi.</p></div>
+    <div><h1>Biznes pasporti</h1><p>{{ b.name }} · {{ b.template.name|default:"turi tanlanmagan" }}. Qancha to'liq to'ldirsangiz, reklama va kontent reja bo'yicha takliflar shuncha aniq bo'ladi.</p></div>
     <div class="ring lg {% if comp.pct >= 80 %}ok{% elif comp.pct < 50 %}bad{% else %}warn{% endif %}" style="--p:{{ comp.pct }}"><div><span><b>{{ comp.pct }}%</b><small>to'liqlik</small></span></div></div>
   </div>
 </div>

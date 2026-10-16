@@ -11,6 +11,8 @@ class Command(BaseCommand):
 
     def handle(self, *a, **o):
         self._purge_stale_codes()
+        from apps.jobs.models import Job
+        Job.objects.filter(type__startswith="facts_").delete()   # olib tashlangan modul vazifalari
         admin, _ = Role.objects.get_or_create(name="Admin", defaults={"is_system": True, "description": "To'liq huquq"})
         Role.objects.get_or_create(name="Mijoz (faqat bot)", defaults={"is_system": True, "description": "Veb-kirish yo'q; faqat Telegram bot"})
         for name, spec in PRESET_ROLES.items():
@@ -19,8 +21,6 @@ class Command(BaseCommand):
                 set_role_permissions(role, codes(spec))
         self._grant_late_modules()
         ensure_templates()
-        from apps.facts.engine import ensure_sources
-        ensure_sources()
         self.stdout.write(self.style.SUCCESS("Rollar va andozalar tayyor."))
 
     def _purge_stale_codes(self):
@@ -30,7 +30,7 @@ class Command(BaseCommand):
         UserPermissionOverride.objects.exclude(code__in=ALL_CODES).delete()
 
     def _grant_late_modules(self):
-        """Keyin qo'shilgan modullar (maqsadlar, faktlar) uchun mavjud rollarga standart ruxsat — faqat bir marta."""
+        """Keyin qo'shilgan modullar (maqsadlar) uchun mavjud rollarga standart ruxsat — faqat bir marta."""
         from apps.accounts.models import RolePermission
         from apps.core.settings_store import get_setting, set_setting
         done = list(get_setting("rbac.late_granted", []) or [])

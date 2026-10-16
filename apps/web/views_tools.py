@@ -81,7 +81,7 @@ def studio_home(request):
     plans = ContentPlan.objects.filter(business=b).order_by("-created_at")
     scripts = Script.objects.filter(business=b).order_by("-created_at")
     if tab == "umumiy":
-        cards = [("reja", "📅 Oylik reja", "AI butun oy uchun post mavzulari, hook va CTA tuzadi.", f"{plans.count()} ta reja"),
+        cards = [("reja", "📅 Kontent reja", "Har tarmoq uchun alohida oylik reja: mavzu, hook, CTA.", f"{plans.count()} ta reja"),
                  ("ssenariy", "🎬 Ssenariy", "Reels/Shorts/video uchun rejissyor ssenariysi: sahna, vaqt, matn.", f"{scripts.count()} ta ssenariy"),
                  ("tahlil", "🔍 Tahlil", "Ssenariy va tayyor videoni baholash: kuchli/kuchsiz joylar, nima tuzatish.", "ssenariy + video"),
                  ("mavzu", "🎨 Dizayner mavzulari", "Dizayner uchun aniq vazifalar: mavzu, vizual g'oya, ssenariy.", "rasm va video"),
@@ -90,11 +90,9 @@ def studio_home(request):
         blocks.append({"type": "html", "html": html})
         blocks.append(ui.form_block(mkform({"topic": forms.CharField(label="Mavzu"), "platform": plat}), "Tezkor caption va hashtaglar", "Yaratish", action="/studiya/caption/"))
     elif tab == "reja":
-        month = forms.CharField(label="Oy (YYYY-MM)", initial=date.today().strftime("%Y-%m"))
-        blocks.append(ui.form_block(mkform({"platform": plat, "month": month}), "Oylik kontent-reja", "AI bilan reja tuzish", action="/studiya/reja/",
-                                    intro="AI sizning statistikangiz asosida oy uchun post kalendarini tuzadi. Keyin uni bir tugma bilan kalendarga qoralama qilib yuklaysiz."))
+        blocks.append({"type": "html", "html": '<div class="row sb"><div><b>Kontent reja endi alohida bo\'limda</b><div class="muted" style="font-size:13px">Har tarmoq (Telegram, Instagram, YouTube) uchun alohida oylik reja, tahrirlash va kalendarga yuklash.</div></div><a class="btn primary" href="/reja/">📅 Kontent rejaga o\'tish</a></div>'})
         blocks.append(ui.table("Rejalar", ["Oy", "Platforma", "Yozuvlar", "Kalendarga", ""],
-                               [[f"{p.month:%Y-%m}", p.platform, len(p.entries), "Yuklangan" if p.loaded_to_calendar else "Yo'q", ui.link("Ochish", f"/studiya/reja/{p.pk}/")] for p in plans[:20]], "Hali reja tuzilmagan."))
+                               [[f"{p.month:%Y-%m}", p.platform, len(p.entries), "Yuklangan" if p.loaded_to_calendar else "Yo'q", ui.link("Ochish", f"/reja/{p.pk}/")] for p in plans[:20]], "Hali reja tuzilmagan."))
     elif tab == "ssenariy":
         blocks.append(ui.form_block(mkform({"brief": forms.CharField(label="Qisqa maqsad", widget=forms.Textarea(attrs={"rows": 2})), "fmt": forms.ChoiceField(label="Format", choices=Script.FORMATS)}),
                                     "Ssenariy yozish", "Ssenariy yozish", action="/studiya/ssenariy/", intro="Rejissyor uslubida: hook, sahnalar vaqt bilan, matn, CTA."))
@@ -122,40 +120,6 @@ def studio_home(request):
         blocks.append({"type": "actions", "title": "Hook bazasi", "buttons": [ui.btn("G'olib postlardan hooklar olish", "/studiya/hook-yangila/")]})
         blocks.append(ui.table("Hooklar", ["Hook", "Manba", "Holat"], [[h.text[:140], h.source, h.status] for h in hooks], "Hali hook yo'q."))
     return ui.page(request, "AI studiya", blocks, subtitle=b.name)
-
-
-@login_required
-@require_POST
-@require_permission("ai_studio.create")
-def studio_plan(request):
-    b = request.business
-    try:
-        y, m = (int(x) for x in request.POST["month"].split("-"))
-    except (KeyError, ValueError):
-        messages.error(request, "Oy formati: YYYY-MM")
-        return redirect("/studiya/?tab=reja")
-    p = _ai_call(request, st.monthly_plan, b, request.POST.get("platform", "telegram"), date(y, m, 1), request.user, ok="Reja tayyor. Ko'rib chiqib kalendarga yuklang.")
-    return redirect(f"/studiya/reja/{p.pk}/" if p else "/studiya/?tab=reja")
-
-
-@login_required
-def studio_plan_view(request, pk):
-    from apps.studio.models import ContentPlan
-    p = get_obj(request, ContentPlan, pk, "ai_studio.view")
-    rows = [[e.get("date"), e.get("format"), e.get("topic"), e.get("hook"), e.get("cta")] for e in p.entries]
-    acts = [] if p.loaded_to_calendar else [ui.btn("Kalendarga yuklash (qoralama)", f"/studiya/reja/{p.pk}/yuklash/", "primary")]
-    return ui.page(request, f"Reja {p.month:%Y-%m} · {p.platform}", [{"type": "text", "title": "Strategiya", "text": p.summary}, ui.table("Reja", ["Sana", "Format", "Mavzu", "Hook", "CTA"], rows),
-                                                                    {"type": "actions", "title": "Amallar", "buttons": acts}], toolbar=[{"label": "Orqaga", "url": "/studiya/"}])
-
-
-@login_required
-@require_POST
-def studio_plan_load(request, pk):
-    from apps.studio.models import ContentPlan
-    p = get_obj(request, ContentPlan, pk, "calendar.create")
-    n = st.load_plan_to_calendar(p, request.user)
-    messages.success(request, f"{n} ta qoralama kalendarga yuklandi (AI qoralamasi: inson ko'rib chiqishi shart).")
-    return redirect("calendar")
 
 
 @login_required

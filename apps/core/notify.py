@@ -15,7 +15,7 @@ TYPES = {
     "token.expiring": "Token tugayapti", "anomaly.detected": "Anomaliya",
     "report.ready": "Hisobot tayyor",
     "provider.switched": "Provayder almashdi", "r2.full": "R2 to'lgan",
-    "job.failed": "Vazifa xatosi", "activity.digest": "Kunlik xulosa", "content.ready": "Kontent tayyor", "competitor.hit": "Raqobatchi posti yaxshi chiqdi", "alert.smart": "Aqlli ogohlantirish", "idea.new": "Yangi g'oya", "design.status": "Dizayner vazifasi", "post.insight": "Post natijasi xulosasi", "connection.error": "Ulanish xatosi", "client.issue": "Mijoz xabari", "goal.behind": "Maqsad ortda qolmoqda", "goal.achieved": "Maqsadga erishildi", "goal.missed": "Maqsad muddati tugadi", "facts.new": "Yangi fakt/yangilik takliflari",
+    "job.failed": "Vazifa xatosi", "activity.digest": "Kunlik xulosa", "content.ready": "Kontent tayyor", "competitor.hit": "Raqobatchi posti yaxshi chiqdi", "alert.smart": "Aqlli ogohlantirish", "idea.new": "Yangi g'oya", "design.status": "Dizayner vazifasi", "post.insight": "Post natijasi xulosasi", "connection.error": "Ulanish xatosi", "client.issue": "Mijoz xabari", "goal.behind": "Maqsad ortda qolmoqda", "goal.achieved": "Maqsadga erishildi", "goal.missed": "Maqsad muddati tugadi",
 }
 
 

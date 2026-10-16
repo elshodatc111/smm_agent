@@ -10,6 +10,8 @@ class ContentPlan(models.Model):
     summary = models.TextField(blank=True)
     generation = models.ForeignKey("ai_router.AIGeneration", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     loaded_to_calendar = models.BooleanField(default=False)
+    strategy = models.JSONField(default=dict, blank=True)  # ustunlar, ohang, asosiy xabarlar, ai_state
+    status = models.CharField(max_length=10, default="draft")  # draft | approved
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -98,3 +100,25 @@ class Idea(models.Model):
 
     class Meta:
         ordering = ["-day", "-created_at"]
+
+
+class Carousel(models.Model):
+    """Karusel ssenariysi: biznesga asoslangan mini-hikoya, qisqa matnli slaydlar; katta bo'lsa 2-3 qismga bo'linadi."""
+    STATUSES = [("draft", "Qoralama"), ("ready", "Tayyor")]
+    business = models.ForeignKey("businesses.Business", on_delete=models.CASCADE, related_name="carousels")
+    platform = models.CharField(max_length=12, default="instagram")
+    title = models.CharField(max_length=200)
+    topic = models.CharField(max_length=300, blank=True)
+    angle = models.CharField(max_length=80, blank=True)
+    story = models.JSONField(default=dict, blank=True)  # logline, qahramon, nega_shuncha_slayd, uslub (palitra/shrift/maket)
+    slides = models.JSONField(default=list)  # yassi ro'yxat: n, role, title, text, visual, note
+    parts = models.JSONField(default=list)  # [{n, of, title, slides:[n..], caption, hashtags, overlay_first, overlay_last, item_id}]
+    status = models.CharField(max_length=10, choices=STATUSES, default="draft")
+    plan = models.ForeignKey(ContentPlan, null=True, blank=True, on_delete=models.SET_NULL, related_name="carousels")
+    plan_entry = models.IntegerField(null=True, blank=True)
+    generation = models.ForeignKey("ai_router.AIGeneration", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]

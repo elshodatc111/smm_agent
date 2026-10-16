@@ -18,7 +18,7 @@ def _c(settings, name="b13", tmp=None):
     settings.USE_FAKES = True
     if tmp is not None:
         settings.MEDIA_ROOT = str(tmp)
-    call_command("seed_demo")
+    __import__("tests.demo_seed", fromlist=["seed"]).seed()
     u = User.objects.create_user(name, password="Boss#2026test!", is_admin=True)
     c = Client(); c.force_login(u)
     b = Business.objects.first()

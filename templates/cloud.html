@@ -8,6 +8,7 @@
 </style>
 <div class="row sb"><div><h1>Cloudflare fayllar</h1><div class="muted">Postlarga yuklangan rasm/video nusxalari. Fayllar faqat siz o'chirganda o'chadi.</div></div></div>
 
+{% if config_error %}<div class="card" style="border-left:4px solid var(--bad)"><b>Cloudflare sozlamasida xato</b><div class="hint bad">{{ config_error }}</div><div class="hint">Sozlamalar → Kalitlar bo'limida R2 ma'lumotlarini to'g'rilang, keyin «Ulanishni tekshirish» tugmasini bosing.</div></div>{% endif %}
 <div class="card"><div class="grid g2">
   <div><div class="muted">Holat</div>
     <div>R2: {% if r2_ok %}<span class="badge ok">ulangan</span> <small class="muted">bucket: {{ bucket }}</small>{% else %}<span class="badge bad">sozlanmagan</span>{% endif %}
@@ -19,15 +20,16 @@
     {% if not r2_ok %}<div class="hint bad" style="margin-top:8px">R2 kalitlarini Sozlamalar → Kalitlar bo'limida kiriting: Account ID, Access Key ID, Secret va Bucket nomi.</div>{% endif %}
   </div>
   <div><div class="muted">Joy: {{ used }} / {{ limit }}</div><div class="cl-bar {% if pct > 85 %}hot{% endif %}" style="margin-top:6px"><i style="width:{{ pct }}%"></i></div>
-    <div class="muted" style="margin-top:6px;font-size:13px">Yuklangan: {{ counts.uploaded }} · Kutmoqda: {{ counts.pending }} · Xato: {{ counts.failed }} · O'chirilgan: {{ counts.deleted }}</div></div>
+    <div class="muted" style="margin-top:6px;font-size:13px">Yuklangan: {{ counts.uploaded }} · Kutmoqda: {{ counts.pending|add:counts.uploading }} · Xato: {{ counts.failed }} · O'chirilgan: {{ counts.deleted }}</div></div>
 </div></div>
 
 {% if can_edit and has_business %}
 <div class="card"><h2>Qo'lda fayl yuklash</h2>
   <form method="post" action="{% url 'cloud_upload_manual' %}" enctype="multipart/form-data" class="row">{% csrf_token %}
-    <input type="file" name="files" multiple accept="image/*,video/*,.pdf" required>
+    <input type="file" name="files" id="upFiles" multiple accept="image/*,video/*,.pdf" required>
     <input type="text" name="tags" placeholder="Teglar: aksiya, kurs, logotip" style="max-width:260px">
-    <button class="btn primary">☁ Cloudflare'ga yuklash</button></form>
+    <button class="btn primary" id="upBtn">☁ Cloudflare'ga yuklash</button></form>
+  <div id="upList" style="margin-top:10px;display:grid;gap:8px"></div>
   <div class="hint">Post bilan bog'lanmagan fayl. Yuklangach «Havola» tugmasi bilan 7 kunlik ochiq havola olasiz.</div></div>
 {% endif %}
 
@@ -49,11 +51,11 @@
       <td style="min-width:150px"><input type="text" value="{{ o.tags }}" placeholder="teg, teg" data-id="{{ o.pk }}" class="tagIn" style="width:100%;padding:4px 8px;font-size:12px" {% if not can_edit %}disabled{% endif %}></td>
       <td>{% if o.item %}<a href="/kalendar/{{ o.item_id }}/">{{ o.item.title|default:"(nomsiz)" }}</a><div class="muted" style="font-size:12px">{{ r.plats }}{% if r.item_status %} · {{ r.item_status }}{% endif %}</div>
           {% else %}<span class="muted">Qo'lda yuklangan</span>{% endif %}</td>
-      <td><span class="badge {{ r.cls }}">{{ r.label }}</span></td>
+      <td><span class="badge {{ r.cls }}">{{ r.label }}</span>{% if o.status == "uploading" or o.status == "pending" %}<div class="cl-bar" style="margin-top:6px;min-width:110px"><i style="width:{{ r.progress }}%"></i></div><div class="muted" style="font-size:12px">{{ r.progress }}%</div>{% endif %}</td>
       <td>{{ o.created_at|date:"d.m.Y H:i" }}</td>
       <td style="white-space:nowrap">
         {% if o.status == "uploaded" %}<button type="button" class="btn sm" onclick="getLink({{ o.pk }},this)">🔗 Havola</button>{% endif %}
-        {% if o.status == "failed" and can_edit %}<button class="btn sm" formaction="{% url 'cloud_retry' o.pk %}" formnovalidate>↻ Qayta</button>{% endif %}
+        {% if o.status == "failed" or o.status == "pending" or o.status == "uploading" %}{% if can_edit %}<button class="btn sm" formaction="{% url 'cloud_retry' o.pk %}" formnovalidate>↻ Qayta</button>{% endif %}{% endif %}
         {% if o.status != "deleted" and can_edit %}<button class="btn sm danger" formaction="{% url 'cloud_delete' o.pk %}" onclick="return confirm('Fayl Cloudflare\'dan o\'chiriladi. Davom etasizmi?')">O'chirish</button>{% endif %}
       </td></tr>
     {% endwith %}{% empty %}<tr><td colspan="8" class="muted">Hozircha fayl yo'q. Postga rasm/video yuklasangiz, shu yerda paydo bo'ladi.</td></tr>{% endfor %}
@@ -66,6 +68,32 @@
   {% if page.has_other_pages %}<div class="row" style="margin-top:8px">{% if page.has_previous %}<a class="btn sm" href="?page={{ page.previous_page_number }}{% if flt %}&status={{ flt }}{% endif %}{% if show %}&show=all{% endif %}">‹</a>{% endif %}<span class="muted">{{ page.number }} / {{ page.paginator.num_pages }}</span>{% if page.has_next %}<a class="btn sm" href="?page={{ page.next_page_number }}{% if flt %}&status={{ flt }}{% endif %}{% if show %}&show=all{% endif %}">›</a>{% endif %}</div>{% endif %}
 </div>
 <script>
+(function(){
+  var form=document.querySelector('form[action$="/cloudflare/yuklash/"]');if(!form)return;
+  var list=document.getElementById('upList'),busy=false,csrf=document.querySelector('meta[name=csrf]').content;
+  function mk(name){var d=document.createElement('div');d.innerHTML='<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px"><b></b><span class="muted">kutilmoqda</span></div><div class="cl-bar"><i style="width:0%"></i></div>';d.querySelector('b').textContent=name;list.appendChild(d);return {bar:d.querySelector('i'),txt:d.querySelector('span')}}
+  function post(url,fd,onp){return new Promise(function(res,rej){var x=new XMLHttpRequest();x.open('POST',url);x.setRequestHeader('X-CSRFToken',csrf);x.setRequestHeader('X-Requested-With','fetch');
+    if(onp)x.upload.onprogress=onp;x.onload=function(){var j={};try{j=JSON.parse(x.responseText)}catch(e){}res({status:x.status,json:j})};x.onerror=function(){rej(new Error('net'))};x.send(fd)})}
+  async function one(f,tags){var ui=mk(f.name);try{
+    var fd=new FormData();fd.append('name',f.name);fd.append('size',f.size);fd.append('tags',tags);
+    var st=await post('/cloudflare/yuklash/boshlash/',fd);if(st.status!==200)throw new Error(st.json.detail||'Boshlab bo\'lmadi');
+    var id=st.json.id,ch=st.json.chunk,off=0;
+    while(off<f.size){var end=Math.min(off+ch,f.size),ok=false;
+      for(var t=0;t<4&&!ok;t++){var b=new FormData();b.append('offset',off);b.append('chunk',f.slice(off,end),'part');
+        try{var r=await post('/cloudflare/'+id+'/bolak/',b,function(e){if(e.lengthComputable){var p=Math.round((off+e.loaded)*100/f.size);ui.bar.style.width=p+'%';ui.txt.textContent=p+'%'}});
+          if(r.status===200)ok=true;else if(r.status===409&&r.json.have!==undefined){off=r.json.have;continue}else throw new Error(r.json.detail||'Xato')}
+        catch(e){await new Promise(function(z){setTimeout(z,1500*(t+1))})}}
+      if(!ok)throw new Error('Bo\'lak yuborilmadi (internet uzildimi?)');off=end}
+    var d=await post('/cloudflare/'+id+'/tugatish/',new FormData());if(d.status!==200)throw new Error(d.json.detail||'Yakunlab bo\'lmadi');
+    ui.bar.style.width='100%';ui.txt.textContent='Cloudflare\'ga o\'tkazilmoqda…'}
+   catch(e){ui.txt.textContent='Xato: '+e.message;ui.txt.style.color='var(--bad)'}}
+  form.addEventListener('submit',async function(ev){ev.preventDefault();if(busy)return;var files=[].slice.call(document.getElementById('upFiles').files),tags=form.querySelector('[name=tags]').value;if(!files.length)return;
+    busy=true;document.getElementById('upBtn').disabled=true;list.innerHTML='';
+    for(var i=0;i<files.length;i++){await one(files[i],tags)}
+    busy=false;document.getElementById('upBtn').disabled=false;setTimeout(function(){location.reload()},1500)});
+  window.__upBusy=function(){return busy};
+})();
+{% if busy %}setTimeout(function(){if(!(window.__upBusy&&window.__upBusy()))location.reload()},4000);{% endif %}
 (function(){var a=document.getElementById('allChk');if(a)a.addEventListener('change',function(){document.querySelectorAll('.rowChk').forEach(function(c){c.checked=a.checked})})})();
 document.querySelectorAll('.tagIn').forEach(function(i){i.addEventListener('change',function(){var fd=new FormData();fd.append('tags',i.value);
  fetch('/cloudflare/'+i.dataset.id+'/teg/',{method:'POST',body:fd,headers:{'X-CSRFToken':document.querySelector('meta[name=csrf]').content,'X-Requested-With':'fetch'}}).then(function(r){return r.json()}).then(function(r){i.value=(r.tags||[]).join(', ');i.style.outline='2px solid var(--ok)';setTimeout(function(){i.style.outline=''},900)})})});

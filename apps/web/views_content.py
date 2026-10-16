@@ -52,7 +52,10 @@ def calendar(request):
     first = date(y, mo, 1)
     nxt = date(y + (mo == 12), mo % 12 + 1, 1)
     prev = (first - timedelta(days=1)).replace(day=1)
-    scheduled = qs.filter(scheduled_at__date__gte=first, scheduled_at__date__lt=nxt).order_by("scheduled_at").prefetch_related("targets__account", "assets")
+    from datetime import datetime as _dt
+    from apps.core.utils import tz as _z
+    lo, hi = _dt.combine(first, _dt.min.time(), tzinfo=_z()), _dt.combine(nxt, _dt.min.time(), tzinfo=_z())   # MySQL'da vaqt jadvallari (CONVERT_TZ) bo'lmasligi mumkin
+    scheduled = qs.filter(scheduled_at__gte=lo, scheduled_at__lt=hi).order_by("scheduled_at").prefetch_related("targets__account", "assets")
     scheduled = list(scheduled)
     unsched = qs.filter(scheduled_at__isnull=True).exclude(status="published")[:30]
     row = lambda i: [ui.dt(i.scheduled_at), ui.link(i.title or "(nomsiz)", f"/kalendar/{i.pk}/"), i.business.name, i.get_media_type_display(),
@@ -166,13 +169,31 @@ def _trashed(request, pk, code):
     return item
 
 
+def _stop_publishing(item, user) -> None:
+    """Qotib qolgan/qayta urinayotgan nashrni to'xtatadi: kutayotgan vazifalar bekor, maqsadlar 'Xato', post 'Xato' holatiga o'tadi."""
+    from apps.jobs.models import Job
+    Job.objects.filter(type="publish_item", status__in=["pending", "running"], dedupe_key__startswith=f"pub:{item.pk}:").update(status="cancelled")
+    item.targets.filter(status__in=["pending", "publishing", "failed_retry"]).update(status="failed", error="Qo'lda to'xtatildi")
+    ContentItem.all_objects.filter(pk=item.pk, status__in=["publishing", "scheduled"]).update(status="failed")
+    audit("content.stop", user=user, business_id=item.business_id, target=f"item:{item.pk}", detail={"title": item.title})
+
+
+@login_required
+@require_POST
+def content_stop(request, pk):
+    item = get_obj(request, ContentItem, pk, "publish.publish")
+    _stop_publishing(item, request.user)
+    messages.success(request, "Nashr to'xtatildi. Postni tahrirlab qayta rejalashtirishingiz yoki o'chirishingiz mumkin.")
+    return redirect("content_detail", pk=item.pk)
+
+
 @login_required
 @require_POST
 def content_delete(request, pk):
     item = get_obj(request, ContentItem, pk, "calendar.delete")
     if item.status == "publishing":
-        messages.error(request, "Post hozir nashr qilinmoqda — tugagach o'chiring.")
-        return redirect("content_detail", pk=item.pk)
+        _stop_publishing(item, request.user)
+        item.refresh_from_db()
     was_live = item.status == "published"
     new_status = "draft" if item.status in ("scheduled", "failed") else item.status
     ContentItem.all_objects.filter(pk=item.pk).update(deleted_at=timezone.now(), deleted_by=request.user, status=new_status)
@@ -186,9 +207,12 @@ def content_delete(request, pk):
 def content_delete_many(request):
     ids = [int(x) for x in request.POST.getlist("ids") if x.isdigit()]
     n = 0
-    for item in _items(request, "calendar.delete").filter(pk__in=ids).exclude(status="publishing"):
+    for item in _items(request, "calendar.delete").filter(pk__in=ids):
         if not perms.can(request.user, "calendar.delete", item.business):
             continue
+        if item.status == "publishing":
+            _stop_publishing(item, request.user)
+            item.refresh_from_db()
         ContentItem.all_objects.filter(pk=item.pk).update(deleted_at=timezone.now(), deleted_by=request.user, status="draft" if item.status in ("scheduled", "failed") else item.status)
         n += 1
     messages.success(request, f"{n} ta post savatga o'tkazildi.") if n else messages.info(request, "Hech narsa tanlanmadi.")
@@ -487,23 +511,30 @@ def content_detail(request, pk):
             acts.append({"t": label, "post": f"{base}/holat/{new}/", "cls": cls})
     if item.status in ("draft", "scheduled", "failed") and perms.can(u, "publish.publish", item.business):
         acts.append({"t": "Hozir nashr qilish", "post": f"{base}/hozir/", "cls": "blue", "confirm": "Post hoziroq nashr qilinadi. Davom etasizmi?"})
-    if perms.can(u, "calendar.edit", item.business):
-        acts.append({"t": "✅ Tayyor, ko'rib chiqing", "post": f"{base}/tayyor/", "cls": "", "confirm": "Mas'ul/SMM mutaxassisga «tayyor» bildirishnomasi yuboriladi."})
+    if (item.status == "publishing" or (item.status == "scheduled" and item.targets.filter(status__in=["publishing", "failed_retry"]).exists())) and perms.can(u, "publish.publish", item.business):
+        acts.append({"t": "Nashrni to'xtatish", "post": f"{base}/toxtat/", "cls": "danger", "confirm": "Nashr to'xtatiladi va post «Xato» holatiga o'tadi. Davom etasizmi?"})
     if item.status in ("draft", "failed") and not item.scheduled_at and perms.can(u, "calendar.edit", item.business):
         acts.append({"t": "⚡ Eng yaxshi vaqtga qo'yish", "post": f"{base}/avto-vaqt/", "cls": "blue"})
     acts.append({"t": "Qoidalarni tekshirish", "post": f"{base}/tekshir/", "cls": ""})
     if (item.rule_status == "block" or item.targets.filter(status="blocked").exists()) and item.status != "published" and perms.can(u, "publish.publish", item.business):
         acts.append({"t": "⚠ Xatolarga qaramay nashr qilish", "post": f"{base}/majburan/", "cls": "danger",
                      "confirm": "Qoidalar xato topgan (masalan, tasdiqlanmagan telefon yoki chegirma). Siz mas'uliyatni o'z zimmangizga olib, postni baribir nashr qilasizmi?"})
-    if item.status != "publishing" and perms.can(u, "calendar.delete", item.business):
+    if perms.can(u, "calendar.delete", item.business):
         acts.append({"t": "O'chirish (savatga)", "post": f"{base}/ochir/", "cls": "danger",
                      "confirm": "Post savatga o'tadi (30 kun ichida tiklash mumkin)." + (" Platformada chiqqan post o'chmaydi." if item.status == "published" else "")})
     if item.targets.filter(status__in=["failed", "blocked"]).exists() and perms.can(u, "publish.publish", item.business):
         acts.append({"t": "Xatolarni qayta urinish", "post": f"{base}/qayta/", "cls": "primary"})
-    probs = []
-    for rc in item.rule_checks.order_by("-checked_at")[:3]:
+    probs, seen_pl, seen_msg = [], set(), set()
+    for rc in item.rule_checks.order_by("-checked_at")[:12]:
+        if rc.platform in seen_pl:      # har platforma uchun faqat oxirgi tekshiruv
+            continue
+        seen_pl.add(rc.platform)
         for p in rc.problems:
-            probs.append({"platform": rc.platform, "status": rc.status, "rule": p.get("rule_id", ""), "msg": p.get("message_uz") or p.get("message", "")})
+            msg = p.get("message_uz") or p.get("message", "")
+            if (rc.platform, msg) in seen_msg:
+                continue
+            seen_msg.add((rc.platform, msg))
+            probs.append({"platform": rc.platform, "status": rc.status, "rule": p.get("rule_id", ""), "msg": msg})
     targets = list(item.targets.select_related("account"))
     sel = {}
     for t in targets:
@@ -847,30 +878,6 @@ def content_asset_replace(request, pk, aid):
     return redirect("content_detail", pk=item.pk)
 
 
-@login_required
-@require_POST
-def content_ready(request, pk):
-    """Dizayner «tayyor» deb belgilaydi -> mas'ul/SMM'ga bildirishnoma (tasdiqlash emas)."""
-    from apps.accounts.models import User
-    from apps.core.notify import notify
-    item = get_obj(request, ContentItem, pk, "calendar.edit")
-    who = request.user.get_full_name() or request.user.username
-    note = (request.POST.get("note") or "").strip()[:300]
-    users = [item.assignee] if item.assignee_id else []
-    if not users and item.created_by_id and item.created_by_id != request.user.pk:
-        users = [item.created_by]
-    if not users:
-        users = [u for u in User.objects.filter(is_active=True) if u.pk != request.user.pk and not u.is_admin and perms.can(u, "calendar.edit", item.business)]
-    if item.design_status != "ready":
-        from apps.content import workflow
-        item.design_status = "ready"
-        item.save(update_fields=["design_status"])
-        workflow.add_comment(item, request.user, "Holat: Tayyor — ko'rib chiqing" + (f". {note}" if note else ""), kind="status")
-    n = notify("content.ready", f"Tayyor: {item.title or 'kontent'}", f"{who} faylni tayyorladi, ko'rib chiqing." + (f"\nIzoh: {note}" if note else ""),
-               business_id=item.business_id, link=f"/kalendar/{item.pk}/", users=users)
-    audit("content.ready", user=request.user, business_id=item.business_id, target=f"item:{item.pk}", detail={"title": item.title, "note": note})
-    messages.success(request, f"«Tayyor» belgisi yuborildi ({n} kishiga)." if n else "Bildirishnoma oluvchi topilmadi (mas'ul tayinlang).")
-    return redirect("content_detail", pk=item.pk)
 
 
 @login_required

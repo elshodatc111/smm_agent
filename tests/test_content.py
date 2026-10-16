@@ -159,7 +159,7 @@ def test_r2_cap_enforced(tmp_path, settings, admin, monkeypatch):
     f.write_bytes(b"x" * 8000)
     monkeypatch.setattr(temphost, "hosts", lambda fake_: [temphost.R2Host()])
     monkeypatch.setattr(temphost.R2Host, "available", lambda self, size: True)
-    monkeypatch.setattr(temphost.R2Host, "upload", lambda self, p, k, t: "https://r2/x")
+    monkeypatch.setattr(temphost.R2Host, "upload", lambda self, p, k, t, progress=None: "https://r2/x")
     temphost.host_file(str(f))
     with pytest.raises(temphost.WaitingForSpace):
         temphost.host_file(str(f))

@@ -7,10 +7,10 @@ from apps.content.models import ContentItem
 
 BUSINESS_UZ = {
     "name": ("Biznes nomi", "Mijozlar biladigan rasmiy nom.", "Masalan: ATKO o'quv markazi"),
-    "template": ("Biznes turi", "Tanlangan tur bo'yicha «Biznes pasporti» savollari, faktlar mavzulari va maslahatlar tayyorlanadi. Kerakli tur bo'lmasa: Sozlamalar → Biznes turlari.", ""),
+    "template": ("Biznes turi", "Tanlangan tur bo'yicha «Biznes pasporti» savollari va maslahatlar tayyorlanadi. Kerakli tur bo'lmasa: Sozlamalar → Biznes turlari.", ""),
     "industry": ("Soha", "Qaysi sohada ishlaysiz (1 qator).", "Masalan: Ta'lim; Grafik dizayn va SMM; Kafe; Kiyim do'koni"),
     "region": ("Hudud", "Qaysi shahar/tumanlarga xizmat ko'rsatasiz.", "Masalan: Toshkent shahri; Qarshi; butun O'zbekiston (onlayn)"),
-    "languages": ("Kontent tillari", "Vergul bilan: uz, ru, en", "uz, ru"),
+    "languages": ("Kontent tili", "Barcha kontent (reja, karusel, ssenariy, caption) FAQAT o'zbek tilida (lotin) yoziladi.", "uz"),
     "description": ("Biznes haqida", "AI shu matndan brend ovozini o'rganadi. 4-6 gap: kim siz, nimasi bilan ajralib turasiz, necha yildan beri, natijalar.", ""),
     "products": ("Xizmat / mahsulotlar", "Har qatorda bittadan: nomi (va kerak bo'lsa davomiyligi/narxi).", "Masalan:\nLogo va brend uslubi\nIjtimoiy tarmoq dizayni\nSMM yuritish"),
     "price_range": ("Narx oralig'i", "", "Masalan: logo 500 000 so'mdan; oylik xizmat 2 000 000 so'mdan"),
@@ -128,10 +128,10 @@ class ContentForm(forms.ModelForm):
     crop_x = forms.FloatField(required=False, min_value=0, max_value=1, widget=forms.HiddenInput)
     crop_y = forms.FloatField(required=False, min_value=0, max_value=1, widget=forms.HiddenInput)
     crop_zoom = forms.FloatField(required=False, min_value=1, max_value=4, widget=forms.HiddenInput)
-    music_source = forms.CharField(label="Musiqa / audio manbasi", required=False, max_length=200,
-                                   widget=forms.TextInput(attrs={"placeholder": "Masalan: CapCut bepul kutubxona, o'z ovozim, litsenziyali"}))
     tg_buttons = forms.CharField(label="Telegram tugmalari (har qatorda: Matn | https://havola)", required=False,
-                                 widget=forms.Textarea(attrs={"rows": 2, "placeholder": "Ro'yxatdan o'tish | https://example.com"}))
+                                 widget=forms.Textarea(attrs={"rows": 4, "placeholder": "Ro'yxatdan o'tish | https://example.com\nBog'lanish | https://t.me/username\nInstagram | https://instagram.com/... || YouTube | https://youtube.com/..."}))
+    tg_cols = forms.ChoiceField(label="Qatorda nechta tugma", required=False, initial="2",
+                                choices=[("1", "1 ta (uzun tugmalar)"), ("2", "2 ta (tavsiya etiladi)"), ("3", "3 ta (qisqa matnlar)")])
 
     class Meta:
         model = ContentItem
@@ -157,16 +157,19 @@ class ContentForm(forms.ModelForm):
             self.fields["yt_privacy"].initial = o.get("privacy", "public")
             self.fields["media_size"].initial = o.get("media_size", "orig")
             self.fields["fit_mode"].initial = o.get("fit_mode", "pad")
-            self.fields["music_source"].initial = o.get("music_source", "")
             c = o.get("crop") or {}
             self.fields["crop_x"].initial, self.fields["crop_y"].initial, self.fields["crop_zoom"].initial = c.get("x", 0.5), c.get("y", 0.5), c.get("z", 1)
-            self.fields["tg_buttons"].initial = "\n".join(f"{b.get('text', '')} | {b.get('url', '')}" for row in (o.get("buttons") or []) for b in row)
+            self.fields["tg_buttons"].initial = buttons_to_text(o.get("buttons") or [])
+            self.fields["tg_cols"].initial = str(o.get("btn_cols") or 2)
         for f in ("goal", "hook_idea", "cta", "notes", "assignee", "title", "brief", "due_at"):
             if f in self.fields:
                 self.fields[f].required = False
 
     def clean(self):
         d = super().clean()
+        if not (d.get("title") or "").strip() and (d.get("text") or "").strip():
+            from apps.content.richtext import to_plain
+            d["title"] = to_plain(d["text"]).strip().split("\n")[0][:80]     # nom kiritilmasa — matnning birinchi qatori
         mt = d.get("media_type")
         for pk in d.get("targets") or []:
             plat = self.account_platforms.get(str(pk))
@@ -177,25 +180,25 @@ class ContentForm(forms.ModelForm):
                 break
         return d
 
+    def clean_tg_cols(self):
+        v = (self.cleaned_data.get("tg_cols") or "2").strip()
+        return v if v in ("1", "2", "3") else "2"
+
     def clean_tg_buttons(self):
-        rows = []
-        for line in (self.cleaned_data.get("tg_buttons") or "").splitlines():
-            if not line.strip():
-                continue
-            txt, _, url = line.partition("|")
-            txt, url = txt.strip(), url.strip()
-            if not txt or not url.startswith(("http://", "https://", "tg://", "https://t.me")):
-                raise forms.ValidationError(f"Noto'g'ri qator: «{line.strip()}». Format: Matn | https://havola")
-            rows.append([{"text": txt[:64], "url": url}])
-        self._tg_rows = rows
-        return self.cleaned_data.get("tg_buttons")
+        raw = self.cleaned_data.get("tg_buttons") or ""
+        cols = (self.data.get(self.add_prefix("tg_cols")) or (self.fields["tg_cols"].initial or "2")).strip()
+        try:
+            self._tg_rows = parse_buttons(raw, int(cols) if cols in ("1", "2", "3") else 2)
+        except ValueError as e:
+            raise forms.ValidationError(str(e))
+        return raw
 
     def options_from_cleaned(self, base: dict | None = None) -> dict:
         o = dict(base or {})
         d = self.cleaned_data
         for k, v in (("title", (d.get("yt_title") or "").strip()), ("privacy", d.get("yt_privacy") or ""),
                      ("tags", [t.strip() for t in (d.get("yt_tags") or "").split(",") if t.strip()]),
-                     ("buttons", getattr(self, "_tg_rows", [])), ("music_source", (d.get("music_source") or "").strip()),
+                     ("buttons", getattr(self, "_tg_rows", [])), ("btn_cols", int(d.get("tg_cols") or 2) if getattr(self, "_tg_rows", None) else 0),
                      ("media_size", d.get("media_size") if d.get("media_size") not in (None, "", "orig") else ""),
                      ("fit_mode", d.get("fit_mode") if d.get("media_size") not in (None, "", "orig") else "")):
             if v:
@@ -216,3 +219,55 @@ class AssetForm(forms.Form):
 
 class SettingsForm(forms.Form):
     """Dinamik: maydonlar view'da qo'shiladi."""
+
+TG_URL_OK = ("http://", "https://", "tg://")
+TG_MAX_BUTTONS = 24
+
+
+def parse_buttons(raw: str, cols: int = 2) -> list[list[dict]]:
+    """«Matn | havola» qatorlaridan Telegram inline_keyboard yasaydi.
+
+    Oddiy qatorlar `cols` tadan bir qatorga joylanadi (sukut 2). Bir qatorda `||` bilan ajratilgan
+    tugmalar esa aynan shu qatorda, alohida satr bo'lib turadi."""
+    rows: list[list[dict]] = []
+    pack: list[dict] = []
+    total = 0
+
+    def one(piece: str, line: str) -> dict:
+        txt, _, url = piece.partition("|")
+        txt, url = txt.strip(), url.strip()
+        if not txt or not url.lower().startswith(TG_URL_OK) or " " in url:
+            raise ValueError(f"Noto'g'ri qator: «{line.strip()}». Format: Matn | https://havola")
+        return {"text": txt[:64], "url": url}
+
+    for line in (raw or "").splitlines():
+        if not line.strip():
+            continue
+        pieces = [p for p in line.split("||") if p.strip()]
+        btns = [one(p, line) for p in pieces]
+        total += len(btns)
+        if total > TG_MAX_BUTTONS:
+            raise ValueError(f"Tugmalar {TG_MAX_BUTTONS} tadan oshmasligi kerak.")
+        if len(btns) > 1:                        # aniq qator: `A | url || B | url`
+            if pack:
+                rows.append(pack)
+                pack = []
+            rows.append(btns[:8])
+            continue
+        pack.append(btns[0])
+        if len(pack) >= max(1, cols):
+            rows.append(pack)
+            pack = []
+    if pack:
+        rows.append(pack)
+    return rows
+
+
+def buttons_to_text(rows: list[list[dict]]) -> str:
+    """Saqlangan qatorlarni formaga qaytaradi: bir tugmali qator = bir satr, ko'p tugmali = `A | u || B | u`."""
+    lines = []
+    for row in rows:
+        items = [f"{b.get('text', '')} | {b.get('url', '')}" for b in row]
+        lines.append(" || ".join(items))
+    return "\n".join(lines)
+

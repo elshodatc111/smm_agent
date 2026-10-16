@@ -30,6 +30,9 @@ function sourceOf(ref) {
 // Faqat lokal tarmoq manzillariga yo'naltiriladi (open-redirect himoyasi)
 function isPrivateHost(h) {
   h = (h || "").toLowerCase();
+  // nip.io / sslip.io: "smm.192.168.1.200.nip.io" -> ichidagi IP lokal bo'lsa ruxsat
+  const m = h.match(/(?:^|\.)(\d{1,3}(?:\.\d{1,3}){3})\.(?:nip|sslip)\.io$/);
+  if (m) h = m[1];
   if (/^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)$/.test(h)) return true;
   // Nuqtasiz kompyuter nomi (masalan "smm") yoki .local/.lan/.home — internetda mavjud emas, faqat ichki tarmoq
   return /^[a-z0-9][a-z0-9-]*$/.test(h) || /\.(local|lan|home|internal|localdomain)$/.test(h);

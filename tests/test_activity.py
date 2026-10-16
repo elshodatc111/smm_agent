@@ -12,7 +12,7 @@ pytestmark = pytest.mark.django_db
 
 def _c(settings, name="actboss"):
     settings.USE_FAKES = True
-    call_command("seed_demo")
+    __import__("tests.demo_seed", fromlist=["seed"]).seed()
     u = User.objects.create_user(name, password="Boss#2026test!", is_admin=True)
     c = Client(); c.force_login(u)
     b = Business.objects.first()
@@ -104,11 +104,8 @@ def test_asset_manage_ready_studio_and_media_card(settings, tmp_path):
     a2 = it.assets.first()
     c.post(f"/kalendar/{it.pk}/fayl/{a2.pk}/almashtir/", {"file": img("new.jpg")})
     a2.refresh_from_db(); assert a2.size > 0
-    # tayyor
-    assert c.post(f"/kalendar/{it.pk}/tayyor/").status_code == 302
-    assert AuditLog.objects.filter(action="content.ready").exists()
     html = c.get(f"/kalendar/{it.pk}/").content.decode()
-    assert "/tayyor/" in html and "addPick" in html
+    assert "addPick" in html
     # karusel soni qoidasi
     from apps.content.rules import run_rules
     for x in it.assets.all()[1:]:

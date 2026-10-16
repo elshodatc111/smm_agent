@@ -50,7 +50,7 @@ Ketma-ketlik tavsiyasi: avval **Telegram** (eng oson, 10 daqiqa), keyin YouTube,
 
 ## Sinab ko'rish (kalitlarsiz demo)
 
-Hech qanday kalit olmasdan tizimni ko'rmoqchi bo'lsangiz: `.env` faylida `USE_FAKES=1` qiling, `seed_demo.bat` ni ishga tushiring. 3 ta namunaviy biznes, soxta ulanishlar va statistika paydo bo'ladi. Haqiqiy akkauntlarga hech narsa yuborilmaydi. Demo tugagach `USE_FAKES=0` qiling (yoki alohida papkada sinang).
+Kalitsiz sinash: `.env` faylida `USE_FAKES=1` qilsangiz AI va tarmoqlar soxta rejimda ishlaydi (haqiqiy akkauntlarga hech narsa yuborilmaydi). Demo tugagach `USE_FAKES=0` qiling.
 
 ## Har kunlik ishlatish
 

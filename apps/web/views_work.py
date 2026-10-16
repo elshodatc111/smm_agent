@@ -121,7 +121,6 @@ def template_initial(tpl: PostTemplate, business, accounts, when: date | None = 
     ini = {"title": fill_vars(tpl.title, business, when), "text": fill_vars(tpl.text, business, when), "media_type": tpl.media_type,
            "brief": tpl.brief, "yt_title": fill_vars(o.get("title", ""), business, when), "yt_tags": ", ".join(o.get("tags") or []),
            "yt_privacy": o.get("privacy", "public"), "media_size": o.get("media_size", "orig"), "fit_mode": o.get("fit_mode", "pad"),
-           "music_source": o.get("music_source", ""),
            "tg_buttons": "\n".join(f"{b.get('text', '')} | {b.get('url', '')}" for row in (o.get("buttons") or []) for b in row)}
     if tpl.platform:
         ini["targets"] = [str(a.pk) for a in accounts if a.platform == tpl.platform]
@@ -158,12 +157,119 @@ def template_list(request):
     for t in qs:
         use = ui.link("Ishlatish", f"/kalendar/yangi/?shablon={t.pk}") if can_c else "—"
         dele = ui.btn("O'chirish", f"/shablonlar/{t.pk}/ochir/", "danger sm", "Shablon o'chirilsinmi?") if perms.can(request.user, "calendar.delete", t.business) else "—"
+        edit = ui.link("Tahrirlash", f"/shablonlar/{t.pk}/tahrir/") if perms.can(request.user, "calendar.edit", t.business) else "—"
         rows.append([t.name, t.business.name, (t.platform or "hammasi").title(), t.get_media_type_display() if hasattr(t, "get_media_type_display") else t.media_type,
-                     (t.text or "")[:90], t.uses, use, dele])
-    blocks = [ui.table("Saqlangan shablonlar", ["Nomi", "Biznes", "Platforma", "Turi", "Matn", "Ishlatilgan", "", ""], rows,
-                       empty="Hali shablon yo'q. Post sahifasida «Shablon sifatida saqlash» tugmasini bosing."),
+                     (t.text or "")[:90], t.uses, use, edit, dele])
+    blocks = [ui.table("Saqlangan shablonlar", ["Nomi", "Biznes", "Platforma", "Turi", "Matn", "Ishlatilgan", "", "", ""], rows,
+                       empty="Hali shablon yo'q. «Yangi shablon» tugmasini bosing yoki post sahifasida «Shablon sifatida saqlash» tugmasidan foydalaning."),
               {"type": "text", "title": "O'zgaruvchilar", "text": "Shablon matnida quyidagilarni yozsangiz, post yaratilganda avtomatik almashtiriladi:\n" + VARS_HELP}]
-    return ui.page(request, "Post shablonlari", blocks, subtitle="Tez-tez takrorlanadigan postlar uchun tayyor qolip")
+    tb = [{"label": "Yangi shablon", "url": "/shablonlar/yangi/", "cls": "primary"}] if can_c else []
+    return ui.page(request, "Post shablonlari", blocks, subtitle="Tez-tez takrorlanadigan postlar uchun tayyor qolip", toolbar=tb)
+
+
+def _tpl_apply(request, t: PostTemplate) -> str:
+    """POST ma'lumotlarini shablonga yozadi; xato bo'lsa matn qaytaradi."""
+    from apps.web.forms import ALLOWED_TYPES, parse_buttons
+    from apps.content.models import TempObject
+    P = request.POST
+    name = (P.get("name") or "").strip()[:120]
+    if not name:
+        return "Shablon nomini kiriting."
+    plat = P.get("platform", "")
+    if plat and plat not in ALLOWED_TYPES:
+        return "Platforma noto'g'ri."
+    mt = P.get("media_type", "text")
+    if plat and mt not in ALLOWED_TYPES[plat]:
+        return f"«{plat.title()}» uchun bu post turi mumkin emas."
+    hint = (P.get("time_hint") or "").strip()
+    if hint:
+        try:
+            datetime.strptime(hint, "%H:%M")
+        except ValueError:
+            return "Vaqt HH:MM ko'rinishida bo'lsin (masalan 10:00)."
+    o = dict(t.options or {})
+    for k in ("title", "tags", "privacy", "buttons", "btn_cols", "weekday", "cloud_ids"):
+        o.pop(k, None)
+    if (P.get("yt_title") or "").strip():
+        o["title"] = P["yt_title"].strip()[:100]
+    tags = [x.strip() for x in (P.get("yt_tags") or "").split(",") if x.strip()]
+    if tags:
+        o["tags"] = tags[:30]
+    if P.get("yt_privacy"):
+        o["privacy"] = P["yt_privacy"]
+    cols = P.get("tg_cols") if P.get("tg_cols") in ("1", "2", "3") else "2"
+    rows = parse_buttons(P.get("tg_buttons", ""), int(cols)) if (P.get("tg_buttons") or "").strip() else []
+    if rows:
+        o["buttons"], o["btn_cols"] = rows, int(cols)
+    if P.get("weekday", "").isdigit() and 0 <= int(P["weekday"]) <= 6:
+        o["weekday"] = int(P["weekday"])
+    ids = [int(x) for x in P.getlist("cloud_ids") if x.isdigit()]
+    ok = set(TempObject.objects.filter(pk__in=ids, status="uploaded").filter(Q(business=t.business) | Q(item__business=t.business)).values_list("pk", flat=True))
+    ids = [i for i in ids if i in ok][:10]
+    if ids:
+        o["cloud_ids"] = ids
+    t.name, t.platform, t.media_type, t.title, t.text, t.brief, t.time_hint, t.options = name, plat, mt, (P.get("title") or "").strip()[:200], P.get("text", ""), P.get("brief", ""), hint, o
+    return ""
+
+
+def _tpl_form(t: PostTemplate | None = None):
+    """Shablon formasi (yaratish/tahrirlash) — oddiy server-render forma."""
+    from django import forms
+    from apps.web.forms import ALLOWED_TYPES, buttons_to_text
+    TYPE_UZ = {"text": "Matn", "image": "Rasm", "video": "Video", "album": "Albom", "carousel": "Karusel", "reel": "Reels", "story": "Stories", "short": "Shorts"}
+    all_types = sorted({m for v in ALLOWED_TYPES.values() for m in v})
+
+    class TplForm(forms.Form):
+        name = forms.CharField(label="Shablon nomi", max_length=120)
+        platform = forms.ChoiceField(label="Platforma", required=False, choices=[("", "Hammasi")] + [(k, k.title()) for k in ALLOWED_TYPES])
+        media_type = forms.ChoiceField(label="Post turi", choices=[(m, TYPE_UZ.get(m, m)) for m in all_types],
+                                       help_text="Tanlangan platformaga mos tur bo'lishi kerak (masalan, Telegramda Reels yo'q).")
+        title = forms.CharField(label="Sarlavha", required=False, max_length=200)
+        text = forms.CharField(label="Matn", required=False, widget=forms.Textarea(attrs={"rows": 6}), help_text="O'zgaruvchilar: " + VARS_HELP)
+        brief = forms.CharField(label="Dizayner uchun izoh", required=False, widget=forms.Textarea(attrs={"rows": 2}))
+        weekday = forms.ChoiceField(label="Hafta kuni", required=False, choices=[("", "— tanlanmagan —")] + [(str(i), d) for i, d in enumerate(["Dushanba", "Seshanba", "Chorshanba", "Payshanba", "Juma", "Shanba", "Yakshanba"])])
+        time_hint = forms.CharField(label="Tayyor vaqt (HH:MM)", required=False, max_length=5, widget=forms.TextInput(attrs={"placeholder": "10:00"}))
+        tg_buttons = forms.CharField(label="Telegram tugmalari (har qatorda: Matn | https://havola)", required=False, widget=forms.Textarea(attrs={"rows": 3}))
+        tg_cols = forms.ChoiceField(label="Qatorda nechta tugma", required=False, initial="2", choices=[("1", "1 ta"), ("2", "2 ta"), ("3", "3 ta")])
+        yt_title = forms.CharField(label="YouTube sarlavhasi", required=False, max_length=100)
+        yt_tags = forms.CharField(label="YouTube teglari (vergul bilan)", required=False)
+        yt_privacy = forms.ChoiceField(label="YouTube ko'rinishi", required=False, choices=[("public", "Hammaga"), ("unlisted", "Havola bilan"), ("private", "Yopiq")])
+
+    ini = {}
+    if t is not None:
+        o = t.options or {}
+        ini = {"name": t.name, "platform": t.platform, "media_type": t.media_type, "title": t.title, "text": t.text, "brief": t.brief, "time_hint": t.time_hint,
+               "weekday": str(o["weekday"]) if "weekday" in o else "", "tg_buttons": buttons_to_text(o.get("buttons") or []), "tg_cols": str(o.get("btn_cols") or 2),
+               "yt_title": o.get("title", ""), "yt_tags": ", ".join(o.get("tags") or []), "yt_privacy": o.get("privacy", "public")}
+    return TplForm(initial=ini)
+
+
+@login_required
+@require_permission("calendar.view")
+def template_save(request, pk=None):
+    from django.shortcuts import render
+    if pk:
+        t = get_obj(request, PostTemplate, pk, "calendar.edit")
+    else:
+        if not request.business:
+            messages.error(request, "Avval yuqoridan biznesni tanlang.")
+            return redirect("template_list")
+        if not perms.can(request.user, "calendar.create", request.business):
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied
+        t = PostTemplate(business=request.business, created_by=request.user)
+    if request.method == "POST":
+        err = _tpl_apply(request, t)
+        if err:
+            messages.error(request, err)
+            form = _tpl_form(t if pk else None)
+            return render(request, "form.html", {"title": "Shablon", "form": form, "back": "/shablonlar/", "submit": "Saqlash"})
+        t.save()
+        audit("template.update" if pk else "template.create", user=request.user, business_id=t.business_id, target=f"tpl:{t.pk}", detail={"name": t.name})
+        messages.success(request, f"«{t.name}» shabloni saqlandi.")
+        return redirect("template_list")
+    return render(request, "form.html", {"title": f"Shablon: {t.name}" if pk else "Yangi shablon", "form": _tpl_form(t if pk else None),
+                                         "back": "/shablonlar/", "submit": "Saqlash"})
 
 
 @login_required

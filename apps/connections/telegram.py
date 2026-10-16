@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from .base import (AccountInfo, AccountStats, AuthError, Capability, Credentials, DryRunReport,
                    HealthResult, LimitProfile, MediaType, Page, PermissionMissingError, Platform, PostMetrics, PublishRequest, PublishResult, RuleProblem)
 from .http import request
+from apps.content import richtext
 from .public_tme import PublicChannelScraper
 
 API = "https://api.telegram.org"
@@ -30,9 +31,14 @@ class TelegramChannelConnector:
     def _call(self, method: str, **params):
         token = self.bot.token() if self.bot else self.account.credentials().get("bot_token", "")
         files = params.pop("_files", None)
+        timeout = 30
+        if files:   # yuklash vaqti fayl hajmiga qarab: ~0,3 MB/s deb hisoblab, kamida 2 daqiqa
+            import os
+            mb = sum(os.path.getsize(f.name) for f in files.values() if getattr(f, "name", None) and os.path.exists(f.name)) / 1e6
+            timeout = (15, int(min(900, max(120, mb * 4))))
         resp = request("POST", f"{API}/bot{token}/{method}", key=f"tgbot:{token[:8]}",
                        min_interval=self.limits.min_interval_sec, jitter=self.limits.jitter_sec,
-                       data=params if files else None, json=None if files else params, files=files)
+                       data=params if files else None, json=None if files else params, files=files, timeout=timeout)
         j = resp.json()
         if not j.get("ok"):
             raise AuthError(str(j.get("description")))
@@ -104,9 +110,11 @@ class TelegramChannelConnector:
     def dry_run(self, req: PublishRequest) -> DryRunReport:
         probs = []
         limit = 1024 if req.media_paths else 4096
-        if req.text and len(req.text) > limit:
-            probs.append(RuleProblem("tg.text_length", "block", f"Matn {limit} belgidan oshmasligi kerak.", "text"))
-        if not req.text and not req.media_paths:
+        if req.text and richtext.visible_len(req.text) > limit:
+            probs.append(RuleProblem("tg.text_length", "block", f"Matn {limit} belgidan oshmasligi kerak (teglar hisobga olinmaydi).", "text"))
+        if req.media_type in (MediaType.IMAGE, MediaType.VIDEO, MediaType.ALBUM, MediaType.REEL, MediaType.SHORT) and not req.media_paths:
+            probs.append(RuleProblem("tg.no_media", "block", "Post turi rasm/video, lekin fayl biriktirilmagan. «Fayl qo'shish» tugmasi bilan fayl qo'shing."))
+        elif not req.text and not req.media_paths:
             probs.append(RuleProblem("tg.empty", "block", "Matn yoki media kerak."))
         try:
             self._check_admin(self._call("getChat", chat_id=self.chat)["id"])
@@ -115,9 +123,9 @@ class TelegramChannelConnector:
         return DryRunReport(not any(p.severity == "block" for p in probs), probs)
 
     def publish(self, req: PublishRequest) -> PublishResult:
-        text = req.text or ""
-        markup = req.options.get("buttons")
         extra = {"parse_mode": req.options.get("parse_mode", "HTML")}
+        text = richtext.sanitize_tg(req.text) if extra["parse_mode"] == "HTML" else (req.text or "")
+        markup = req.options.get("buttons")
         if markup:
             extra["reply_markup"] = json.dumps({"inline_keyboard": markup})
         paths = req.media_paths

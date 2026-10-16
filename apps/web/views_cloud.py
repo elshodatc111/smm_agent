@@ -21,7 +21,7 @@ from apps.content.models import TempObject
 from apps.core.settings_store import get_setting, set_setting
 from apps.jobs.queue import enqueue
 
-STATUS_UZ = {"pending": ("Yuklanmoqda…", "warn"), "uploaded": ("Yuklangan", "ok"), "failed": ("Xato", "bad"), "deleted": ("O'chirilgan", "")}
+STATUS_UZ = {"uploading": ("Yuklanmoqda…", "warn"), "pending": ("Cloudflare'ga…", "warn"), "uploaded": ("Yuklangan", "ok"), "failed": ("Xato", "bad"), "deleted": ("O'chirilgan", "")}
 PLAT_UZ = {"telegram": "Telegram", "instagram": "Instagram", "youtube": "YouTube"}
 
 
@@ -74,7 +74,7 @@ def cloud_home(request):
         if o.item_id:
             plats = ", ".join(sorted({PLAT_UZ.get(t.account.platform, t.account.platform) for t in o.item.targets.select_related("account")}))
         rows.append({"o": o, "kind": _kind(o), "url": temphost.view_url(o), "label": label, "cls": cls, "size": _mb(o.size), "plats": plats,
-                     "item_status": o.item.get_status_display() if o.item_id else ""})
+                     "item_status": o.item.get_status_display() if o.item_id else "", "progress": o.progress or 0})
     used, limit = temphost.r2_used_bytes(), temphost.r2_limit_bytes()
     r2_ok = temphost.R2Host().available(0)
     kv_ok = bool(get_setting("worker.cloudflare_url"))
@@ -83,8 +83,19 @@ def cloud_home(request):
         "r2_ok": r2_ok, "kv_ok": kv_ok, "auto": get_setting("cloud.auto_upload", True), "flt": flt, "show": show, "q": q, "tag": tag, "all_tags": all_tags,
         "can_edit": perms.can(request.user, "publish.publish", request.business) if request.business else request.user.is_admin,
         "has_business": bool(request.business), "bucket": get_setting("r2.bucket", ""),
+        "busy": _scope(request).filter(status__in=["uploading", "pending"]).exists(), "config_error": _config_error(),
         "counts": {k: _scope(request).filter(status=k).count() for k in STATUS_UZ},
     })
+
+
+def _config_error() -> str:
+    if settings.USE_FAKES or not get_setting("r2.bucket"):
+        return ""
+    try:
+        temphost.r2_bucket()
+    except Exception as e:  # noqa: BLE001
+        return getattr(e, "user_message_uz", str(e))
+    return ""
 
 
 def _need_edit(request):
@@ -126,6 +137,97 @@ def cloud_upload_manual(request):
     return redirect("cloud_home")
 
 
+_OK_EXT = (".jpg", ".jpeg", ".png", ".webp", ".mp4", ".mov", ".m4v", ".gif", ".pdf")
+MAX_UPLOAD = 2 * 1024 ** 3
+
+
+def _part_path(o: TempObject) -> str:
+    return o.local_path
+
+
+@login_required
+@require_POST
+def cloud_chunk_start(request):
+    """Brauzerdan bo'laklab yuklashni boshlaydi: {name,size,tags} -> {id, chunk}."""
+    _need_edit(request)
+    if not request.business:
+        return JsonResponse({"detail": "Avval biznesni tanlang."}, status=400)
+    if not temphost.configured(settings.USE_FAKES):
+        return JsonResponse({"detail": "Cloudflare R2 sozlanmagan: Sozlamalar → Kalitlar."}, status=400)
+    err = _config_error()
+    if err:
+        return JsonResponse({"detail": err}, status=400)
+    name = (request.POST.get("name") or "fayl")[:200]
+    ext = os.path.splitext(name)[1].lower()
+    try:
+        size = int(request.POST.get("size") or 0)
+    except ValueError:
+        size = 0
+    if ext not in _OK_EXT:
+        return JsonResponse({"detail": f"«{name}» turi qo'llanmaydi (rasm, mp4/mov, pdf)."}, status=400)
+    if size <= 0 or size > MAX_UPLOAD:
+        return JsonResponse({"detail": "Fayl hajmi 2 GB dan oshmasligi kerak."}, status=400)
+    d = os.path.join(str(settings.MEDIA_ROOT), "cloud_manual")
+    os.makedirs(d, exist_ok=True)
+    key = f"{uuid.uuid4().hex}{ext}"
+    path = os.path.join(d, key)
+    open(path, "wb").close()
+    o = TempObject.objects.create(key=key, status="uploading", business=request.business, size=size, filename=name, local_path=path,
+                                  tags=",".join(_split_tags(request.POST.get("tags", ""))))
+    return JsonResponse({"id": o.pk, "chunk": CHUNK})
+
+
+CHUNK = 8 * 1024 * 1024
+
+
+@login_required
+@require_POST
+def cloud_chunk_put(request, pk):
+    """Bitta bo'lak: file=<bo'lak>, offset=<boshlanish>. Qayta yuborilsa (offset bir xil) ustiga yozadi — uzilgan joydan davom etadi."""
+    _need_edit(request)
+    o = _get(request, pk)
+    f = request.FILES.get("chunk")
+    if o.status != "uploading" or not f or not o.local_path:
+        return JsonResponse({"detail": "Yuklash faol emas."}, status=400)
+    try:
+        offset = int(request.POST.get("offset", "0"))
+    except ValueError:
+        return JsonResponse({"detail": "offset noto'g'ri"}, status=400)
+    have = os.path.getsize(o.local_path) if os.path.exists(o.local_path) else 0
+    if offset > have or offset + f.size > o.size + 1024:
+        return JsonResponse({"detail": "Bo'lak tartibi buzildi", "have": have}, status=409)
+    with open(o.local_path, "r+b") as out:
+        out.seek(offset)
+        out.truncate(offset)
+        for ch in f.chunks():
+            out.write(ch)
+    got = offset + f.size
+    o.progress = min(99, int(got * 100 / max(o.size, 1)))
+    o.save(update_fields=["progress"])
+    return JsonResponse({"ok": True, "have": got})
+
+
+@login_required
+@require_POST
+
+
+@login_required
+@require_POST
+def cloud_chunk_done(request, pk):
+    _need_edit(request)
+    o = _get(request, pk)
+    if o.status != "uploading":
+        return JsonResponse({"detail": "Yuklash faol emas."}, status=400)
+    have = os.path.getsize(o.local_path) if o.local_path and os.path.exists(o.local_path) else 0
+    if have != o.size:
+        return JsonResponse({"detail": f"Fayl to'liq kelmadi ({have} / {o.size} bayt). Qayta yuklang."}, status=409)
+    o.status, o.progress = "pending", 0
+    o.save(update_fields=["status", "progress"])
+    enqueue("cloud_upload", {"temp_id": o.pk}, queue="media", business_id=o.business_id, dedupe_key=f"cu:{o.pk}")
+    audit("cloud.upload", user=request.user, business_id=o.business_id, target=f"cloud:{o.pk}", detail={"file": o.filename, "size": o.size})
+    return JsonResponse({"ok": True})
+
+
 @login_required
 @require_POST
 def cloud_delete(request, pk):
@@ -133,6 +235,11 @@ def cloud_delete(request, pk):
     o = _get(request, pk)
     if o.status != "deleted":
         temphost.delete_object(o, fake=settings.USE_FAKES)
+        if o.local_path and not o.asset_id:
+            try:
+                os.remove(o.local_path)
+            except OSError:
+                pass
     audit("cloud.delete", user=request.user, business_id=o.business_id or (o.item.business_id if o.item_id else None), target=f"cloud:{o.pk}", detail={"file": o.filename})
     messages.success(request, f"«{o.filename or o.key}» Cloudflare'dan o'chirildi.")
     return redirect(request.POST.get("next") or "cloud_home")

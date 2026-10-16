@@ -56,3 +56,8 @@ class Command(BaseCommand):
             for b in Business.objects.all()[:2]:
                 UserBusinessAccess.objects.create(user=u, business=b, role=role)
         self.stdout.write(self.style.SUCCESS("Demo tayyor. Kirish: o'zingiz yaratgan admin; demo menejer: menejer / Menejer#2026demo"))
+
+
+def seed():
+    """Testlar uchun demo ma'lumotlar (avval `seed_demo` buyrug'i edi, endi faqat testlarda)."""
+    Command().handle()

@@ -10,13 +10,11 @@ def ensure_templates():
     from .types_data import TYPES
     for key, t in TYPES.items():
         obj, created = BusinessTemplate.objects.get_or_create(key=key, defaults={
-            "name": t["name"], "config": t["config"], "profile_fields": t["fields"], "topics": t["topics"], "is_system": True, "sort": t.get("sort", 50)})
+            "name": t["name"], "config": t["config"], "profile_fields": t["fields"], "is_system": True, "sort": t.get("sort", 50)})
         if not created:
             upd = []
             if not obj.profile_fields:
                 obj.profile_fields = t["fields"]; upd.append("profile_fields")
-            if not obj.topics and t["topics"]:
-                obj.topics = t["topics"]; upd.append("topics")
             if not obj.is_system:
                 obj.is_system = True; upd.append("is_system")
             if not obj.config:

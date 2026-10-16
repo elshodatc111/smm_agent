@@ -71,8 +71,7 @@ details.more summary{cursor:pointer;font-weight:600;margin-top:16px}
         <div class="row" style="margin-top:6px"><button type="button" class="btn sm" id="sizeRecBtn">📐 Tavsiya etilgan o'lchamni qo'yish</button></div>
         <div class="hint">Fayl yuborishdan oldin tizim o'zi shu o'lchamga keltiradi (asl fayl saqlanadi). Video uchun kompyuterda ffmpeg o'rnatilgan bo'lishi kerak.</div>
         <label for="id_fit_mode">{{ form.fit_mode.label }}</label>{{ form.fit_mode }}{{ form.crop_x }}{{ form.crop_y }}{{ form.crop_zoom }}</div>
-      <div id="musicBox" style="display:none"><label for="id_music_source">{{ form.music_source.label }}</label>{{ form.music_source }}
-        <div class="hint">Audio montajda (CapCut va h.k.) videoga qo'shiladi — Instagram API orqali trend audioni nashr paytida biriktirib bo'lmaydi.</div></div></div>
+      </div>
 
     <div id="ytBox" style="display:none" class="box"><b>YouTube</b>
       <label for="id_yt_title">{{ form.yt_title.label }}</label>{{ form.yt_title }}{{ form.yt_title.errors }}
@@ -233,7 +232,6 @@ details.more summary{cursor:pointer;font-weight:600;margin-top:16px}
     fi.accept=vid?'video/*':(mt==='story'?'image/*,video/*':'image/*');
     $('fileHint').textContent={image:'1 ta rasm (JPG/PNG/WEBP).',album:'2–10 ta rasm/video.',carousel:'2–10 ta rasm/video.',video:'1 ta video (MP4/MOV).',short:'Vertikal (9:16) video, ≤60 soniya.',reel:'Vertikal (9:16) video, 90 soniyagacha.',story:'Vertikal (9:16) rasm yoki video.'}[mt]||'';
     document.querySelectorAll('.acc').forEach(function(l){l.classList.toggle('on',l.querySelector('input').checked)});
-    $('musicBox').style.display=(['video','reel','short','story'].indexOf(mt)>=0)?'block':'none';
     PV.render();cropUI();
     var pf=plats()[0];if(pf)PV.show(pf);
   }

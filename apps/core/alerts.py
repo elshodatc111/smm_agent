@@ -188,7 +188,7 @@ def g_sqlite(p):
     except OSError:
         return
     if mb >= p:
-        yield A(None, "sq", f"SQLite bazasi katta ({mb:.0f} MB)", "Tezlik va ishonchlilik uchun MySQL'ga o'tish tavsiya etiladi: mysql_otish.bat (Yo'riqnoma: MySQL'ga o'tish).", "info", "/yoriqnoma/", 30)
+        yield A(None, "sq", f"SQLite bazasi katta ({mb:.0f} MB)", "Tezlik va ishonchlilik uchun MySQL tavsiya etiladi (Yo'riqnoma: MySQL).", "info", "/yoriqnoma/", 30)
 
 
 # kod, nom, izoh, parametr (nom, standart, birlik), default yoqilgan, funksiya, global?

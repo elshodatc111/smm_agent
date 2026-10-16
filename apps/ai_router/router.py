@@ -124,7 +124,7 @@ class AIRouter:
         if req.system_extra:
             parts.append(req.system_extra)
         if req.require_lang == "uz":
-            parts.append("Javobni o'zbek tilida (lotin alifbosida), sodda va tushunarli yoz. Narx, chegirma, muddat, telefon "
+            parts.append("Javobni FAQAT o'zbek tilida (lotin alifbosida) yoz; rus tili va kirill yozuvidan foydalanma. Sodda va tushunarli bo'lsin. Narx, chegirma, muddat, telefon "
                          "va manzilni FAQAT yuqoridagi biznes ma'lumotidan ol; o'ylab topma.")
         return "\n\n".join(parts), bv
 

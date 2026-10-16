@@ -12,8 +12,8 @@ from . import views_preview as pv
 from . import views_pwa as pw
 from . import views_ads as ad
 from . import views_inbox as ib
-from . import views_facts as fc
 from . import views_goals as gl
+from . import views_reja as rj
 from . import views_tools as t
 from . import views_types as vt
 from . import views_work as w
@@ -92,6 +92,7 @@ urlpatterns = [
     path("kalendar/<int:pk>/tekshir/", c.content_check, name="content_check"),
     path("kalendar/<int:pk>/override/", c.content_override, name="content_override"),
     path("kalendar/<int:pk>/majburan/", c.content_force, name="content_force"),
+    path("kalendar/<int:pk>/toxtat/", c.content_stop, name="content_stop"),
     path("kalendar/<int:pk>/qayta/", c.content_retry, name="content_retry"),
     path("kalendar/<int:pk>/ai-korildi/", c.content_ai_reviewed, name="content_ai_reviewed"),
     path("kalendar/<int:pk>/fayl/", c.content_asset, name="content_asset"),
@@ -99,7 +100,6 @@ urlpatterns = [
     path("kalendar/<int:pk>/fayl/<int:aid>/almashtir/", c.content_asset_replace, name="content_asset_replace"),
     path("kalendar/avto-vaqt/", c.content_autotime_many, name="content_autotime_many"),
     path("kalendar/<int:pk>/avto-vaqt/", c.content_autotime, name="content_autotime"),
-    path("kalendar/<int:pk>/tayyor/", c.content_ready, name="content_ready"),
     path("kalendar/<int:pk>/fayl/<int:aid>/surish/", w.content_asset_move, name="content_asset_move"),
     path("kalendar/<int:pk>/koch/", w.content_move, name="content_move"),
     path("kalendar/<int:pk>/nusxa/", w.content_duplicate, name="content_duplicate"),
@@ -117,14 +117,24 @@ urlpatterns = [
     path("ogohlantirishlar/", g.alerts_home, name="alerts_home"),
     path("shablonlar/", w.template_list, name="template_list"),
     path("shablonlar/<int:pk>/ochir/", w.template_delete, name="template_delete"),
+    path("shablonlar/yangi/", w.template_save, name="template_new"),
+    path("shablonlar/<int:pk>/tahrir/", w.template_save, name="template_edit"),
+    path("shablonlar/<int:pk>/saqlash/", w.template_save, name="template_save"),
     path("vazifalar/", w.my_tasks, name="my_tasks"),
     path("qidiruv/", w.global_search, name="global_search"),
     path("nashr-jurnali/", c.publish_log, name="publish_log"),
     # studiya
     path("studiya/", t.studio_home, name="studio_home"),
-    path("studiya/reja/", t.studio_plan, name="studio_plan"),
-    path("studiya/reja/<int:pk>/", t.studio_plan_view, name="studio_plan_view"),
-    path("studiya/reja/<int:pk>/yuklash/", t.studio_plan_load, name="studio_plan_load"),
+    path("studiya/reja/", rj.studio_plan_redirect, name="studio_plan"),
+    path("studiya/reja/<int:pk>/", rj.studio_plan_redirect, name="studio_plan_view"),
+    path("reja/", rj.reja_home, name="reja_home"),
+    path("reja/yaratish/", rj.reja_create, name="reja_create"),
+    path("reja/<int:pk>/", rj.reja_view, name="reja_view"),
+    path("reja/<int:pk>/amal/", rj.reja_action, name="reja_action"),
+    path("karusel/", rj.carousel_home, name="carousel_home"),
+    path("karusel/yaratish/", rj.carousel_create, name="carousel_create"),
+    path("karusel/<int:pk>/", rj.carousel_view, name="carousel_view"),
+    path("karusel/<int:pk>/amal/", rj.carousel_action, name="carousel_action"),
     path("studiya/ssenariy/", t.studio_script, name="studio_script"),
     path("studiya/ssenariy/<int:pk>/", t.studio_script_view, name="studio_script_view"),
     path("studiya/ssenariy/<int:pk>/tahlil/", t.studio_script_analyze, name="studio_script_analyze"),
@@ -141,6 +151,9 @@ urlpatterns = [
     path("faoliyat/", ac.activity_log, name="activity_log"),
     path("cloudflare/", cl.cloud_home, name="cloud_home"),
     path("cloudflare/tanlash/", cl.cloud_pick, name="cloud_pick"),
+    path("cloudflare/yuklash/boshlash/", cl.cloud_chunk_start, name="cloud_chunk_start"),
+    path("cloudflare/<int:pk>/bolak/", cl.cloud_chunk_put, name="cloud_chunk_put"),
+    path("cloudflare/<int:pk>/tugatish/", cl.cloud_chunk_done, name="cloud_chunk_done"),
     path("cloudflare/yuklash/", cl.cloud_upload_manual, name="cloud_upload_manual"),
     path("cloudflare/tanlangan-ochir/", cl.cloud_delete_many, name="cloud_delete_many"),
     path("cloudflare/tozalash/", cl.cloud_cleanup_published, name="cloud_cleanup_published"),
@@ -157,14 +170,6 @@ urlpatterns = [
     path("reklama/taklif/<int:pk>/holat/", ad.ads_proposal_status, name="ads_proposal_status"),
     path("reklama/taklif/<int:pk>/qayta/", ad.ads_proposal_redo, name="ads_proposal_redo"),
     path("reklama/taklif/<int:pk>/pdf/", ad.ads_proposal_pdf, name="ads_proposal_pdf"),
-    # faktlar va yangiliklar
-    path("faktlar/", fc.facts_home, name="facts_home"),
-    path("faktlar/yangilash/", fc.facts_refresh_now, name="facts_refresh_now"),
-    path("faktlar/yonalishlar/", fc.facts_topics, name="facts_topics"),
-    path("faktlar/yonalishlar/<int:pk>/<str:action>/", fc.facts_topic_action, name="facts_topic_action"),
-    path("faktlar/manbalar/", fc.facts_sources, name="facts_sources"),
-    path("faktlar/manbalar/<int:pk>/<str:action>/", fc.facts_source_action, name="facts_source_action"),
-    path("faktlar/taklif/<int:pk>/holat/", fc.facts_suggestion_status, name="facts_suggestion_status"),
     # maqsadlar
     path("maqsadlar/", gl.goals_home, name="goals_home"),
     path("maqsadlar/yangi/", gl.goal_new, name="goal_new"),
