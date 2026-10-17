@@ -1,0 +1,18 @@
+{% extends "base.html" %}{% load onlinetags %}{% block title %}{{ title }}{% endblock %}
+{% block content %}{% include "partials/online_head.html" %}
+{% if todo %}<div class="callout warn"><b>!</b><div><b>Ishga tushirishdan oldin:</b><ul style="margin:6px 0 0 18px">{% for t in todo %}<li>{{ t }}</li>{% endfor %}</ul></div></div>{% endif %}
+{% if can_publish %}<div class="row" style="margin-bottom:8px;gap:8px;flex-wrap:wrap">
+<form method="post" action="{% url 'online_publish' p.pk %}">{% csrf_token %}<button class="btn primary">⚙️ Botni sozlash va ishga tushirish</button></form>
+<form method="post" action="{% url 'online_status' p.pk %}">{% csrf_token %}<button class="btn">{% if p.status == 'active' %}⏸ To'xtatish{% else %}▶️ Yoqish{% endif %}</button></form></div>{% endif %}
+{% if p.last_check %}<div class="card"><div class="row sb"><h2 style="margin:0">Tekshiruv natijasi</h2><span class="muted sm">{{ p.last_check_at|date:"d.m.Y H:i" }}</span></div>
+{% for c in p.last_check %}<div class="row" style="gap:8px;padding:4px 0"><span>{% if c.ok %}✅{% else %}⚠️{% endif %}</span><div><b>{{ c.label }}</b>{% if c.msg %}<div class="muted sm">{{ c.msg }}</div>{% endif %}</div></div>{% endfor %}</div>{% endif %}
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(230px,1fr));margin-top:12px">
+{% for label, s in periods %}<div class="card"><div class="muted sm">{{ label }}</div>
+<div style="font-size:22px;font-weight:700">{{ s.sales }} <span class="muted sm" style="font-weight:400">sotuv</span></div>
+<div class="sm">💰 {{ s.revenue|money }} so'm</div><div class="sm">👥 {{ s.leads }} lead · 📱 {{ s.phones }} telefon</div><div class="sm">🎯 konversiya {{ s.conv }}%</div></div>{% endfor %}</div>
+<div class="grid g2 mt">
+<div class="card"><h2>Obunalar</h2>{% with s=periods.3.1 %}<div class="sm">✅ Faol obunachilar: <b>{{ s.active_subs }}</b></div><div class="sm">⏰ 7 kunda tugaydi: <b>{{ s.expiring }}</b></div><div class="sm">⏳ Kutilayotgan to'lovlar: <b>{{ s.pending }}</b></div><div class="sm">❌ Rad etilgan: {{ s.rejected }}</div>{% endwith %}</div>
+<div class="card"><h2>Kutilayotgan to'lovlar</h2>{% for x in pending %}<div class="row sb" style="padding:4px 0"><div><b>#{{ x.pk }}</b> {{ x.lead.full_name }} · {{ x.amount|money }} so'm{% if x.duplicate %} <span class="badge bad">takror chek</span>{% endif %}</div><a class="btn sm" href="{% url 'online_payments' p.pk %}?st=pending">Ko'rish</a></div>{% empty %}<div class="muted">Yo'q.</div>{% endfor %}</div></div>
+<div class="card mt"><h2>So'nggi 30 kun</h2><div class="muted sm">Ko'k — yangi leadlar, yashil — sotuvlar</div>
+<div style="display:flex;align-items:flex-end;gap:3px;height:110px;margin-top:8px">{% for r in series %}<div title="{{ r.d|date:'d.m' }}: {{ r.leads }} lead, {{ r.sales }} sotuv" style="flex:1;display:flex;gap:1px;align-items:flex-end;height:100%"><i style="flex:1;background:var(--brand-2);height:{{ r.lh }}%;min-height:{% if r.leads %}2px{% else %}0{% endif %};border-radius:2px 2px 0 0"></i><i style="flex:1;background:var(--ok);height:{{ r.sh }}%;min-height:{% if r.sales %}2px{% else %}0{% endif %};border-radius:2px 2px 0 0"></i></div>{% endfor %}</div></div>
+{% endblock %}

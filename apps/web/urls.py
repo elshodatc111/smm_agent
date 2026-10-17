@@ -14,6 +14,7 @@ from . import views_ads as ad
 from . import views_inbox as ib
 from . import views_goals as gl
 from . import views_reja as rj
+from . import views_online as on
 from . import views_stories as st
 from . import views_tools as t
 from . import views_types as vt
@@ -132,6 +133,34 @@ urlpatterns = [
     path("reja/yaratish/", rj.reja_create, name="reja_create"),
     path("reja/<int:pk>/", rj.reja_view, name="reja_view"),
     path("reja/<int:pk>/amal/", rj.reja_action, name="reja_action"),
+    path("onlayn/", on.online_home, name="online_home"),
+    path("onlayn/yangi/", on.online_new, name="online_new"),
+    path("onlayn/<int:pk>/", on.online_project, name="online_project"),
+    path("onlayn/<int:pk>/sozlash/", on.online_publish, name="online_publish"),
+    path("onlayn/<int:pk>/holat/", on.online_status, name="online_status"),
+    path("onlayn/<int:pk>/bot/", on.online_bot, name="online_bot"),
+    path("onlayn/<int:pk>/bot/saqlash/", on.online_bot_save, name="online_bot_save"),
+    path("onlayn/<int:pk>/bot/joriy/", on.online_bot_flow_publish, name="online_bot_flow_publish"),
+    path("onlayn/<int:pk>/bot/bekor/", on.online_bot_discard, name="online_bot_discard"),
+    path("onlayn/<int:pk>/bot/versiya/", on.online_bot_rollback, name="online_bot_rollback"),
+    path("onlayn/<int:pk>/bot/sinov/", on.online_bot_test, name="online_bot_test"),
+    path("onlayn/<int:pk>/bot/profil/", on.online_profile, name="online_profile"),
+    path("onlayn/<int:pk>/bot/ai/", on.online_ai_generate, name="online_ai_generate"),
+    path("onlayn/<int:pk>/media/yuklash/", on.online_media_upload, name="online_media_upload"),
+    path("onlayn/<int:pk>/media/<int:mid>/", on.online_media_file, name="online_media_file"),
+    path("onlayn/<int:pk>/leadlar/", on.online_leads, name="online_leads"),
+    path("onlayn/<int:pk>/leadlar/<int:lid>/", on.online_lead, name="online_lead"),
+    path("onlayn/<int:pk>/obunachilar/", on.online_subs, name="online_subs"),
+    path("onlayn/<int:pk>/obunachilar/amal/", on.online_sub_action, name="online_sub_action"),
+    path("onlayn/<int:pk>/tolovlar/", on.online_payments, name="online_payments"),
+    path("onlayn/<int:pk>/tolovlar/<int:payid>/qaror/", on.online_payment_decide, name="online_payment_decide"),
+    path("onlayn/<int:pk>/tolovlar/<int:payid>/chek/", on.online_receipt, name="online_receipt"),
+    path("onlayn/<int:pk>/tariflar/", on.online_tariffs, name="online_tariffs"),
+    path("onlayn/<int:pk>/ai/", on.online_ai, name="online_ai"),
+    path("onlayn/<int:pk>/ai/sinov/", on.online_ai_test, name="online_ai_test"),
+    path("onlayn/<int:pk>/guruhlar/", on.online_groups, name="online_groups"),
+    path("onlayn/<int:pk>/tarix/", on.online_events, name="online_events"),
+    path("onlayn/<int:pk>/sozlamalar/", on.online_settings, name="online_settings"),
     path("stories/", st.stories_home, name="stories_home"),
     path("stories/yangi/", st.stories_new, name="stories_new"),
     path("stories/kalendar/", st.stories_calendar, name="stories_calendar"),

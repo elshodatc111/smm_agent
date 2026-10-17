@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% load onlinetags %}{% block title %}{{ title }}{% endblock %}
+{% block content %}{% include "partials/online_head.html" %}
+<div class="callout"><b>i</b><div>Tariflar bot ichida «Tariflar» tugmasi orqali ko'rinadi. Foydalanuvchi tarifni tanlab, kartaga to'laydi va chekni yuboradi; mas'ul admin tasdiqlagach obuna shu muddatga beriladi.</div></div>
+{% for t in tariffs %}<div class="card" style="margin-bottom:8px"><form method="post" class="row" style="gap:8px;flex-wrap:wrap;align-items:end">{% csrf_token %}<input type="hidden" name="id" value="{{ t.pk }}">
+<div style="flex:2;min-width:160px"><label>Nomi</label><input name="name" value="{{ t.name }}" {% if not can_edit %}disabled{% endif %}></div>
+<div style="width:100px"><label>Muddat (kun)</label><input name="days" type="number" min="1" value="{{ t.days }}" {% if not can_edit %}disabled{% endif %}></div>
+<div style="width:150px"><label>Narx (so'm)</label><input name="price" value="{{ t.price }}" {% if not can_edit %}disabled{% endif %}></div>
+<div style="flex:3;min-width:180px"><label>Tavsif</label><input name="description" value="{{ t.description }}" {% if not can_edit %}disabled{% endif %}></div>
+<div style="width:70px"><label>Tartib</label><input name="sort" type="number" value="{{ t.sort }}" {% if not can_edit %}disabled{% endif %}></div>
+<label class="row" style="gap:6px"><input type="checkbox" name="is_active" value="1" {% if t.is_active %}checked{% endif %} {% if not can_edit %}disabled{% endif %}> Faol</label>
+{% if can_edit %}<button class="btn sm primary" name="action" value="save">Saqlash</button><button class="btn sm danger" name="action" value="delete" onclick="return confirm('Tarif o\'chirilsinmi?')">O'chirish</button>{% endif %}</form></div>
+{% empty %}<div class="card"><div class="empty">Tarif yo'q.</div></div>{% endfor %}
+{% if can_edit %}<div class="card mt"><h2 style="margin-top:0">Yangi tarif</h2><form method="post" class="row" style="gap:8px;flex-wrap:wrap;align-items:end">{% csrf_token %}<input type="hidden" name="action" value="add">
+<div style="flex:2;min-width:160px"><label>Nomi</label><input name="name" required placeholder="3 oylik"></div><div style="width:100px"><label>Muddat (kun)</label><input name="days" type="number" min="1" value="30"></div>
+<div style="width:150px"><label>Narx (so'm)</label><input name="price" placeholder="299000"></div><div style="flex:3;min-width:180px"><label>Tavsif</label><input name="description" placeholder="Qisqa izoh"></div><button class="btn primary">Qo'shish</button></form></div>{% endif %}
+{% endblock %}

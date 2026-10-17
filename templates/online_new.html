@@ -1,0 +1,11 @@
+{% extends "base.html" %}{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="pg-head"><div class="muted sm"><a href="{% url 'online_home' %}">Onlayn kanal</a> ›</div><h1 style="margin:2px 0">Yangi loyiha</h1></div>
+<div class="card" style="max-width:680px"><form method="post">{% csrf_token %}
+<label>Loyiha nomi</label><input name="name" value="{{ P.name }}" required maxlength="120" placeholder="Masalan: ATKO Premium">
+<label>Bot tokeni</label><input name="token" autocomplete="off" placeholder="@BotFather dan olingan token (keyinroq ham kiritish mumkin)">
+<div class="help">Token shifrlangan holda saqlanadi va faqat admin ko'ra/o'zgartira oladi.</div>
+<label>Loyiha haqida qisqa ma'lumot (AI uchun)</label><textarea name="brief" rows="5" placeholder="Nima o'rgatasiz? Kimlar uchun? Yopiq guruhda nima bor? Ohang qanday (rasmiy yoki do'stona)?">{{ P.brief }}</textarea>
+<label class="row" style="gap:8px;margin-top:10px"><input type="checkbox" name="ai" value="1" checked> <span>AI bot matnlarini (salom, telefon so'rash, menyu, tavsif, FAQ, AI mentor ko'rsatmasi) avtomatik tayyorlasin — qoralamaga yoziladi</span></label>
+<div class="row mt"><button class="btn primary">Loyihani yaratish</button><a class="btn" href="{% url 'online_home' %}">Bekor qilish</a></div></form></div>
+{% endblock %}

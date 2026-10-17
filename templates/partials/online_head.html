@@ -1,0 +1,3 @@
+<div class="pg-head row sb"><div><div class="muted sm"><a href="{% url 'online_home' %}">Onlayn kanal</a> ›</div><h1 style="margin:2px 0">{{ p.name }} <span class="badge {{ pbadge }}">{{ p.get_status_display }}</span></h1>
+<div class="muted">{% if p.bot_username %}<a href="{{ p.bot_link }}" target="_blank" rel="noopener">@{{ p.bot_username }}</a>{% else %}Bot hali ulanmagan{% endif %}{% if p.last_error %} · <span style="color:var(--bad)">{{ p.last_error }}</span>{% endif %}</div></div></div>
+<div class="row" style="margin-bottom:12px;gap:6px;flex-wrap:wrap">{% for u, l in tabs %}<a class="pill {% if u == tab %}active{% endif %}" href="{% url u p.pk %}">{{ l }}</a>{% endfor %}</div>

@@ -105,6 +105,8 @@ class Worker:
             threads.append(threading.Thread(target=run_bot_loop, args=(self.stop,), daemon=True, name="tgbot"))
             from apps.inbox.listener import run_inbox_loop
             threads.append(threading.Thread(target=run_inbox_loop, args=(self.stop,), daemon=True, name="inbox"))
+            from apps.online.bot import run_online_loop
+            threads.append(threading.Thread(target=run_online_loop, args=(self.stop,), daemon=True, name="online"))
         for t in threads:
             t.start()
         log.info("Worker ishga tushdi: %s oqim", len(threads))

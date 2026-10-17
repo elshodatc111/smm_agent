@@ -1,0 +1,19 @@
+{% extends "base.html" %}{% load onlinetags %}{% block title %}{{ title }}{% endblock %}
+{% block content %}{% include "partials/online_head.html" %}
+<div class="row" style="gap:6px;margin-bottom:10px"><a class="pill {% if f == 'active' %}active{% endif %}" href="?f=active">Faol ({{ n_active }})</a><a class="pill {% if f == 'soon' %}active{% endif %}" href="?f=soon">7 kunda tugaydi</a><a class="pill {% if f == 'ended' %}active{% endif %}" href="?f=ended">Tugagan / bekor</a><a class="pill {% if f == 'all' %}active{% endif %}" href="?f=all">Hammasi</a></div>
+{% if can_members %}<div class="card"><h2 style="margin-top:0">Qo'lda obuna berish / uzaytirish</h2>
+<form method="post" action="{% url 'online_sub_action' p.pk %}" class="row" style="gap:8px;flex-wrap:wrap;align-items:end">{% csrf_token %}<input type="hidden" name="action" value="grant">
+<div style="flex:2;min-width:200px"><label>Lead (Telegram ID, @username yoki telefon)</label><input name="q" required placeholder="@username yoki +998…"></div>
+<div style="width:120px"><label>Kun</label><input name="days" type="number" value="30" min="1"></div><button class="btn primary">Berish</button></form>
+<div class="help">Foydalanuvchi botga kamida bir marta /start bosgan bo'lishi kerak. Mavjud guruh a'zolari uchun ham shunday obuna bering — aks holda muddat tugaganda nazorat ularni tanimaydi.</div></div>{% endif %}
+<div class="card mt"><div class="tbl"><table><tr><th>Lead</th><th>Tarif</th><th>Boshlangan</th><th>Tugaydi</th><th>Holat</th><th></th></tr>
+{% for s in page %}<tr><td><a href="{% url 'online_lead' p.pk s.lead_id %}"><b>{{ s.lead.full_name }}</b></a><div class="muted sm">{{ s.lead.phone }}</div></td><td>{{ s.tariff.name|default:"—" }}{% if s.source == 'manual' %} <span class="badge">qo'lda</span>{% endif %}</td>
+<td class="sm">{{ s.starts_at|date:"d.m.Y" }}</td><td class="sm">{{ s.ends_at|date:"d.m.Y H:i" }}</td><td><span class="badge {{ s.status|bcls }}">{{ s.get_status_display }}</span></td>
+<td>{% if can_members %}<div class="row" style="gap:4px;flex-wrap:wrap">
+<form method="post" action="{% url 'online_sub_action' p.pk %}" class="row" style="gap:4px">{% csrf_token %}<input type="hidden" name="lead" value="{{ s.lead_id }}"><input type="hidden" name="action" value="extend"><input name="days" type="number" value="30" style="width:70px;padding:4px 8px"><button class="btn sm">+kun</button></form>
+{% if s.status == 'active' %}<form method="post" action="{% url 'online_sub_action' p.pk %}">{% csrf_token %}<input type="hidden" name="lead" value="{{ s.lead_id }}"><input type="hidden" name="action" value="resend"><button class="btn sm">Havola</button></form>
+<form method="post" action="{% url 'online_sub_action' p.pk %}" onsubmit="return confirm('Obuna bekor qilinadi va foydalanuvchi guruhdan chiqariladi. Davom etasizmi?')">{% csrf_token %}<input type="hidden" name="lead" value="{{ s.lead_id }}"><input type="hidden" name="action" value="cancel"><button class="btn sm danger">Bekor</button></form>{% endif %}</div>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="6" class="empty">Yozuv yo'q.</td></tr>{% endfor %}</table></div></div>
+{% if exempt %}<div class="card mt"><h2 style="margin-top:0">Cheksiz / xodimlar (guruhdan chiqarilmaydi)</h2>{% for l in exempt %}<span class="badge violet">{{ l.full_name }}</span> {% endfor %}</div>{% endif %}
+{% if can_members %}<div class="card mt"><h2 style="margin-top:0">«Cheksiz / xodim» belgisi</h2><form method="post" action="{% url 'online_sub_action' p.pk %}" class="row" style="gap:8px;align-items:end">{% csrf_token %}<input type="hidden" name="action" value="exempt"><div style="flex:1"><label>Lead (ID, @username, telefon)</label><input name="q" required></div><button class="btn">Belgini almashtirish</button></form></div>{% endif %}
+{% endblock %}

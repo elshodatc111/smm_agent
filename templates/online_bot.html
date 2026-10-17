@@ -1,0 +1,132 @@
+{% extends "base.html" %}{% block title %}{{ title }}{% endblock %}
+{% block content %}{% include "partials/online_head.html" %}
+<style>
+.sp-layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}.sp-main,.sp-side{min-width:0}
+.sp-side{position:sticky;top:84px;align-self:start;max-height:calc(100vh - 96px);overflow:auto}
+@media (max-width:1000px){.sp-layout{grid-template-columns:1fr}.sp-side{position:static;max-height:none;order:-1}}
+.tgp{width:300px;max-width:100%;margin:0 auto;border-radius:28px;background:#111;padding:8px;box-shadow:0 10px 30px rgba(0,0,0,.28)}
+.tgp-in{border-radius:21px;overflow:hidden;background:#0e1621;color:#fff;font-size:13px;display:flex;flex-direction:column;height:520px}
+.tgp-top{display:flex;align-items:center;gap:9px;padding:9px 12px;background:#17212b;border-bottom:1px solid #0b121a}
+.tgp-av{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#e11d2e,#7c3aed);display:grid;place-items:center;font-weight:700;overflow:hidden;flex:none}.tgp-av img{width:100%;height:100%;object-fit:cover}
+.tgp-nm{font-weight:650;line-height:1.15}.tgp-st{font-size:11px;color:#6d7f8f}
+.tgp-body{flex:1;overflow:auto;padding:10px;display:flex;flex-direction:column;gap:6px;background:#0e1621}
+.tgp-b{max-width:88%;align-self:flex-start;background:#182533;border-radius:12px 12px 12px 3px;padding:7px 10px;line-height:1.4;word-break:break-word;white-space:pre-wrap}
+.tgp-b.me{align-self:flex-end;background:#2b5278;border-radius:12px 12px 3px 12px}
+.tgp-b img,.tgp-b video{display:block;max-width:100%;border-radius:8px;margin:-2px 0 6px}.tgp-b a{color:#6ab3f3}.tgp-b code{background:#0e1621;padding:0 4px;border-radius:4px}
+.tgp-kb{align-self:flex-start;width:88%;display:flex;flex-direction:column;gap:3px}.tgp-kb div{display:flex;gap:3px}
+.tgp-kb button{flex:1;border:0;border-radius:8px;background:#2b3e52;color:#fff;font:inherit;padding:7px 4px;cursor:pointer}.tgp-kb button:hover{background:#34506b}
+.tgp-reply{padding:7px 10px;background:#17212b}.tgp-reply button{width:100%;border:0;border-radius:9px;background:#2b3e52;color:#fff;font:inherit;padding:9px}
+.tgp-prof{margin:auto 0;text-align:center;padding:14px}.tgp-prof .box{background:#182533;border-radius:14px;padding:12px;text-align:left;margin-top:10px}
+.tgp-in-bar{padding:9px 12px;background:#17212b;color:#6d7f8f;font-size:12px}
+.sc-pill{display:inline-flex;gap:4px;align-items:center;margin:2px 4px 2px 0;padding:6px 12px;border-radius:99px;background:var(--surface-2);border:1px solid var(--border);cursor:pointer;font-size:13px}.sc-pill.on{background:var(--grad);color:#fff;border-color:transparent}
+.bt-row{display:flex;gap:6px;flex-wrap:wrap;align-items:stretch;margin-bottom:6px;padding:6px;border:1px dashed var(--border);border-radius:12px}
+.bt{flex:1;min-width:150px;background:var(--surface-2);border-radius:10px;padding:6px;display:flex;flex-direction:column;gap:4px}.bt input,.bt select{padding:5px 8px;font-size:13px}
+.chip{display:inline-block;padding:2px 8px;border-radius:99px;background:var(--surface-2);border:1px solid var(--border);font-size:12px;cursor:pointer;margin:2px}
+.mtile{width:74px;height:74px;border-radius:10px;border:2px solid transparent;object-fit:cover;cursor:pointer;background:var(--surface-2)}.mtile.on{border-color:var(--brand)}
+#savest{font-size:12px}
+</style>
+<div class="callout {% if has_draft %}warn{% else %}ok{% endif %}"><b>{% if has_draft %}✎{% else %}✓{% endif %}</b><div>{% if has_draft %}<b>Qoralama bor.</b> O'zgarishlar hali foydalanuvchilarga ko'rinmaydi — tayyor bo'lgach «Joriy qilish» ni bosing.{% else %}Joriy oqim ko'rsatilmoqda. O'zgartirsangiz qoralama yaratiladi va faqat «Joriy qilish» dan keyin botga o'tadi.{% endif %} <span id="savest" class="muted"></span></div></div>
+<div class="sp-layout"><div class="sp-main">
+<div class="card"><div class="row sb" style="flex-wrap:wrap;gap:8px"><h2 style="margin:0">Ekranlar va tugmalar</h2>
+<div class="row" style="gap:6px;flex-wrap:wrap">{% if can_publish %}<form method="post" action="{% url 'online_bot_flow_publish' p.pk %}" onsubmit="event.preventDefault();var f=this;(window.flushSave?window.flushSave():Promise.resolve()).then(function(){f.submit()});return false">{% csrf_token %}<button class="btn primary">🚀 Joriy qilish</button></form>{% endif %}
+{% if can_edit and has_draft %}<form method="post" action="{% url 'online_bot_discard' p.pk %}" onsubmit="return confirm('Qoralama bekor qilinsinmi?')">{% csrf_token %}<button class="btn">Qoralamani bekor qilish</button></form>{% endif %}</div></div>
+<div id="scrs" style="margin-top:8px"></div>
+{% if can_edit %}<div class="row mt" style="gap:6px"><input id="newkey" placeholder="Yangi ekran nomi (masalan: kurslar)" style="max-width:260px"><button type="button" class="btn sm" id="addscr">+ Ekran qo'shish</button></div>{% endif %}</div>
+<div class="card mt" id="ed" {% if not can_edit %}style="pointer-events:none;opacity:.75"{% endif %}>
+<div class="row sb"><h2 style="margin:0" id="edtitle"></h2><button type="button" class="btn sm danger" id="delscr">Ekranni o'chirish</button></div>
+<label>Ekran nomi (faqat siz uchun)</label><input id="f_title" maxlength="60">
+<label>Matn <span class="muted sm">(HTML: &lt;b&gt;qalin&lt;/b&gt;, &lt;i&gt;kursiv&lt;/i&gt;, &lt;a href="..."&gt;havola&lt;/a&gt;)</span></label><textarea id="f_text" rows="7"></textarea>
+<div class="sm muted">Qo'yish mumkin: <span id="chips"></span></div>
+<div id="phonebox" style="display:none"><label>Telefon tugmasi yozuvi</label><input id="f_btn" maxlength="40"><div class="help">Bu ekranda inline tugma emas, «kontakt yuborish» tugmasi chiqadi.</div></div>
+<label>Rasm yoki video</label><div id="mlist" class="row" style="gap:6px;flex-wrap:wrap"></div>
+<div class="row mt" style="gap:8px"><input type="file" id="mfile" accept="image/*,video/mp4,video/quicktime" style="max-width:300px"><span id="mst" class="muted sm"></span></div>
+<div id="btnbox"><h3 style="margin:14px 0 6px">Tugmalar</h3><div id="rows"></div><button type="button" class="btn sm" id="addrow">+ Qator</button> <span class="muted sm">Qatorda 3 tagacha tugma, 8 qator.</span></div></div>
+<div class="card mt" {% if not can_edit %}style="pointer-events:none;opacity:.75"{% endif %}><h2 style="margin-top:0">Tizim xabarlari <span class="muted sm" style="font-weight:400">— to'lov, obuna, AI va boshqa avtomatik javoblar</span></h2>
+<div id="txts"></div></div>
+<div class="card mt"><h2 style="margin-top:0">Bot profili (Telegramda ko'rinadigan)</h2>
+<form method="post" action="{% url 'online_profile' p.pk %}" enctype="multipart/form-data">{% csrf_token %}
+<label>Bot nomi</label><input name="bot_title" id="pf_title" value="{{ profile.title }}" maxlength="64" {% if not can_edit %}disabled{% endif %}>
+<label>Qisqa tavsif (About) — 120 belgigacha</label><input name="about" id="pf_about" value="{{ profile.about }}" maxlength="120" {% if not can_edit %}disabled{% endif %}>
+<label>Tavsif (Description) — /start dan oldin ko'rinadi, 512 belgigacha</label><textarea name="description" id="pf_desc" rows="4" maxlength="512" {% if not can_edit %}disabled{% endif %}>{{ profile.description }}</textarea>
+<label>Buyruqlar (har qatorda: <code>buyruq - izoh</code>)</label><textarea name="commands" rows="4" {% if not can_edit %}disabled{% endif %}>{{ cmds }}</textarea>
+<label>Bot rasmi (avatar)</label><input type="file" name="avatar" accept="image/*" {% if not can_edit %}disabled{% endif %}>
+<label class="row" style="gap:6px;margin-top:8px"><input type="checkbox" name="ask_phone" value="1" {% if p.ask_phone %}checked{% endif %} {% if not can_edit %}disabled{% endif %}> /start dan keyin telefon raqamini so'rash (lead yig'ish)</label>
+{% if can_edit %}<div class="row mt"><button class="btn primary">Profilni saqlash</button></div>{% endif %}
+<div class="help">Saqlangandan keyin loyiha sahifasidagi «Botni sozlash va ishga tushirish» tugmasi nom, tavsif, buyruqlar va rasmni Telegramga yuboradi.</div></form></div>
+{% if can_edit %}<div class="card mt"><h2 style="margin-top:0">✨ AI bilan avtomatik tayyorlash</h2><div class="muted sm">Loyiha haqida yozing — AI salom, telefon so'rash, menyu, tavsif, FAQ va AI mentor ko'rsatmasini o'zbek tilida tayyorlab, <b>qoralamaga</b> yozadi. Joriy bot o'zgarmaydi.</div>
+<form method="post" action="{% url 'online_ai_generate' p.pk %}" onsubmit="return confirm('AI qoralama matnlarini qayta yozadi. Davom etasizmi?')">{% csrf_token %}<textarea name="brief" rows="4" placeholder="Nima o'rgatasiz? Kimlar uchun? Yopiq guruhda nimalar bor? Ohang qanday?">{{ p.brief }}</textarea><div class="row mt"><button class="btn">AI bilan tayyorlash</button></div></form></div>{% endif %}
+{% if can_publish %}<div class="grid g2 mt"><div class="card"><h2 style="margin-top:0">🧪 Telegramda sinash</h2><div class="muted sm">Qoralama ekranlarini mas'ul adminning Telegramiga haqiqiy ko'rinishda yuboradi.</div>
+<form method="post" action="{% url 'online_bot_test' p.pk %}" class="row mt" style="gap:8px">{% csrf_token %}<select name="admin">{% for a in admins %}<option value="{{ a.pk }}">{{ a.name|default:a.tg_id }}</option>{% empty %}<option value="">Admin yo'q</option>{% endfor %}</select><button class="btn">Yuborish</button></form></div>
+<div class="card"><h2 style="margin-top:0">Versiyalar</h2>{% for v in versions %}<form method="post" action="{% url 'online_bot_rollback' p.pk %}" class="row sb" style="padding:3px 0">{% csrf_token %}<input type="hidden" name="version" value="{{ v.pk }}"><span class="sm">{{ v.at|date:"d.m.Y H:i" }} · {{ v.note }}</span><button class="btn sm">Qaytarish</button></form>{% empty %}<div class="muted sm">Hali versiya yo'q (har joriy qilishda eskisi saqlanadi).</div>{% endfor %}</div></div>{% endif %}
+</div>
+<div class="sp-side"><div class="tgp"><div class="tgp-in"><div class="tgp-top"><div class="tgp-av" id="pv_av"></div><div><div class="tgp-nm" id="pv_nm"></div><div class="tgp-st" id="pv_st">bot</div></div><button type="button" id="pv_reset" title="Boshidan" style="margin-left:auto;border:0;background:none;color:#6d7f8f;cursor:pointer;font-size:16px">↺</button></div>
+<div class="tgp-body" id="pv_body"></div><div id="pv_reply"></div><div class="tgp-in-bar">Xabar yozing…</div></div></div>
+<div class="row" style="justify-content:center;gap:6px;margin-top:10px"><button type="button" class="pill active" id="m_chat">Suhbat</button><button type="button" class="pill" id="m_prof">Bot profili</button></div>
+<div id="warns" class="sm" style="margin-top:8px"></div>
+<div class="muted sm" style="text-align:center;margin-top:6px">Tugmalarni bosib suhbatni sinab ko'ring. Qiymatlar namunaviy.</div></div></div>
+{{ flow|json_script:"d-flow" }}{{ media|json_script:"d-media" }}{{ sample|json_script:"d-sample" }}{{ tariffs|json_script:"d-tariffs" }}{{ actions|json_script:"d-actions" }}{{ placeholders|json_script:"d-ph" }}{{ text_labels|json_script:"d-tl" }}{{ profile|json_script:"d-prof" }}
+{% endblock %}
+{% block scripts %}<script>
+(function(){
+const J=id=>JSON.parse(document.getElementById(id).textContent);
+const flow=J('d-flow'),media=J('d-media'),S=J('d-sample'),TAR=J('d-tariffs'),ACT=J('d-actions'),PH=J('d-ph'),TL=J('d-tl'),PROF=J('d-prof');
+const canEdit={{ can_edit|yesno:"true,false" }};const csrf=document.querySelector('meta[name=csrf]').content;
+const CORE=['start','phone','menu'];let cur='start',hist=[],mode='chat',timer=null,saving=null;
+const $=id=>document.getElementById(id);
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function ph(s){return String(s||'').replace(/\{(\w+)\}/g,(m,k)=>k in S?S[k]:m)}
+function tg(s){let t=esc(ph(s));t=t.replace(/&lt;(\/?)(b|i|u|s|code|pre|strong|em)&gt;/g,'<$1$2>').replace(/&lt;a href=&quot;(https?:\/\/[^"&<]*)&quot;&gt;/g,'<a href="$1" target="_blank" rel="noopener">').replace(/&lt;\/a&gt;/g,'</a>');return t}
+function mediaOf(id){return media.find(m=>m.id===id)}
+// ---- saqlash ----
+function dirty(){if(!canEdit)return;$('savest').textContent='saqlanmoqda…';clearTimeout(timer);timer=setTimeout(save,900)}
+function save(){clearTimeout(timer);saving=fetch('{% url "online_bot_save" p.pk %}',{method:'POST',headers:{'X-CSRFToken':csrf,'Content-Type':'application/json'},body:JSON.stringify(flow)}).then(r=>r.json()).then(j=>{$('savest').textContent=j.ok?('✓ qoralama saqlandi '+j.saved):('⚠ '+j.error);$('savest').style.color=j.ok?'':'var(--bad)'}).catch(()=>{$('savest').textContent='⚠ tarmoq xatosi'});return saving}
+window.flushSave=()=>{clearTimeout(timer);return save()};
+// ---- ekranlar ----
+function renderScrs(){const w=$('scrs');w.innerHTML='';Object.keys(flow.screens).forEach(k=>{const b=document.createElement('span');b.className='sc-pill'+(k===cur?' on':'');b.textContent=(flow.screens[k].title||k)+(CORE.includes(k)?' ★':'');b.onclick=()=>{cur=k;hist=[];renderAll()};w.appendChild(b)})}
+function renderEd(){const s=flow.screens[cur];if(!s)return;$('edtitle').textContent='«'+(s.title||cur)+'» ekrani ('+cur+')';$('f_title').value=s.title||'';$('f_text').value=s.text||'';$('delscr').style.display=CORE.includes(cur)?'none':'';
+$('phonebox').style.display=cur==='phone'?'':'none';$('btnbox').style.display=cur==='phone'?'none':'';if(cur==='phone')$('f_btn').value=s.btn||'';
+const ch=$('chips');ch.innerHTML='';PH.forEach(k=>{const c=document.createElement('span');c.className='chip';c.textContent='{'+k+'}';c.onclick=()=>{const t=$('f_text'),a=t.selectionStart;t.value=t.value.slice(0,a)+'{'+k+'}'+t.value.slice(t.selectionEnd);t.focus();s.text=t.value;dirty();renderPv()};ch.appendChild(c)});
+const ml=$('mlist');ml.innerHTML='';const none=document.createElement('span');none.className='chip';none.textContent=s.media?'✕ Mediani olib tashlash':'media yo\'q';none.onclick=()=>{s.media=null;dirty();renderAll()};ml.appendChild(none);
+media.forEach(m=>{const e=m.kind==='video'?document.createElement('video'):document.createElement('img');e.src=m.url;e.className='mtile'+(s.media===m.id?' on':'');e.onclick=()=>{s.media=m.id;dirty();renderAll()};ml.appendChild(e)});
+renderRows()}
+function actSel(b,onch){const sel=document.createElement('select');ACT.forEach(a=>{const o=document.createElement('option');o.value=a[0];o.textContent=a[1];if(b.a===a[0])o.selected=true;sel.appendChild(o)});sel.onchange=()=>{b.a=sel.value;b.v='';onch()};return sel}
+function renderRows(){const s=flow.screens[cur],w=$('rows');w.innerHTML='';s.rows.forEach((row,ri)=>{const rd=document.createElement('div');rd.className='bt-row';row.forEach((b,bi)=>{const d=document.createElement('div');d.className='bt';
+const t=document.createElement('input');t.value=b.t;t.placeholder='Tugma yozuvi';t.oninput=()=>{b.t=t.value;dirty();renderPv()};d.appendChild(t);
+d.appendChild(actSel(b,()=>{renderRows();dirty();renderPv()}));
+if(b.a==='screen'){const v=document.createElement('select');Object.keys(flow.screens).forEach(k=>{const o=document.createElement('option');o.value=k;o.textContent=flow.screens[k].title||k;if(b.v===k)o.selected=true;v.appendChild(o)});if(!b.v){b.v=v.value}v.onchange=()=>{b.v=v.value;dirty();renderPv()};d.appendChild(v)}
+else if(b.a==='url'){const v=document.createElement('input');v.value=b.v||'';v.placeholder='https://…';v.oninput=()=>{b.v=v.value;dirty()};d.appendChild(v)}
+const x=document.createElement('button');x.type='button';x.className='btn sm';x.textContent='✕ o\'chirish';x.onclick=()=>{row.splice(bi,1);if(!row.length)s.rows.splice(ri,1);renderRows();dirty();renderPv()};d.appendChild(x);rd.appendChild(d)});
+if(row.length<3){const a=document.createElement('button');a.type='button';a.className='btn sm';a.textContent='+ tugma';a.onclick=()=>{row.push({t:'Yangi tugma',a:'screen',v:'menu'});renderRows();dirty();renderPv()};rd.appendChild(a)}w.appendChild(rd)});$('addrow').style.display=s.rows.length>=8?'none':''}
+function renderTxts(){const w=$('txts');w.innerHTML='';Object.keys(TL).forEach(k=>{const d=document.createElement('details');d.style.cssText='border-top:1px solid var(--border);padding:6px 0';const sm=document.createElement('summary');sm.textContent=TL[k];d.appendChild(sm);const t=document.createElement('textarea');t.rows=3;t.value=flow.texts[k]||'';t.oninput=()=>{flow.texts[k]=t.value;dirty();showSys(k)};d.appendChild(t);d.ontoggle=()=>{if(d.open)showSys(k)};w.appendChild(d)})}
+// ---- jonli ko'rinish ----
+function bubble(html,me,m){const b=document.createElement('div');b.className='tgp-b'+(me?' me':'');let h='';if(m){h+=m.kind==='video'?'<video src="'+m.url+'" controls muted></video>':'<img src="'+m.url+'" alt="">'}b.innerHTML=h+html;return b}
+function kb(rows,body){if(!rows||!rows.length)return;const k=document.createElement('div');k.className='tgp-kb';rows.forEach(r=>{const d=document.createElement('div');r.forEach(b=>{const e=document.createElement('button');e.type='button';e.textContent=b.t+(b.a==='url'?' ↗':'');e.onclick=()=>press(b);d.appendChild(e)});k.appendChild(d)});body.appendChild(k)}
+function press(b){if(b.a==='screen'){if(flow.screens[b.v]){hist.push({me:b.t});hist.push({scr:b.v})}else hist.push({sys:'unknown'})}else if(b.a==='url'){hist.push({sys:'url',u:b.v})}else if(b.a==='tarif'){hist.push({me:b.t});hist.push({sys:'pay_info'})}else if(b.a==='tariffs'){hist.push({me:b.t});hist.push({tar:1})}else if(b.a==='status'){hist.push({me:b.t});hist.push({sys:'status_active'})}else if(b.a==='join'){hist.push({me:b.t});hist.push({sys:'join_links'})}else if(b.a==='ai'){hist.push({me:b.t});hist.push({sys:'ai_intro'})}else if(b.a==='stat'){hist.push({me:b.t});hist.push({txt:'📊 Statistika (faqat adminlarga ko\'rinadi)'})}renderPv(true)}
+function scrMsg(k,body){const s=flow.screens[k];if(!s)return;body.appendChild(bubble(tg(s.text),false,mediaOf(s.media)));if(k!=='phone')kb(s.rows,body);else{$('pv_reply').innerHTML='<div class="tgp-reply"><button type="button">'+esc(s.btn||'📱 Raqamni yuborish')+'</button></div>'}}
+function showSys(k){hist=[{sys:k}];renderPv(true)}
+function renderPv(keep){const body=$('pv_body');$('pv_reply').innerHTML='';body.innerHTML='';
+$('pv_nm').textContent=PROF.title||'Bot';$('pv_st').textContent=($('pf_about')&&$('pf_about').value)||'bot';
+const av=$('pv_av');av.innerHTML=PROF.avatar?'<img src="'+PROF.avatar+'">':esc((PROF.title||'B')[0]);
+if(mode==='prof'){const d=document.createElement('div');d.className='tgp-prof';d.innerHTML='<div style="font-weight:700;font-size:15px">'+esc($('pf_title').value||PROF.title)+'</div><div class="tgp-st">bot</div><div class="box"><b>Bu bot nima qila oladi?</b><div style="margin-top:6px;white-space:pre-wrap">'+esc($('pf_desc').value||'(tavsif yozilmagan)')+'</div></div><div class="box" style="text-align:center;background:#2b5278;margin-top:10px">BOSHLASH</div>';body.appendChild(d);return}
+if(!hist.length){hist=[{me:'/start'},{scr:cur}]}
+hist.forEach(h=>{if(h.me)body.appendChild(bubble(esc(h.me),true));else if(h.scr)scrMsg(h.scr,body);else if(h.tar){const ts=TAR.length?TAR:[{name:'1 oylik',price:'0',days:30}];let t=tg(flow.texts.tariffs_title)+'<br>'+ts.map(x=>'• <b>'+esc(x.name)+'</b> — '+esc(x.price)+' so\'m / '+x.days+' kun').join('<br>');body.appendChild(bubble(t));kb(ts.map(x=>[{t:x.name+' — '+x.price+' so\'m',a:'tarif'}]).concat([[{t:'⬅️ Bosh menyu',a:'screen',v:'menu'}]]),body)}
+else if(h.sys==='url'){body.appendChild(bubble('🔗 '+esc(h.u||'(havola kiritilmagan)')))}else if(h.sys==='unknown'){body.appendChild(bubble('⚠️ Tugma mavjud bo\'lmagan ekranga olib boradi'))}else if(h.sys){body.appendChild(bubble(tg(flow.texts[h.sys]||'')))}else if(h.txt){body.appendChild(bubble(esc(h.txt)))}});
+body.scrollTop=body.scrollHeight}
+function warns(){const w=[];Object.keys(flow.screens).forEach(k=>{const s=flow.screens[k];if(!(s.text||'').trim()&&!s.media)w.push('«'+(s.title||k)+'»: matn ham, media ham yo\'q');s.rows.forEach(r=>r.forEach(b=>{if(b.a==='screen'&&!flow.screens[b.v])w.push('«'+(s.title||k)+'» → «'+b.t+'» mavjud bo\'lmagan ekranga olib boradi');if(b.a==='url'&&!/^(https?:\/\/|tg:\/\/|t\.me\/)/.test(b.v||''))w.push('«'+(s.title||k)+'» → «'+b.t+'»: havola noto\'g\'ri');if(!(b.t||'').trim())w.push('Bo\'sh tugma yozuvi')}))});$('warns').innerHTML=w.length?'<div class="callout warn" style="padding:8px 10px"><div>'+w.map(esc).join('<br>')+'</div></div>':''}
+function renderAll(){renderScrs();renderEd();renderPv();warns()}
+// ---- hodisalar ----
+$('f_title').oninput=e=>{flow.screens[cur].title=e.target.value;dirty();renderScrs()};
+$('f_text').oninput=e=>{flow.screens[cur].text=e.target.value;dirty();hist=[];renderPv();warns()};
+$('f_btn').oninput=e=>{flow.screens[cur].btn=e.target.value;dirty();renderPv()};
+$('addrow').onclick=()=>{const s=flow.screens[cur];if(s.rows.length<8){s.rows.push([{t:'Yangi tugma',a:'screen',v:'menu'}]);renderRows();dirty();renderPv()}};
+$('pv_reset').onclick=()=>{hist=[];renderPv()};
+$('m_chat').onclick=()=>{mode='chat';$('m_chat').classList.add('active');$('m_prof').classList.remove('active');renderPv()};
+$('m_prof').onclick=()=>{mode='prof';$('m_prof').classList.add('active');$('m_chat').classList.remove('active');renderPv()};
+['pf_title','pf_about','pf_desc'].forEach(i=>{const e=$(i);if(e)e.oninput=()=>{PROF.title=$('pf_title').value||PROF.title;renderPv()}});
+const add=$('addscr');if(add)add.onclick=()=>{let k=$('newkey').value.trim().toLowerCase().replace(/[^a-z0-9_]+/g,'_').replace(/^_+|_+$/g,'').slice(0,24);if(!k){alert('Ekran nomini lotin harflarida yozing (masalan: kurslar).');return}if(flow.screens[k]){alert('Bunday ekran bor.');return}
+flow.screens[k]={title:$('newkey').value.trim().slice(0,60)||k,text:'',media:null,rows:[]};$('newkey').value='';cur=k;hist=[];dirty();renderAll()};
+$('delscr').onclick=()=>{if(CORE.includes(cur))return;if(!confirm('Ekran o\'chirilsinmi? Unga olib boruvchi tugmalar ishlamay qoladi.'))return;delete flow.screens[cur];cur='menu';hist=[];dirty();renderAll()};
+$('mfile').onchange=async e=>{const f=e.target.files[0];if(!f)return;$('mst').textContent='Yuklanmoqda…';const fd=new FormData();fd.append('file',f);try{const r=await fetch('{% url "online_media_upload" p.pk %}',{method:'POST',headers:{'X-CSRFToken':csrf},body:fd});const j=await r.json();if(!j.ok){$('mst').textContent='⚠ '+j.error;return}media.push({id:j.id,url:j.url,kind:j.kind});flow.screens[cur].media=j.id;$('mst').textContent='✓ yuklandi';dirty();renderAll()}catch(x){$('mst').textContent='⚠ tarmoq xatosi'}e.target.value=''};
+renderTxts();renderAll();
+})();
+</script>{% endblock %}
