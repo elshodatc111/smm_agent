@@ -3,7 +3,7 @@ from __future__ import annotations
 from django.core.cache import cache
 
 from .models import Role, RolePermission, User, UserBusinessAccess, UserPermissionOverride
-from .permissions_registry import GLOBAL_MODULES, validate
+from .permissions_registry import ADMIN_ONLY, GLOBAL_MODULES, validate
 
 
 def bump_permissions(user: User | None = None) -> None:
@@ -40,6 +40,8 @@ class PermissionService:
             return False
         if user.is_admin:
             return True
+        if code in ADMIN_ONLY:      # sozlamalar, foydalanuvchilar, yangi biznes/akkaunt ulash: rol yoki individual ruxsat bilan ham berilmaydi
+            return False
         module = code.split(".")[0]
         bid = getattr(business, "pk", business)
         if module in GLOBAL_MODULES:

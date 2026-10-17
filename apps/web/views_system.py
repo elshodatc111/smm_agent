@@ -13,8 +13,8 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from apps.accounts.decorators import require_permission
-from apps.accounts.models import Role, User, UserBusinessAccess
-from apps.accounts.permissions_registry import ACTIONS, MODULES
+from apps.accounts.models import Role, User, UserBusinessAccess, UserPermissionOverride
+from apps.accounts.permissions_registry import ADMIN_ONLY, CATALOG, GRANTABLE, grantable_groups
 from apps.accounts.services import bump_permissions, delete_role, guard_admin_change, perms, set_role_permissions
 from apps.ai_router.models import AIKey
 from apps.businesses.models import Business
@@ -343,20 +343,49 @@ def user_new(request):
     return render(request, "form.html", {"title": "Yangi foydalanuvchi", "form": form, "back": "/foydalanuvchilar/"})
 
 
+def _role_union(u: User) -> set[str]:
+    out: set[str] = set()
+    for a in u.accesses.all():
+        out |= perms._role_codes(a.role_id)
+    return out
+
+
+def effective_codes(u: User) -> set[str]:
+    """Foydalanuvchining berilishi mumkin bo'lgan ruxsatlari (rol + individual qo'shish − olib tashlash)."""
+    allow, deny = perms._overrides(u)
+    return ((_role_union(u) | allow) - deny) & set(GRANTABLE)
+
+
 @login_required
 @require_permission("users.view")
 def user_detail(request, pk):
     u = get_object_or_404(User, pk=pk)
     can = perms.can(request.user, "users.edit", None)
-    acc = [[a.business.name if a.business else "Barcha bizneslar", a.role.name, ui.btn("Olib tashlash", f"/foydalanuvchilar/{u.pk}/kirish/{a.pk}/ochir/", "danger") if can else ""] for a in u.accesses.select_related("business", "role")]
-    blocks = [ui.kv("Ma'lumot", [("Login", u.username), ("Ism", u.full_name), ("Telegram ID", u.telegram_id), ("Admin", "Ha" if u.is_admin else "Yo'q"), ("Faol", "Ha" if u.is_active else "Yo'q")]),
-              ui.table("Biznes va rol", ["Biznes", "Rol", ""], acc, "Hech qaysi bizneska biriktirilmagan.")]
-    if can:
-        f = type("AF", (forms.Form,), {"business": forms.ModelChoiceField(label="Biznes", queryset=Business.objects.filter(archived_at__isnull=True), required=False, empty_label="— Barcha bizneslar —"),
-                                       "role": forms.ModelChoiceField(label="Rol", queryset=Role.objects.all())})()
-        blocks.append(ui.form_block(f, "Kirish berish", "Biriktirish", action=f"/foydalanuvchilar/{u.pk}/kirish/"))
-        blocks.append(ui.form_block(UserForm(instance=u), "Tahrirlash", "Saqlash", action=f"/foydalanuvchilar/{u.pk}/tahrir/"))
-    return ui.page(request, u.display, blocks, toolbar=[{"label": "Orqaga", "url": "/foydalanuvchilar/"}])
+    accesses = list(u.accesses.select_related("business", "role"))
+    have = effective_codes(u)
+    base = _role_union(u) & set(GRANTABLE)
+    role_map = {str(r.pk): sorted(set(r.permissions.values_list("code", flat=True)) & set(GRANTABLE)) for r in Role.objects.all()}
+    return render(request, "user_detail.html", {
+        "title": u.display, "u": u, "can": can, "accesses": accesses, "groups": grantable_groups(), "have": have, "base": base,
+        "changed": have ^ base, "roles": Role.objects.order_by("name"), "businesses": Business.objects.filter(archived_at__isnull=True).order_by("name"),
+        "role_map": json.dumps(role_map), "form": UserForm(instance=u), "has_all": any(a.business_id is None for a in accesses),
+        "admin_only_info": ["Sozlamalar", "Foydalanuvchilar va rollar", "Tizim holati", "Faoliyat jurnali", "Yangi biznes qo'shish", "Yangi akkaunt ulash (Ulanishlar, Murojaatlar, Stories)"]})
+
+
+@login_required
+@require_POST
+@require_permission("users.edit")
+def user_permissions_save(request, pk):
+    u = get_object_or_404(User, pk=pk)
+    want = {c for c in request.POST.getlist("codes") if c in GRANTABLE}
+    base = _role_union(u) & set(GRANTABLE)
+    UserPermissionOverride.objects.filter(user=u).delete()
+    rows = [UserPermissionOverride(user=u, code=c, allow=True) for c in sorted(want - base)] + [UserPermissionOverride(user=u, code=c, allow=False) for c in sorted(base - want)]
+    UserPermissionOverride.objects.bulk_create(rows)
+    bump_permissions(u)
+    audit("user.permissions", user=request.user, target=u.username, detail={"jami": len(want), "qo'shilgan": len(want - base), "olib tashlangan": len(base - want)})
+    messages.success(request, f"Ruxsatlar saqlandi: {len(want)} ta ruxsat berilgan. O'zgarish darhol kuchga kirdi.")
+    return redirect("user_detail", pk=u.pk)
 
 
 @login_required
@@ -391,15 +420,22 @@ def user_edit(request, pk):
 @require_POST
 @require_permission("users.edit")
 def user_access_add(request, pk):
+    """Bir vaqtda bir nechta biznesga (yoki «Barcha bizneslar»ga) kirish berish."""
     u = get_object_or_404(User, pk=pk)
     role = get_object_or_404(Role, pk=request.POST.get("role"))
-    bid = request.POST.get("business")
-    if bid:
-        UserBusinessAccess.objects.update_or_create(user=u, business_id=int(bid), defaults={"role": role, "all_flag": False})
-    else:
+    ids = [int(x) for x in request.POST.getlist("businesses") + request.POST.getlist("business") if str(x).isdigit()]
+    valid = list(Business.objects.filter(pk__in=ids).values_list("pk", flat=True))
+    every = request.POST.get("all") == "1" or ("business" in request.POST and not request.POST.get("business") and not request.POST.getlist("businesses"))
+    if not valid and not every:
+        messages.error(request, "Kamida bitta biznes tanlang yoki «Barcha bizneslar»ni belgilang.")
+        return redirect("user_detail", pk=u.pk)
+    for bid in valid:
+        UserBusinessAccess.objects.update_or_create(user=u, business_id=bid, defaults={"role": role, "all_flag": False})
+    if every:
         UserBusinessAccess.objects.update_or_create(user=u, business=None, defaults={"role": role, "all_flag": True})
     bump_permissions(u)
-    audit("user.access", user=request.user, target=u.username, detail={"business": bid, "role": role.name})
+    audit("user.access", user=request.user, target=u.username, detail={"businesses": valid, "all": every, "role": role.name})
+    messages.success(request, f"Kirish berildi: {'barcha bizneslar' if every else str(len(valid)) + ' ta biznes'} ({role.name}).")
     return redirect("user_detail", pk=u.pk)
 
 
@@ -445,13 +481,13 @@ def role_detail(request, pk):
     if request.method == "POST":
         if not can:
             return HttpResponseForbidden("Ruxsat yo'q")
-        codes = {c for c in request.POST.getlist("codes") if c.split(".")[0] in MODULES and c.split(".")[1] in ACTIONS}
+        codes = {c for c in request.POST.getlist("codes") if c in GRANTABLE}
         set_role_permissions(r, codes)
         audit("role.permissions", user=request.user, target=r.name, detail={"count": len(codes)})
         messages.success(request, "Ruxsatlar saqlandi.")
         return redirect("role_detail", pk=r.pk)
     have = set(r.permissions.values_list("code", flat=True))
-    return render(request, "role_matrix.html", {"role": r, "modules": {k: v for k, v in MODULES.items() if k != "approvals"}, "actions": {k: v for k, v in ACTIONS.items() if k != "approve"}, "have": have, "can": can})
+    return render(request, "role_matrix.html", {"role": r, "groups": grantable_groups(), "have": have & set(GRANTABLE), "can": can, "users_n": r.accesses.values("user").distinct().count()})
 
 
 @login_required

@@ -49,7 +49,6 @@ urlpatterns = [
     path("bizneslar/<int:pk>/killswitch/", b.business_killswitch, name="business_killswitch"),
     path("bizneslar/<int:pk>/brend/yangi/", b.brand_new, name="brand_new"),
     path("bizneslar/<int:pk>/brend/ai/", b.brand_ai, name="brand_ai"),
-    path("bizneslar/<int:pk>/brend/<int:vid>/tasdiq/", b.brand_approve, name="brand_approve"),
     path("bizneslar/<int:pk>/brend/<int:vid>/qaytarish/", b.brand_restore, name="brand_restore"),
     # ulanishlar
     path("ulanishlar/", n.connection_list, name="connection_list"),
@@ -239,5 +238,6 @@ urlpatterns = [
     path("foydalanuvchilar/<int:pk>/", s.user_detail, name="user_detail"),
     path("foydalanuvchilar/<int:pk>/tahrir/", s.user_edit, name="user_edit"),
     path("foydalanuvchilar/<int:pk>/kirish/", s.user_access_add, name="user_access_add"),
+    path("foydalanuvchilar/<int:pk>/ruxsat/", s.user_permissions_save, name="user_permissions_save"),
     path("foydalanuvchilar/<int:pk>/kirish/<int:aid>/ochir/", s.user_access_delete, name="user_access_delete"),
 ]

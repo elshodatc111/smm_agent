@@ -41,10 +41,10 @@
   {% block content %}{% endblock %}
 </main></div></div>
 <nav class="bnav" aria-label="Asosiy">
-  <a href="{% url 'calendar' %}" class="{% if request.resolver_match.url_name == 'calendar' %}active{% endif %}"><svg viewBox="0 0 24 24">{{ icons.cal|safe }}</svg>Kalendar</a>
-  <a href="{% url 'cloud_home' %}" class="{% if request.resolver_match.url_name|slice:':6' == 'cloud_' %}active{% endif %}"><svg viewBox="0 0 24 24">{{ icons.cloud|safe }}</svg>Cloudflare</a>
-  <a href="{% url 'content_new' %}"><span class="plus"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span></a>
-  <a href="{% url 'analytics' %}" class="{% if request.resolver_match.url_name == 'analytics' %}active{% endif %}"><svg viewBox="0 0 24 24">{{ icons.chart|safe }}</svg>Tahlil</a>
+  {% if 'calendar' in nav_urls %}<a href="{% url 'calendar' %}" class="{% if request.resolver_match.url_name == 'calendar' %}active{% endif %}"><svg viewBox="0 0 24 24">{{ icons.cal|safe }}</svg>Kalendar</a>{% endif %}
+  {% if 'cloud_home' in nav_urls %}<a href="{% url 'cloud_home' %}" class="{% if request.resolver_match.url_name|slice:':6' == 'cloud_' %}active{% endif %}"><svg viewBox="0 0 24 24">{{ icons.cloud|safe }}</svg>Cloudflare</a>{% endif %}
+  {% if 'calendar' in nav_urls %}<a href="{% url 'content_new' %}"><span class="plus"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span></a>{% endif %}
+  {% if 'analytics' in nav_urls %}<a href="{% url 'analytics' %}" class="{% if request.resolver_match.url_name == 'analytics' %}active{% endif %}"><svg viewBox="0 0 24 24">{{ icons.chart|safe }}</svg>Tahlil</a>{% endif %}
   <button type="button" onclick="Alpine.$data(document.querySelector('.app')).open=true"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>Menyu</button>
 </nav>
 {% else %}{% block anon %}{% endblock %}{% endif %}

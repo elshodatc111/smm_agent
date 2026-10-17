@@ -1,5 +1,6 @@
 from django.urls import reverse
 
+from apps.accounts.permissions_registry import GLOBAL_MODULES
 from apps.accounts.services import perms
 from apps.core.settings_store import get_setting
 
@@ -29,36 +30,36 @@ ICONS = {
 }
 
 NAV = [
-    ("Asosiy", [("dashboard", "Boshqaruv paneli", "dashboard", "dashboard", "home"),
-                ("businesses", "Bizneslar", "business_list", "businesses", "brief"),
-                ("inbox", "Murojaatlar", "inbox_home", "inbox", "users"),
-                ("calendar", "Kontent kalendar", "calendar", "calendar", "cal"),
-                ("ai_studio", "AI takliflar", "studio_home", "ai_studio", "spark")]),
+    ("Bosh", [("dashboard", "Boshqaruv paneli", "dashboard", "dashboard", "home"),
+              ("notifications", "Aqlli ogohlantirishlar", "alerts_home", "notifications", "bell")]),
+    ("Mijozlar", [("businesses", "Bizneslar", "business_list", "businesses", "brief"),
+                  ("inbox", "Murojaatlar", "inbox_home", "inbox", "users"),
+                  ("goals", "Maqsadlar", "goals_home", "goals", "target"),
+                  ("connections", "Ulanishlar", "connection_list", "connections", "link")]),
+    ("Kontent", [("calendar", "Kontent kalendar", "calendar", "calendar", "cal"),
+                 ("ai_studio", "Kontent reja", "reja_home", "ai_studio", "cal"),
+                 ("ai_studio", "Karusel ssenariy", "carousel_home", "ai_studio", "film"),
+                 ("ai_studio", "G'oyalar banki", "ideas_home", "ai_studio", "bulb"),
+                 ("ai_studio", "AI takliflar", "studio_home", "ai_studio", "spark"),
+                 ("calendar", "Shablonlar", "template_list", "calendar", "scroll"),
+                 ("calendar", "Vazifalar", "my_tasks", "calendar", "brief"),
+                 ("calendar", "Savat", "trash_list", "calendar", "trash")]),
+    ("Nashr", [("publish", "Nashr jurnali", "publish_log", "publish", "send"),
+               ("stories", "Telegram Stories", "stories_home", "stories", "film"),
+               ("publish", "Cloudflare", "cloud_home", "publish", "cloud")]),
     ("Tahlil", [("analytics", "Tahlil", "analytics", "analytics", "chart"),
                 ("analytics", "Kunlik statistika", "daily_stats", "analytics", "pulse"),
                 ("competitors", "Raqobatchilar", "competitor_list", "competitors", "users"),
+                ("ads", "Reklama tahlili", "ads_home", "ads", "mega"),
                 ("media_analysis", "Media tahlil", "media_list", "media_analysis", "film"),
                 ("reports", "Hisobotlar", "report_list", "reports", "file")]),
-    ("Strategiya", [("goals", "Maqsadlar", "goals_home", "goals", "target"),
-                    ("ai_studio", "Kontent reja", "reja_home", "ai_studio", "cal"),
-                    ("ai_studio", "Karusel ssenariy", "carousel_home", "ai_studio", "film"),
-                    ("ads", "Reklama tahlili", "ads_home", "ads", "mega"),
-                    ("ai_studio", "G'oyalar banki", "ideas_home", "ai_studio", "bulb"),
-                    ("stories", "Telegram Stories", "stories_home", "stories", "film")]),
-    ("Ko'proq", [("connections", "Ulanishlar", "connection_list", "connections", "link"),
-                 ("calendar", "Vazifalar", "my_tasks", "calendar", "brief"),
-                 ("calendar", "Shablonlar", "template_list", "calendar", "scroll"),
-                 ("publish", "Nashr jurnali", "publish_log", "publish", "send"),
-                 ("publish", "Cloudflare", "cloud_home", "publish", "cloud"),
-                 ("calendar", "Savat", "trash_list", "calendar", "trash"),
-                 ("activity", "Faoliyat jurnali", "activity_log", "businesses", "pulse"),
-                 ("notifications", "Aqlli ogohlantirishlar", "alerts_home", "notifications", "bell"),
-                 ("system_health", "Tizim holati", "health", "system_health", "pulse"),
-                 ("settings", "Sozlamalar", "settings_home", "settings", "gear"),
-                 ("users", "Foydalanuvchilar", "user_list", "users", "users"),
-                 ("guides", "Yo'riqnoma", "guide_index", "guides", "book")]),
+    ("Tizim", [("users", "Foydalanuvchilar", "user_list", "users", "users"),
+               ("settings", "Sozlamalar", "settings_home", "settings", "gear"),
+               ("system_health", "Tizim holati", "health", "system_health", "pulse"),
+               ("activity", "Faoliyat jurnali", "activity_log", "businesses", "pulse"),
+               ("guides", "Yo'riqnoma", "guide_index", "guides", "book")]),
 ]
-CLOSED_BY_DEFAULT = {"Ko'proq"}
+CLOSED_BY_DEFAULT = {"Tizim"}
 
 
 def ui_context(request):
@@ -75,13 +76,13 @@ def ui_context(request):
             if user.is_admin:
                 ok = True
             elif key == "activity":
-                ok = bool(biz and perms.can(user, "businesses.edit", biz)) or (not biz and perms.businesses_for(user, "businesses.edit").exists())
-            elif module in ("settings", "users", "system_health", "guides", "stories"):
+                ok = False      # faoliyat jurnali: faqat admin
+            elif module in GLOBAL_MODULES:
                 ok = perms.can(user, f"{module}.view", None)
             else:
                 ok = perms.can(user, f"{module}.view", biz) if biz else perms.businesses_for(user, f"{module}.view").exists()
             if ok:
-                rows.append({"label": label, "url": reverse(url_name), "icon": ICONS[icon], "active": cur == url_name or (cur or "").startswith(url_name.split("_")[0] + "_"), "key": key})
+                rows.append({"label": label, "url": reverse(url_name), "name": url_name, "icon": ICONS[icon], "active": cur == url_name or (cur or "").startswith(url_name.split("_")[0] + "_"), "key": key})
         if rows:
             nav.append({"title": sec, "items": rows, "has_active": any(r["active"] for r in rows),
                         "closed": sec in CLOSED_BY_DEFAULT})
@@ -89,4 +90,5 @@ def ui_context(request):
     return {"system_name": get_setting("general.system_name", "SMM Platforma"), "brand_color": get_setting("general.brand_color", "#E11D2E"),
             "default_theme": get_setting("general.theme_default", "light"), "nav": nav, "icons": ICONS,
             "my_businesses": perms.businesses_for(user), "current_business": biz,
-            "unread": Notification.objects.filter(user=user, read_at__isnull=True).count()}
+            "unread": Notification.objects.filter(user=user, read_at__isnull=True).count(),
+            "nav_urls": {r["name"] for sec in nav for r in sec["items"]}}

@@ -99,7 +99,7 @@ def brand_new(request, pk):
     form = BrandForm(request.POST)
     if form.is_valid():
         bsvc.save_brand_version(b, form.cleaned_data["content"], user=request.user, note=form.cleaned_data["note"])
-        messages.success(request, "Yangi versiya qoralama sifatida saqlandi.")
+        messages.success(request, "Yangi versiya saqlandi va ishlatilmoqda.")
     return redirect("business_detail", pk=b.pk)
 
 
@@ -110,18 +110,9 @@ def brand_ai(request, pk):
     from apps.studio.services import generate_brand_profile
     try:
         generate_brand_profile(b, request.user)
-        messages.success(request, "AI brend xotirasi qoralamasini yaratdi. Ko'rib chiqib tasdiqlang.")
+        messages.success(request, "AI brend xotirasini yaratdi va saqladi. Kerak bo'lsa quyida tahrirlab yangi versiya saqlang.")
     except Exception as e:  # noqa: BLE001
         messages.error(request, getattr(e, "user_message_uz", None) or f"AI xatosi: {e}")
-    return redirect("business_detail", pk=b.pk)
-
-
-@login_required
-@require_POST
-def brand_approve(request, pk, vid):
-    b = _biz_or_404(request, pk, "businesses.edit")
-    bsvc.approve_brand(get_object_or_404(BrandProfile, pk=vid, business=b), request.user)
-    messages.success(request, "Brend xotirasi tasdiqlandi.")
     return redirect("business_detail", pk=b.pk)
 
 

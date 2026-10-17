@@ -1,9 +1,10 @@
 {% extends "base.html" %}{% block title %}{{ role.name }}{% endblock %}
 {% block content %}
 <div class="row sb"><h1>Rol: {{ role.name }}</h1><a class="btn" href="{% url 'role_list' %}">Orqaga</a></div>
+<div class="callout"><b>i</b><div>Rol — xodimga beriladigan <b>andoza (boshlang'ich ruxsatlar)</b>. Har bir xodimning ruxsatlarini keyin <b>Foydalanuvchilar → xodim sahifasida</b> alohida o'zgartirish mumkin. Bu rol hozir <b>{{ users_n }}</b> ta xodimga biriktirilgan; o'zgartirsangiz, ularda alohida belgilanmagan ruxsatlar ham o'zgaradi. Sozlamalar, foydalanuvchilar, yangi biznes va akkaunt ulash faqat adminda qoladi.</div></div>
 <form method="post">{% csrf_token %}
-<div class="card"><div class="tbl"><table class="matrix"><tr><th>Modul</th>{% for a,l in actions.items %}<th>{{ l }}</th>{% endfor %}</tr>
-{% for m,ml in modules.items %}<tr><td>{{ ml }}</td>{% for a,l in actions.items %}<td><input type="checkbox" name="codes" value="{{ m }}.{{ a }}" {% if m|add:"."|add:a in have %}checked{% endif %} {% if not can %}disabled{% endif %}></td>{% endfor %}</tr>{% endfor %}
-</table></div>{% if can %}<div class="mt row"><button class="btn primary">Saqlash</button></div>{% endif %}</div></form>
-{% if can and not role.is_system %}<form method="post" action="{% url 'role_delete' role.pk %}" onsubmit="return confirm('Rol o\'chirilsinmi?')">{% csrf_token %}<button class="btn danger">Rolni o'chirish</button></form>{% endif %}
+{% if can %}<div class="row mt" style="gap:8px"><button type="button" class="btn sm" onclick="pmAll('all')">Hammasini belgilash</button><button type="button" class="btn sm" onclick="pmAll('view')">Faqat ko'rish</button><button type="button" class="btn sm" onclick="pmAll('none')">Hech narsa</button></div>{% endif %}
+{% include "partials/perm_matrix.html" %}
+{% if can %}<div class="mt row"><button class="btn primary">Saqlash</button></div>{% endif %}</form>
+{% if can and not role.is_system %}<form method="post" action="{% url 'role_delete' role.pk %}" onsubmit="return confirm('Rol o\'chirilsinmi?')" class="mt">{% csrf_token %}<button class="btn danger">Rolni o'chirish</button></form>{% endif %}
 {% endblock %}

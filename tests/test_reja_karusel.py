@@ -152,9 +152,7 @@ def test_web_pages(biz, admin):
     p = ContentPlan.objects.filter(platform="instagram").first()
     page = c.get(f"/reja/{p.pk}/")
     assert page.status_code == 200 and "Hook" in page.content.decode()
-    r = c.post(f"/reja/{p.pk}/amal/", {"act": "approve", "n": 0})
-    p.refresh_from_db()
-    assert p.status == "approved"
+    assert "Tasdiqlash" not in page.content.decode()      # tasdiqlash bosqichi yo'q
     r = c.post("/karusel/yaratish/", {"topic": "Test mavzu", "size": "auto", "platform": "instagram"})
     assert r.status_code == 302
     from apps.studio.models import Carousel

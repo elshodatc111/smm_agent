@@ -38,7 +38,7 @@ def generate_brand_profile(business, user=None, router: AIRouter | None = None):
     d = res.data or {}
     content = d.get("prompt") or res.text or ""
     bp = save_brand_version(business, content, user=user, structured={k: v for k, v in d.items() if k != "prompt"},
-                            note="AI yozdi — ko'rib chiqing va tasdiqlang", ai=True)
+                            note="AI yozdi", ai=True)
     return bp
 
 

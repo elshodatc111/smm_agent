@@ -40,4 +40,5 @@ def require_permission(code: str):
 def _deny(request):
     if request.path.startswith("/api/"):
         return JsonResponse({"error": {"code": "permission_denied", "message_uz": "Bu amalga ruxsat yo'q."}}, status=403)
-    return HttpResponseForbidden(b"<h1>403</h1><p>Bu amalga ruxsat yo'q.</p>")
+    from apps.web.views_core import permission_denied
+    return permission_denied(request)

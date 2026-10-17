@@ -227,7 +227,7 @@ def test_late_modules_granted_to_existing_roles(db):
     set_setting("rbac.late_granted", [])
     call_command("bootstrap")
     assert RolePermission.objects.filter(role__name="Menejer", code="goals.edit").exists()
-    assert RolePermission.objects.filter(role__name="Analitik", code="goals.export").exists()
+    assert RolePermission.objects.filter(role__name="Analitik", code="goals.view").exists()
 
 
 # ------------------------------------------------------------------ reklama taklifi

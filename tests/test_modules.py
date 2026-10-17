@@ -34,9 +34,7 @@ def test_brand_profile_versioning(biz, admin):
     from apps.studio import services as st
     from apps.businesses.services import approve_brand, restore_brand
     bp = st.generate_brand_profile(biz, admin)
-    assert bp.version == 1 and bp.status == "draft" and bp.generated_by_ai
-    assert biz.active_brand is None
-    approve_brand(bp, admin)
+    assert bp.version == 1 and bp.status == "approved" and bp.generated_by_ai     # tasdiqlash bosqichi yo'q
     assert biz.active_brand.version == 1
     from apps.businesses.services import save_brand_version
     save_brand_version(biz, "yangi matn", user=admin, status="approved")

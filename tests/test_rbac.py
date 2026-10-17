@@ -20,7 +20,7 @@ def test_role_per_business_differs(user_smm, biz, biz2):
     UserBusinessAccess.objects.create(user=user_smm, business=biz2, role=Role.objects.get(name="Analitik"))
     assert perms.can(user_smm, "calendar.create", biz)
     assert not perms.can(user_smm, "calendar.create", biz2)
-    assert perms.can(user_smm, "analytics.export", biz2)
+    assert perms.can(user_smm, "reports.export", biz2)
 
 
 def test_all_businesses_flag(db, biz, biz2):
@@ -30,9 +30,9 @@ def test_all_businesses_flag(db, biz, biz2):
 
 
 def test_override_and_instant_effect(user_smm, biz):
-    assert not perms.can(user_smm, "approvals.approve", biz)
-    UserPermissionOverride.objects.create(user=user_smm, code="approvals.approve", allow=True)
-    assert perms.can(user_smm, "approvals.approve", biz)
+    assert not perms.can(user_smm, "competitors.delete", biz)
+    UserPermissionOverride.objects.create(user=user_smm, code="competitors.delete", allow=True)
+    assert perms.can(user_smm, "competitors.delete", biz)
     UserPermissionOverride.objects.create(user=user_smm, code="calendar.create", allow=False)
     assert not perms.can(user_smm, "calendar.create", biz)
 

@@ -1,0 +1,18 @@
+<style>
+.pm-g{margin:16px 0 6px;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.pm-mod{border:1px solid var(--border);border-radius:12px;padding:10px 14px;margin-bottom:8px;background:var(--surface)}
+.pm-h{display:flex;align-items:center;gap:10px;margin-bottom:4px}.pm-h a{font-size:12px;cursor:pointer;color:var(--brand)}
+.pm-acts{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:4px 16px}
+.pm-acts label{display:grid;grid-template-columns:auto 1fr;column-gap:8px;align-items:start;font-weight:500;cursor:pointer;padding:4px 0}
+.pm-acts input{width:auto;margin-top:3px}.pm-acts small{grid-column:2;color:var(--muted);font-size:11.5px;line-height:1.3}
+.pm-acts em{grid-column:2;font-style:normal;font-size:10.5px;color:var(--brand-2);font-weight:700}
+</style>
+{% for gname, mods in groups %}<div class="pm-g">{{ gname }}</div>
+{% for m, mlabel, acts in mods %}<div class="pm-mod" data-mod="{{ m }}"><div class="pm-h"><b>{{ mlabel }}</b>{% if can %}<a onclick="pmMod(this,true)">hammasi</a><a onclick="pmMod(this,false)" style="color:var(--muted)">hech biri</a>{% endif %}</div>
+<div class="pm-acts">{% for code, label, help in acts %}<label><input type="checkbox" name="codes" value="{{ code }}" {% if code in have %}checked{% endif %} {% if not can %}disabled{% endif %}><span>{{ label }}</span><small>{{ help }}</small>{% if code in changed %}<em>● shu xodim uchun alohida</em>{% endif %}</label>{% endfor %}</div></div>{% endfor %}
+{% endfor %}
+<script>
+function pmMod(a,on){a.closest('.pm-mod').querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=on})}
+function pmAll(mode){document.querySelectorAll('.pm-acts input[type=checkbox]').forEach(function(c){c.checked=mode==='all'?true:mode==='view'?/\.view$/.test(c.value):false})}
+function pmSet(list){var s={};list.forEach(function(x){s[x]=1});document.querySelectorAll('.pm-acts input[type=checkbox]').forEach(function(c){c.checked=!!s[c.value]})}
+</script>

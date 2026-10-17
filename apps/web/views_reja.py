@@ -83,7 +83,7 @@ def reja_home(request):
         state = (p.strategy or {}).get("ai_state", "ok")
         rows.append([f"{p.month:%Y-%m}", pl.PLATFORM_UZ.get(p.platform, p.platform), len(p.entries),
                      ui.badge({"pending": "AI yozmoqda…", "fallback": "Andoza", "ok": "AI bilan"}.get(state, state), "running" if state == "pending" else "ok" if state == "ok" else "warn"),
-                     ui.badge("Tasdiqlangan" if p.status == "approved" else "Qoralama", "approved" if p.status == "approved" else "draft"),
+                     ui.badge("Reja", "draft"),
                      "Yuklangan" if p.loaded_to_calendar else "Yo'q", ui.link("Ochish", f"/reja/{p.pk}/")])
     blocks.append(ui.table("Tuzilgan rejalar", ["Oy", "Tarmoq", "Nashrlar", "Mazmun", "Holat", "Kalendarga", ""], rows, "Hali reja tuzilmagan."))
     return ui.page(request, "Kontent reja", blocks, subtitle=b.name, toolbar=[{"label": "🎠 Karusel ssenariy", "url": "/karusel/"}])
@@ -182,11 +182,10 @@ def reja_view(request, pk):
             '<button class="btn primary" name="act" value="save">💾 Saqlash</button>'
             '<button class="btn" name="act" value="add">➕ Qator qo\'shish</button>'
             '<button class="btn" name="act" value="ai" onclick="this.textContent=\'AI yozmoqda…\'">✨ AI bilan yangilash</button>'
-            + ('' if p.status == "approved" else '<button class="btn" name="act" value="approve">✔ Tasdiqlash</button>')
             + '<button class="btn" name="act" value="load">📅 Kalendarga qoralama qilib yuklash</button>'
             '<button class="btn" name="act" value="delete_plan" onclick="return confirm(\'Butun reja o\\\'chirilsinmi?\')">🗑 Rejani o\'chirish</button></div></form>')
     blocks.append({"type": "html", "title": "Reja (tahrirlash mumkin)", "html": html})
-    return ui.page(request, f"{plat_name} · {pl.MONTHS_UZ[p.month.month]} {p.month.year}", blocks, subtitle=("Tasdiqlangan" if p.status == "approved" else "Qoralama"),
+    return ui.page(request, f"{plat_name} · {pl.MONTHS_UZ[p.month.month]} {p.month.year}", blocks, subtitle="Tahrirlab, kalendarga yuklash mumkin",
                    toolbar=[{"label": "← Barcha rejalar", "url": "/reja/"}])
 
 
@@ -236,9 +235,6 @@ def reja_action(request, pk):
         p.entries.append(pl.validate_entry(p.platform, {"date": base.isoformat(), "time": last.get("time", ""), "format": pl.PLATFORM_FORMATS[p.platform][0],
                                                        "topic": "Yangi mavzu", "pillar_name": "Qo'shimcha", "source": "qo'lda"}))
         messages.success(request, "Bo'sh qator qo'shildi.")
-    elif kind == "approve":
-        p.status = "approved"
-        messages.success(request, "Reja tasdiqlandi. Endi kalendarga yuklashingiz mumkin.")
     p.entries.sort(key=lambda e: (e.get("date") or "9999", e.get("time") or ""))
     p.save()
     # tartiblangach indekslar o'zgargan bo'lishi mumkin: AI amallari uchun mavzu bo'yicha qayta topamiz

@@ -26,9 +26,9 @@
       <div class="row">{% if can_ai %}<form method="post" action="/bizneslar/{{ b.pk }}/brend/ai/">{% csrf_token %}<button class="btn sm primary">AI bilan yaratish</button></form>{% endif %}</div></div>
       {% if act %}<div class="muted sm">Faol versiya v{{ act.version }}</div><div class="fx" style="max-height:260px;overflow:auto;margin:8px 0;padding:12px;border-radius:12px;background:var(--surface-2)">{{ act.content }}</div>{% else %}<div class="empty">Brend xotirasi hali yo'q.</div>{% endif %}
       <div class="tbl"><table><tr><th>Versiya</th><th>Holat</th><th>Manba</th><th>Sana</th><th></th></tr>
-      {% for v in versions %}<tr><td>v{{ v.version }}</td><td><span class="badge {% if v.status == 'approved' %}ok{% endif %}">{{ v.get_status_display }}</span></td><td>{% if v.generated_by_ai %}AI{% else %}Qo'lda{% endif %}</td><td>{{ v.created_at|date:"d.m.Y" }}</td>
-        <td>{% if can_edit %}<div class="row">{% if v.status != 'approved' %}<form method="post" action="/bizneslar/{{ b.pk }}/brend/{{ v.pk }}/tasdiq/">{% csrf_token %}<button class="btn sm primary">Tasdiqlash</button></form>{% endif %}<form method="post" action="/bizneslar/{{ b.pk }}/brend/{{ v.pk }}/qaytarish/">{% csrf_token %}<button class="btn sm">Qaytarish</button></form></div>{% endif %}</td></tr>{% endfor %}</table></div>
-      {% if can_edit %}<form method="post" action="/bizneslar/{{ b.pk }}/brend/yangi/" class="mt">{% csrf_token %}{% include "partials/form_card.html" with form=brand_form %}<div class="mt"><button class="btn">Qoralama sifatida saqlash</button></div></form>{% endif %}</div>
+      {% for v in versions %}<tr><td>v{{ v.version }}</td><td><span class="badge ok">{% if forloop.first %}Joriy{% else %}Eski versiya{% endif %}</span></td><td>{% if v.generated_by_ai %}AI{% else %}Qo'lda{% endif %}</td><td>{{ v.created_at|date:"d.m.Y" }}</td>
+        <td>{% if can_edit %}<div class="row"><form method="post" action="/bizneslar/{{ b.pk }}/brend/{{ v.pk }}/qaytarish/">{% csrf_token %}<button class="btn sm">Qaytarish</button></form></div>{% endif %}</td></tr>{% endfor %}</table></div>
+      {% if can_edit %}<form method="post" action="/bizneslar/{{ b.pk }}/brend/yangi/" class="mt">{% csrf_token %}{% include "partials/form_card.html" with form=brand_form %}<div class="mt"><button class="btn">Yangi versiya sifatida saqlash</button></div></form>{% endif %}</div>
   </div>
   <div>
     <div class="card"><h2>Ma'lumot</h2><div class="kvx" style="grid-template-columns:1fr">

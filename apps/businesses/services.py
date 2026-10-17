@@ -25,11 +25,13 @@ def ensure_templates():
 
 @transaction.atomic
 def save_brand_version(business: Business, content: str, *, user=None, structured=None,
-                       status="draft", note="", ai=False) -> BrandProfile:
+                       status="approved", note="", ai=False) -> BrandProfile:
     last = business.brand_profiles.order_by("-version").first()
     bp = BrandProfile.objects.create(business=business, version=(last.version + 1) if last else 1,
                                      content=content, structured=structured or {}, status=status,
                                      note=note, created_by=user, generated_by_ai=ai)
+    if status == "approved":
+        Business.objects.filter(pk=business.pk).update(brand_update_suggested=False)
     audit("brand.version", user=user, business_id=business.pk, target=f"v{bp.version}")
     return bp
 

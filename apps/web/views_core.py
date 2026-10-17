@@ -167,3 +167,21 @@ def guide_view(request, slug):
         raise Http404
     html = markdown.markdown(f.read_text(encoding="utf-8"), extensions=["tables", "fenced_code", "toc", "sane_lists"])
     return render(request, "guide.html", {"html": html, "guides": _guides(), "slug": slug})
+
+
+def first_allowed_url(request) -> str | None:
+    """Foydalanuvchi kira oladigan birinchi bo'lim (menyudagi tartib bo'yicha)."""
+    from .context import ui_context
+    for sec in ui_context(request).get("nav", []):
+        for it in sec["items"]:
+            return it["url"]
+    return None
+
+
+def permission_denied(request, exception=None):
+    """Chiroyli 403: kim kirgani, kira oladigan bo'limlar va «Chiqish» tugmasi bilan."""
+    if request.user.is_authenticated and request.path == "/":
+        nxt = first_allowed_url(request)
+        if nxt and nxt != "/":
+            return redirect(nxt)
+    return render(request, "403.html", {"title": "Ruxsat yo'q"}, status=403)

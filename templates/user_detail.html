@@ -1,0 +1,32 @@
+{% extends "base.html" %}{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="row sb"><div><h1 style="margin:2px 0">{{ u.display }}</h1><div class="muted">@{{ u.username }} · {% if u.is_admin %}Admin{% else %}Xodim{% endif %} · {% if u.is_active %}faol{% else %}o'chiq{% endif %}{% if u.telegram_id %} · Telegram ID {{ u.telegram_id }}{% endif %}</div></div><a class="btn" href="{% url 'user_list' %}">Orqaga</a></div>
+
+{% if u.is_admin %}<div class="callout"><b>i</b><div>Bu foydalanuvchi <b>admin</b>: unga barcha bo'limlar ochiq, alohida ruxsat berish shart emas.</div></div>
+{% else %}
+<div class="card mt"><h2>1 · Qaysi bizneslarga kirishi mumkin</h2>
+<div class="tbl"><table><tr><th>Biznes</th><th>Rol (andoza)</th><th></th></tr>
+{% for a in accesses %}<tr><td>{% if a.business %}{{ a.business.name }}{% else %}<b>Barcha bizneslar</b>{% endif %}</td><td>{{ a.role.name }}</td>
+<td>{% if can %}<form method="post" action="{% url 'user_access_delete' u.pk a.pk %}">{% csrf_token %}<button class="btn sm danger">Olib tashlash</button></form>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="3" class="empty">Hech qaysi bizneska biriktirilmagan. Biznes bo'yicha bo'limlar (kalendar, murojaatlar va h.k.) uchun kamida bitta biznes kerak. Stories kabi umumiy bo'limlar biznesga bog'liq emas.</td></tr>{% endfor %}</table></div>
+{% if can %}<form method="post" action="{% url 'user_access_add' u.pk %}" class="mt">{% csrf_token %}
+ <label>Biznes(lar)ni tanlang — bir nechtasini belgilash mumkin</label>
+ <div style="max-height:190px;overflow:auto;border:1px solid var(--border);border-radius:10px;padding:8px 12px">
+  <label class="row" style="gap:8px;font-weight:700"><input type="checkbox" name="all" value="1" style="width:auto" onclick="document.querySelectorAll('.bizChk').forEach(c=>c.disabled=this.checked)"> Barcha bizneslar (yangilari ham)</label>
+  {% for b in businesses %}<label class="row" style="gap:8px;font-weight:500"><input type="checkbox" class="bizChk" name="businesses" value="{{ b.pk }}" style="width:auto"> {{ b.name }}</label>{% endfor %}</div>
+ <label>Rol (andoza; ruxsatlarni pastda xodim uchun alohida sozlaysiz)</label><select name="role">{% for r in roles %}<option value="{{ r.pk }}">{{ r.name }}</option>{% endfor %}</select>
+ <div class="mt"><button class="btn primary">Kirish berish</button></div></form>{% endif %}</div>
+
+<form method="post" action="{% url 'user_permissions_save' u.pk %}" class="card mt"><h2>2 · Qaysi bo'limlarda nima qila oladi</h2>{% csrf_token %}
+ <div class="muted sm">Belgilangan = ruxsat bor. Rolning ruxsatlari belgilab qo'yilgan; xohlagan katagingizni qo'shing yoki olib tashlang, so'ng pastda «Saqlash»ni bosing. «Alohida» belgisi rol andozasidan farq qiladigan joylarni ko'rsatadi.</div>
+ {% if can %}<div class="row mt" style="gap:8px;flex-wrap:wrap"><button type="button" class="btn sm" onclick="pmAll('all')">Hammasini belgilash</button><button type="button" class="btn sm" onclick="pmAll('view')">Faqat ko'rish</button><button type="button" class="btn sm" onclick="pmAll('none')">Hech narsa</button>
+  <span class="muted sm">Rol andozasini qo'llash:</span><select id="pmRole" style="width:auto">{% for r in roles %}<option value="{{ r.pk }}">{{ r.name }}</option>{% endfor %}</select><button type="button" class="btn sm" onclick="pmSet(ROLE_MAP[document.getElementById('pmRole').value]||[])">Qo'llash</button></div>{% endif %}
+ {% include "partials/perm_matrix.html" with groups=groups have=have changed=changed can=can %}
+ <div class="callout warn mt"><b>!</b><div><b>Faqat admin:</b> {{ admin_only_info|join:"; " }}. Bular xodimga berilmaydi.</div></div>
+ {% if can %}<div class="mt row"><button class="btn primary">Ruxsatlarni saqlash</button></div>{% endif %}</form>
+<script>var ROLE_MAP={{ role_map|safe }};</script>
+{% endif %}
+
+{% if can %}<form method="post" action="{% url 'user_edit' u.pk %}" class="card mt" style="max-width:640px"><h2>{% if u.is_admin %}1{% else %}3{% endif %} · Ma'lumotlarini tahrirlash</h2>{% csrf_token %}
+ {% include "partials/form_card.html" %}<div class="mt"><button class="btn primary">Saqlash</button></div></form>{% endif %}
+{% endblock %}
