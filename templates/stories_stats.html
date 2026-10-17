@@ -1,0 +1,10 @@
+{% extends "base.html" %}{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="pg-head row sb"><div><h1 style="margin:2px 0">Stories statistikasi</h1><div class="muted">So'nggi {{ days }} kun. Ko'rishlar joylangandan keyin 30 daqiqa, 3, 12 soat va story tugagach avtomatik yangilanadi.</div></div></div>
+{% include "partials/stories_tabs.html" %}
+<div class="grid g3" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))"><div class="card"><div class="muted sm">Joylangan</div><b style="font-size:26px">{{ totals.sent }}</b></div><div class="card"><div class="muted sm">Ko'rishlar</div><b style="font-size:26px">{{ totals.views }}</b></div><div class="card"><div class="muted sm">Ulashishlar</div><b style="font-size:26px">{{ totals.fw }}</b></div><div class="card"><div class="muted sm">Reaksiyalar</div><b style="font-size:26px">{{ totals.re }}</b></div></div>
+<div class="card mt"><h2>Akkauntlar bo'yicha</h2><div class="tbl"><table><tr><th>Akkaunt</th><th>Premium</th><th>Joylandi</th><th>Xato</th><th>Ko'rishlar</th><th>O'rtacha</th><th>Ulashish</th><th>Reaksiya</th></tr>
+{% for r in rows %}<tr><td>{{ r.a.name }}<div class="help">{{ r.a.phone }}</div></td><td>{% if r.a.is_premium %}Ha{% else %}—{% endif %}</td><td>{{ r.sent }}</td><td>{{ r.err }}</td><td>{{ r.views }}</td><td>{{ r.avg }}</td><td>{{ r.fw }}</td><td>{{ r.re }}</td></tr>{% empty %}<tr><td colspan="8" class="empty">Akkaunt yo'q.</td></tr>{% endfor %}</table></div></div>
+<div class="card mt"><h2>Eng ko'p ko'rilgan storylar</h2><div class="tbl"><table><tr><th>Story</th><th>Vaqt</th><th>Akkauntlar</th><th>Ko'rishlar</th></tr>
+{% for r in top %}<tr><td><a href="{% url 'stories_detail' r.s.pk %}">{{ r.s.title }}</a></td><td>{{ r.when }}</td><td>{{ r.sent }}</td><td>{{ r.views }}</td></tr>{% empty %}<tr><td colspan="4" class="empty">Ma'lumot yo'q.</td></tr>{% endfor %}</table></div></div>
+{% endblock %}

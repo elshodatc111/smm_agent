@@ -1,0 +1,12 @@
+{% extends "base.html" %}{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="pg-head row sb"><div><h1 style="margin:2px 0">Stories kalendari</h1><div class="muted">Faqat Telegram Stories rejasi — asosiy kontent kalendaridan alohida.</div></div>
+<div class="row"><a class="btn" href="?m={{ prev }}">←</a><b>{{ month_name }}</b><a class="btn" href="?m={{ nxt }}">→</a></div></div>
+{% include "partials/stories_tabs.html" %}
+<div class="card" style="overflow:auto"><table style="width:100%;table-layout:fixed;min-width:760px;border-collapse:collapse">
+<tr>{% for d in wd %}<th style="text-align:center;padding:6px">{{ d }}</th>{% endfor %}</tr>
+{% for w in weeks %}<tr>{% for c in w %}<td style="vertical-align:top;height:104px;border:1px solid var(--border);padding:4px;{% if not c.in %}opacity:.45;{% endif %}{% if c.today %}background:color-mix(in srgb,var(--brand) 8%,transparent);{% endif %}">
+ <div class="row sb sm"><b>{{ c.d.day }}</b><a href="{% url 'stories_new' %}?date={{ c.d|date:'Y-m-d' }}" title="Shu kunga story" class="muted">+</a></div>
+ {% for r in c.items %}<a href="{% url 'stories_detail' r.s.pk %}" class="sm" style="display:block;margin-top:3px;padding:2px 5px;border-radius:6px;background:var(--surface-2);overflow:hidden;white-space:nowrap;text-overflow:ellipsis" title="{{ r.s.title }} — {{ r.s.get_status_display }}">
+  <span style="color:{% if r.s.status == 'done' %}var(--ok){% elif r.s.status == 'failed' %}var(--bad){% elif r.s.status == 'partial' %}var(--warn){% endif %}">●</span> {{ r.time }} {{ r.s.title }} <span class="muted">({{ r.total }})</span></a>{% endfor %}</td>{% endfor %}</tr>{% endfor %}</table></div>
+{% endblock %}

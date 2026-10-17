@@ -1,0 +1,39 @@
+{% extends "base.html" %}{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="pg-head row sb"><div><h1 style="margin:2px 0">Yangi story</h1><div class="muted">Bir marta yuklang — tanlangan akkauntlarga avtomatik oraliq bilan joylanadi.</div></div></div>
+{% include "partials/stories_tabs.html" %}
+{% if errors %}<div class="callout bad"><b>!</b><div>{% for e in errors %}{{ e }}<br>{% endfor %}</div></div>{% endif %}
+<form method="post" enctype="multipart/form-data" class="grid g2" style="align-items:start">{% csrf_token %}
+<div>
+ <div class="card"><h2>1 · Fayl</h2>
+  <label>Rasm yoki video (kompyuterdan)</label><input type="file" name="media" accept="image/*,video/mp4,video/quicktime">
+  <div class="help">Story 9:16 (1080×1920) bo'ladi. Video: mp4, 60 soniyagacha tavsiya etiladi. Eng ko'pi {{ 200 }} MB.</div>
+  {% if assets %}<label>yoki kontent bazadagi fayldan</label><select name="asset"><option value="">—</option>{% for a in assets %}<option value="{{ a.pk }}" {% if P.asset == a.pk|stringformat:"s" %}selected{% endif %}>{{ a.original_name|default:a.file.name }} · {{ a.item.title|truncatechars:40 }}</option>{% endfor %}</select>{% endif %}
+  <label>Moslash usuli</label><select name="fit_mode"><option value="pad">Butun kadr saqlansin (chetlari xira fon)</option><option value="crop" {% if P.fit_mode == 'crop' %}selected{% endif %}>Markazdan qirqilsin (to'liq to'ldiradi)</option><option value="orig" {% if P.fit_mode == 'orig' %}selected{% endif %}>Asl holicha</option></select></div>
+ <div class="card mt"><h2>2 · Matn va stikerlar</h2>
+  <label>Ichki nom (ixtiyoriy)</label><input name="title" value="{{ P.title }}" maxlength="160">
+  <label>Sarlavha (caption)</label><textarea name="caption" rows="4" placeholder="Matn. <b>qalin</b>, <i>kursiv</i>, <a href=&quot;https://...&quot;>havola</a> ishlaydi">{{ P.caption }}</textarea>
+  <div class="help">Premium bo'lmagan akkauntda 200 belgigacha, Premiumda 2048 gacha. Uzun bo'lsa, Premium bo'lmaganlar «Premium kerak» deb ko'rsatiladi.</div>
+  <label>Havola stikeri (bosiladigan havola)</label><input name="link_url" value="{{ P.link_url }}" placeholder="https://t.me/..." maxlength="300">
+  <label>Reaksiya stikeri</label><select name="reaction"><option value="">—</option>{% for r in reactions %}<option value="{{ r }}" {% if P.reaction == r %}selected{% endif %}>{{ r }}</option>{% endfor %}</select>
+  <div class="row"><div style="flex:1"><label>Joylashuv: kenglik</label><input name="geo_lat" value="{{ P.geo_lat }}" placeholder="41.311"></div><div style="flex:1"><label>uzunlik</label><input name="geo_lon" value="{{ P.geo_lon }}" placeholder="69.279"></div></div></div>
+ <div class="card mt"><h2>3 · Sozlamalar</h2>
+  <label>Ko'rinish muddati</label><select name="period">{% for v, l in periods %}<option value="{{ v }}" {% if P.period == v|stringformat:"s" or not P.period and v == 86400 %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+  <label>Kimga ko'rinadi</label><select name="privacy">{% for v, l in privacy %}<option value="{{ v }}" {% if P.privacy == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+  <label class="row" style="gap:8px;font-weight:500"><input type="checkbox" name="pinned" value="1" style="width:auto" {% if P.pinned %}checked{% endif %}> Profilda doimiy qoldirish (pin)</label>
+  <label class="row" style="gap:8px;font-weight:500"><input type="checkbox" name="noforwards" value="1" style="width:auto" {% if P.noforwards %}checked{% endif %}> Ulashish va saqlashni taqiqlash</label></div>
+</div>
+<div>
+ <div class="card"><h2>4 · Akkauntlar</h2>
+  {% if accs %}<label class="row" style="gap:8px;font-weight:600"><input type="checkbox" id="allAcc" style="width:auto" onclick="document.querySelectorAll('.accChk').forEach(c=>{if(!c.disabled)c.checked=this.checked})"> Hammasini tanlash</label>
+  {% for a in accs %}<label class="row" style="gap:8px;font-weight:500"><input type="checkbox" class="accChk" name="accounts" value="{{ a.pk }}" style="width:auto" {% if a.status != 'active' %}disabled{% endif %} {% if a.pk|stringformat:"s" in sel %}checked{% endif %}> {{ a.name }} <span class="muted sm">{{ a.phone }}</span>
+   <span class="badge {% if a.is_premium %}violet{% endif %}">{% if a.is_premium %}Premium{% else %}Premium emas{% endif %}</span>{% if a.status != 'active' %}<span class="badge bad">{{ a.get_status_display }}</span>{% endif %}</label>{% endfor %}
+  {% else %}<div class="empty">Akkaunt yo'q. Avval <a href="{% url 'stories_accounts' %}">akkaunt ulang</a>.</div>{% endif %}</div>
+ <div class="card mt"><h2>5 · Qachon?</h2>
+  <label class="row" style="gap:8px;font-weight:500"><input type="radio" name="when" value="now" style="width:auto" {% if P.when != 'later' and not default_when %}checked{% endif %}> Hozir joylansin</label>
+  <label class="row" style="gap:8px;font-weight:500"><input type="radio" name="when" value="later" style="width:auto" {% if P.when == 'later' or default_when %}checked{% endif %}> Rejalashtirish (Toshkent vaqti)</label>
+  <input type="datetime-local" name="scheduled_at" value="{{ P.scheduled_at|default:default_when }}">
+  <div class="help">Akkauntlar orasida tizim {{ lo_hi.0 }}–{{ lo_hi.1 }} soniya tasodifiy oraliq qo'yadi, shuning uchun ro'yxatdagi oxirgi akkaunt bir necha daqiqa kechroq joylanadi.</div></div>
+ <div class="mt"><button class="btn primary">Joylash / rejalashtirish</button></div>
+</div></form>
+{% endblock %}

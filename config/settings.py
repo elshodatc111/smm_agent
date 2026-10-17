@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     "apps.metrics",
     "apps.content",
     "apps.studio",
+    "apps.stories",
     "apps.media_analysis",
     "apps.ads",
     "apps.goals",

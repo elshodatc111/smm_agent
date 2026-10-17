@@ -7,18 +7,19 @@ MODULES = {
     "ads": "Reklama tavsiyalari", "reports": "Hisobotlar",
     "notifications": "Bildirishnomalar", "system_health": "Tizim holati", "settings": "Sozlamalar",
     "users": "Foydalanuvchilar", "guides": "Yo'riqnoma",
-    "goals": "Maqsadlar", "inbox": "Murojaatlar",
+    "goals": "Maqsadlar", "inbox": "Murojaatlar", "stories": "Telegram Stories",
 }
 ACTIONS = {
     "view": "Ko'rish", "create": "Yaratish", "edit": "Tahrirlash", "delete": "O'chirish",
     "approve": "Tasdiqlash", "publish": "Nashr qilish", "export": "Eksport", "configure": "Sozlash",
 }
 # Biznesga bog'lanmagan (global) modullar
-GLOBAL_MODULES = {"settings", "users", "system_health", "guides"}
+GLOBAL_MODULES = {"settings", "users", "system_health", "guides", "stories"}
 # Keyinroq qo'shilgan modullar: mavjud rollarga bir marta beriladigan standart ruxsatlar (bootstrap)
 LATE_MODULES = {
     "goals": {"Menejer": "view,create,edit,delete", "SMM mutaxassis": "view,create,edit", "Targetolog": "view", "Analitik": "view,export", "Kontent-maker": "view"},
     "inbox": {"Menejer": "view,create,edit,configure", "SMM mutaxassis": "view,create,edit"},
+    "stories": {"Menejer": "view,create,edit,configure", "SMM mutaxassis": "view,create,edit"},
 }
 
 ALL_CODES = [f"{m}.{a}" for m in MODULES for a in ACTIONS]
@@ -39,7 +40,7 @@ def codes(spec: dict[str, str]) -> set[str]:
     return out
 
 
-VIEW_ALL = {m: "view" for m in MODULES if m not in ("settings", "users", "system_health", "inbox")}  # tizim bo'limlari faqat admin / alohida beriladi
+VIEW_ALL = {m: "view" for m in MODULES if m not in ("settings", "users", "system_health", "inbox", "stories")}  # tizim bo'limlari faqat admin / alohida beriladi
 
 PRESET_ROLES = {
     "Menejer": {**VIEW_ALL, "inbox": "view,create,edit,configure", "goals": "view,create,edit,delete", "businesses": "view,create,edit", "connections": "view,create,edit",

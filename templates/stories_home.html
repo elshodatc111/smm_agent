@@ -1,0 +1,13 @@
+{% extends "base.html" %}{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="pg-head row sb"><div><h1 style="margin:2px 0">Telegram Stories</h1><div class="muted">Telegram akkauntlaringizga story joylash, rejalashtirish va ko'rishlarni kuzatish. Boshqa bo'limlarga bog'liq emas.</div></div>
+<div class="row"><a class="btn primary" href="{% url 'stories_new' %}">+ Yangi story</a></div></div>
+{% include "partials/stories_tabs.html" %}
+<div class="grid g3" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">{% for k, v in cards %}<div class="card"><div class="muted sm">{{ k }}</div><div style="font-size:26px;font-weight:700">{{ v }}</div></div>{% endfor %}</div>
+{% if not n_acc %}<div class="callout warn mt"><b>!</b><div>Hali akkaunt ulanmagan. <a href="{% url 'stories_accounts' %}">Akkauntlar</a> bo'limida Telegram akkauntlarni ulang (30 tagacha).</div></div>{% endif %}
+{% if upcoming %}<div class="card mt"><h2>Rejalashtirilganlar</h2><div class="tbl"><table><tr><th>Story</th><th>Vaqt</th><th>Akkauntlar</th></tr>
+{% for r in upcoming %}<tr><td><a href="{% url 'stories_detail' r.s.pk %}">{{ r.s.title }}</a></td><td>{{ r.when }}</td><td>{{ r.total }} ta</td></tr>{% endfor %}</table></div></div>{% endif %}
+<div class="card mt"><h2>So'nggi storylar</h2><div class="tbl"><table><tr><th>Story</th><th>Holat</th><th>Vaqt</th><th>Joylandi</th><th>Xato</th><th>Ko'rishlar</th></tr>
+{% for r in recent %}<tr><td><a href="{% url 'stories_detail' r.s.pk %}">{{ r.s.title }}</a></td><td><span class="badge {{ r.badge }}">{{ r.s.get_status_display }}</span></td><td>{{ r.when }}</td><td>{{ r.sent }} / {{ r.total }}</td><td>{{ r.errs }}</td><td>{{ r.views }}</td></tr>
+{% empty %}<tr><td colspan="6" class="empty">Hali story yo'q.</td></tr>{% endfor %}</table></div></div>
+{% endblock %}

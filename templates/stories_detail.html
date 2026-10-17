@@ -1,0 +1,24 @@
+{% extends "base.html" %}{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="pg-head row sb"><div><a class="muted sm" href="{% url 'stories_home' %}">← Stories</a><h1 style="margin:2px 0">{{ s.title }}</h1>
+<span class="badge {{ row.badge }}">{{ s.get_status_display }}</span> <span class="muted sm">{{ row.when }}</span></div>
+<div class="row">{% if pending %}<form method="post" action="{% url 'stories_action' s.pk %}" onsubmit="return confirm('Kutilayotgan yuborishlar to\'xtatiladi. Joylanganlar o\'zgarmaydi.')">{% csrf_token %}<input type="hidden" name="action" value="cancel"><button class="btn danger">Kutilayotganlarni to'xtatish ({{ pending }})</button></form>{% endif %}
+<form method="post" action="{% url 'stories_action' s.pk %}">{% csrf_token %}<input type="hidden" name="action" value="stats"><button class="btn">Statistikani yangilash</button></form></div></div>
+{% if prem %}<div class="callout bad mt"><b>!</b><div><b>Premium talab qilingan akkauntlar ({{ prem|length }}):</b> {{ prem|join:", " }}. Bu akkauntlarda story joylanmadi — Premium yoqing yoki ularda Premium talab qiladigan imkoniyatni (uzun sarlavha, havola stikeri va h.k.) olib tashlab qayta urinib ko'ring.</div></div>{% endif %}
+<div class="grid g2 mt" style="align-items:start">
+ <div class="card"><h2>Story</h2>{% if s.kind == 'video' %}<video src="{% url 'stories_media' s.pk %}" controls style="max-width:100%;max-height:420px;border-radius:12px"></video>{% else %}<img src="{% url 'stories_media' s.pk %}" style="max-width:100%;max-height:420px;border-radius:12px">{% endif %}
+  <div class="muted sm mt">Muddat: {{ period_label }} · Ko'rinish: {{ privacy_label }}{% if s.pinned %} · Pin{% endif %}{% if s.noforwards %} · Ulashish taqiqlangan{% endif %}{% if s.link_url %} · Havola: {{ s.link_url }}{% endif %}{% if s.reaction %} · Reaksiya {{ s.reaction }}{% endif %}{% if s.geo_lat is not None %} · Joy: {{ s.geo_lat }}, {{ s.geo_lon }}{% endif %}</div>
+  {% if s.caption %}<div class="mt" style="white-space:pre-wrap">{{ s.caption }}</div>{% endif %}</div>
+ <div class="card"><h2>Natija</h2><div class="grid g2"><div><div class="muted sm">Joylandi</div><b style="font-size:22px">{{ row.sent }} / {{ row.total }}</b></div><div><div class="muted sm">Jami ko'rishlar</div><b style="font-size:22px">{{ row.views }}</b></div></div>
+  {% if other_err %}<form method="post" action="{% url 'stories_action' s.pk %}" class="mt">{% csrf_token %}<input type="hidden" name="action" value="retry_all"><button class="btn sm">Xatolarni qayta urinish ({{ other_err|length }})</button></form>{% endif %}</div>
+</div>
+<div class="card mt"><h2>Akkauntlar bo'yicha</h2><div class="tbl"><table><tr><th>Akkaunt</th><th>Holat</th><th>Vaqt</th><th>Ko'rish</th><th>Ulashish</th><th>Reaksiya</th><th></th></tr>
+{% for t in targets %}<tr><td>{{ t.account.name }}<div class="help">{{ t.account.phone }} · {% if t.account.is_premium %}Premium{% else %}Premium emas{% endif %}</div></td>
+ <td><span class="badge {% if t.status == 'sent' %}ok{% elif t.status == 'error' %}bad{% elif t.status == 'sending' %}blue{% endif %}">{{ t.get_status_display }}</span>{% if t.error_code %} <span class="badge bad">{% if t.error_code == 'premium' %}Premium kerak{% elif t.error_code == 'limit' %}Limit{% elif t.error_code == 'flood' %}FloodWait{% elif t.error_code == 'media' %}Fayl xatosi{% elif t.error_code == 'auth' %}Qayta ulash kerak{% else %}Xato{% endif %}</span>{% endif %}
+  {% if t.error %}<div class="help" style="color:var(--bad)">{{ t.error }}</div>{% endif %}</td>
+ <td class="sm">{% if t.sent_at %}{{ t.sent_at|date:"d.m H:i" }}{% elif t.run_at %}reja: {{ t.run_at|date:"d.m H:i" }}{% endif %}</td>
+ <td>{{ t.views }}</td><td>{{ t.forwards }}</td><td>{{ t.reactions }}</td>
+ <td>{% if t.status == 'error' %}<form method="post" action="{% url 'stories_action' s.pk %}">{% csrf_token %}<input type="hidden" name="action" value="retry"><input type="hidden" name="target" value="{{ t.pk }}"><button class="btn sm">Qayta</button></form>{% endif %}</td></tr>
+{% endfor %}</table></div></div>
+{% for t in targets %}{% if t.snapshots.all %}{% if forloop.first %}<div class="card mt"><h2>Ko'rishlar tarixi</h2>{% endif %}<details><summary>{{ t.account.name }} — {{ t.snapshots.all|length }} ta o'lchov</summary><div class="tbl"><table><tr><th>Vaqt</th><th>Ko'rish</th><th>Ulashish</th><th>Reaksiya</th></tr>{% for sn in t.snapshots.all %}<tr><td>{{ sn.taken_at|date:"d.m H:i" }}</td><td>{{ sn.views }}</td><td>{{ sn.forwards }}</td><td>{{ sn.reactions }}</td></tr>{% endfor %}</table></div></details>{% endif %}{% endfor %}
+{% endblock %}

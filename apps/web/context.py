@@ -43,7 +43,8 @@ NAV = [
                     ("ai_studio", "Kontent reja", "reja_home", "ai_studio", "cal"),
                     ("ai_studio", "Karusel ssenariy", "carousel_home", "ai_studio", "film"),
                     ("ads", "Reklama tahlili", "ads_home", "ads", "mega"),
-                    ("ai_studio", "G'oyalar banki", "ideas_home", "ai_studio", "bulb")]),
+                    ("ai_studio", "G'oyalar banki", "ideas_home", "ai_studio", "bulb"),
+                    ("stories", "Telegram Stories", "stories_home", "stories", "film")]),
     ("Ko'proq", [("connections", "Ulanishlar", "connection_list", "connections", "link"),
                  ("calendar", "Vazifalar", "my_tasks", "calendar", "brief"),
                  ("calendar", "Shablonlar", "template_list", "calendar", "scroll"),
@@ -75,7 +76,7 @@ def ui_context(request):
                 ok = True
             elif key == "activity":
                 ok = bool(biz and perms.can(user, "businesses.edit", biz)) or (not biz and perms.businesses_for(user, "businesses.edit").exists())
-            elif module in ("settings", "users", "system_health", "guides"):
+            elif module in ("settings", "users", "system_health", "guides", "stories"):
                 ok = perms.can(user, f"{module}.view", None)
             else:
                 ok = perms.can(user, f"{module}.view", biz) if biz else perms.businesses_for(user, f"{module}.view").exists()

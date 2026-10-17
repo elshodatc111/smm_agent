@@ -14,6 +14,7 @@ from . import views_ads as ad
 from . import views_inbox as ib
 from . import views_goals as gl
 from . import views_reja as rj
+from . import views_stories as st
 from . import views_tools as t
 from . import views_types as vt
 from . import views_work as w
@@ -132,6 +133,17 @@ urlpatterns = [
     path("reja/yaratish/", rj.reja_create, name="reja_create"),
     path("reja/<int:pk>/", rj.reja_view, name="reja_view"),
     path("reja/<int:pk>/amal/", rj.reja_action, name="reja_action"),
+    path("stories/", st.stories_home, name="stories_home"),
+    path("stories/yangi/", st.stories_new, name="stories_new"),
+    path("stories/kalendar/", st.stories_calendar, name="stories_calendar"),
+    path("stories/statistika/", st.stories_stats, name="stories_stats"),
+    path("stories/akkauntlar/", st.stories_accounts, name="stories_accounts"),
+    path("stories/akkauntlar/qosh/", st.stories_account_add, name="stories_account_add"),
+    path("stories/akkauntlar/bekor/", st.stories_account_cancel, name="stories_account_cancel"),
+    path("stories/akkauntlar/<int:pk>/amal/", st.stories_account_action, name="stories_account_action"),
+    path("stories/<int:pk>/", st.stories_detail, name="stories_detail"),
+    path("stories/<int:pk>/amal/", st.stories_action, name="stories_action"),
+    path("stories/<int:pk>/media/", st.stories_media, name="stories_media"),
     path("karusel/", rj.carousel_home, name="carousel_home"),
     path("karusel/yaratish/", rj.carousel_create, name="carousel_create"),
     path("karusel/<int:pk>/", rj.carousel_view, name="carousel_view"),
