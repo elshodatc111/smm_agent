@@ -134,6 +134,7 @@ urlpatterns = [
     path("reja/<int:pk>/amal/", rj.reja_action, name="reja_action"),
     path("stories/", st.stories_home, name="stories_home"),
     path("stories/yangi/", st.stories_new, name="stories_new"),
+    path("stories/musiqa/royxat/", st.stories_music_list, name="stories_music_list"),
     path("stories/kalendar/", st.stories_calendar, name="stories_calendar"),
     path("stories/statistika/", st.stories_stats, name="stories_stats"),
     path("stories/akkauntlar/", st.stories_accounts, name="stories_accounts"),

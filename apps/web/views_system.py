@@ -89,6 +89,14 @@ TABS = {
                                   ("worker.admin_token", "Worker admin tokeni", "secret", ""),
                                   ("oauth.callback_url", "OAuth callback bazasi (ixtiyoriy)", "text", "Faqat Worker ishlamasa: http://localhost:8000 (serverning o'zidan ulaning)"), ("r2.account_id", "R2 Account ID (ixtiyoriy)", "text", ""),
                                   ("r2.access_key_id", "R2 Access Key ID", "secret", ""), ("r2.secret_access_key", "R2 Secret", "secret", ""), ("r2.bucket", "R2 Bucket", "text", "")]),
+    "musiqa": ("Musiqa (Jamendo)", [("music.jamendo.enabled", "Jamendo musiqa yoqilgan", "bool", "O'chiq bo'lsa story yuklashda musiqa bo'limi ko'rinmaydi"),
+                                    ("music.jamendo.client_id", "Jamendo client_id (API kalit)", "secret", "devportal.jamendo.com da bepul ilova yarating"),
+                                    ("music.jamendo.order", "Ro'yxat tartibi", "choice:popularity_week,popularity_month,popularity_total,buzzrate,downloads_week", "popularity_week = shu haftaning eng mashhurlari"),
+                                    ("music.jamendo.count", "Ko'rsatiladigan qo'shiqlar soni", "int", "Standart 10 (eng ko'pi 50)"),
+                                    ("music.jamendo.commercial_only", "Faqat tijoriy ishlatishga ruxsat etilgan litsenziyalar", "bool", "Tavsiya: yoqilgan (CC BY, CC BY-SA, CC0). NC/ND litsenziyalar chiqarib tashlanadi"),
+                                    ("music.jamendo.credit", "Izohga muallif (credit) qo'shish", "bool", "«Musiqa: nom — ijrochi (Jamendo)» qatori story izohiga avtomatik qo'shiladi"),
+                                    ("music.jamendo.cache_min", "Ro'yxatni keshlash (daqiqa)", "int", "API so'rovlarini tejash uchun"),
+                                    ("music.clip_default", "Standart parcha uzunligi (soniya)", "int", "10–30")]),
     "yigish": ("Ma'lumot yig'ish", [("collect.enabled", "Yig'ish yoqilgan", "bool", ""), ("collect.schedule", "Kunlik vaqtlar (HH:MM, vergul bilan)", "list", ""),
                                     ("collect.history_days", "Tarixiy import (kun)", "int", ""), ("competitors.light_per_day", "Raqobatchi: yengil tekshiruv/kun", "int", ""),
                                     ("competitors.heavy_per_week", "Raqobatchi: to'liq/hafta", "int", "")]),
@@ -204,6 +212,10 @@ def settings_home(request):
             f = type("KF", (forms.Form,), {"provider": forms.ChoiceField(label="Provayder", choices=[(p, p) for p, _ in AIKey._meta.get_field("provider").choices]),
                                            "alias": forms.CharField(label="Nom (masalan: openai-1)"), "key": forms.CharField(label="Kalit", widget=forms.PasswordInput)})()
             blocks[-1] = ui.form_block(f, "AI kalit qo'shish", "Qo'shish va tekshirish", action="/sozlamalar/ai-kalit/qoshish/")
+    if tab == "musiqa":
+        blocks.insert(1, {"type": "html", "html": "<div class='card' style='padding:14px;line-height:1.6'><b>Jamendo kalitini olish:</b><br>1) <b>devportal.jamendo.com</b> ga kiring va ro'yxatdan o'ting.<br>2) «Create an application» orqali bepul ilova yarating (Non-Commercial tarif).<br>3) Berilgan <b>client_id</b> ni pastga kiriting va «Saqlash» bosing.<br>4) «Jamendo ulanishini tekshirish» tugmasini bosing.<br><span class='muted'>Muhim: Jamendo API shartlarini (Terms of Use) o'zingiz o'qib chiqing — platformada ishlatish shartlarga mos ekanini tasdiqlang. Bepul tarifda oyiga 35 000 so'rov.</span></div>"})
+        if can_edit:
+            blocks.append({"type": "actions", "title": "Ulanishni tekshirish", "buttons": [ui.btn("Jamendo ulanishini tekshirish", "/sozlamalar/tekshir/jamendo/")]})
     if tab == "kalitlar" and can_edit:
         blocks.append({"type": "actions", "title": "Ulanishni tekshirish", "buttons": [ui.btn("Cloudflare Worker", "/sozlamalar/tekshir/worker/"), ui.btn("ScrapeCreators", "/sozlamalar/tekshir/scrapecreators/"),
                                                                                         ui.btn("YouTube API kaliti", "/sozlamalar/tekshir/youtube/"), ui.btn("Mijoz boti", "/sozlamalar/tekshir/agency_bot/")]})
@@ -286,6 +298,11 @@ def setting_test(request, what):
             tok = ss.get_secret("telegram.agency_bot_token")
             r = requests.get(f"https://api.telegram.org/bot{tok}/getMe", timeout=15).json()
             messages.success(request, f"Bot: @{r['result']['username']}") if r.get("ok") else messages.error(request, "Bot tokeni noto'g'ri.")
+        elif what == "jamendo":
+            from apps.stories import music
+            ok, msg = music.check()
+            (messages.success if ok else messages.error)(request, msg)
+            return redirect("/sozlamalar/?tab=musiqa")
         else:
             raise Http404
     except Http404:

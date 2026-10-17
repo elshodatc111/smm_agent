@@ -10,7 +10,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.files import File
 from django.db.models import Count, Q, Sum
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -21,7 +21,8 @@ from apps.core import crypto
 from apps.core.audit import audit
 from apps.core.utils import fmt_dt, local, tz
 from apps.jobs.queue import enqueue
-from apps.stories import services, tgclient
+from apps.core.settings_store import get_setting
+from apps.stories import music, services, tgclient
 from apps.stories.models import PERIODS, PRIVACY, Story, StoryAccount, StoryStat, StoryTarget
 
 EXT_OK = ("jpg", "jpeg", "png", "webp", "mp4", "mov", "m4v")
@@ -171,6 +172,34 @@ def _parse_when(request, errors):
     return dt
 
 
+def _music_ctx():
+    on = music.enabled()
+    return {"music_on": on, "music_ready": on and music.configured(), "music_default": music.clamp_len(None)}
+
+
+def _find_track(track_id: str, q: str = ""):
+    """Qo'shiq ro'yxat (kesh)dan olinadi — brauzerdan kelgan audio manzilga ishonilmaydi."""
+    try:
+        for t in music.top_tracks(q) + (music.top_tracks("") if q else []):
+            if t["id"] == str(track_id):
+                return t
+    except music.MusicError:
+        return None
+    return None
+
+
+@login_required
+@require_permission("stories.create")
+def stories_music_list(request):
+    if not music.enabled():
+        return JsonResponse({"ok": False, "error": "Musiqa o'chirilgan."})
+    try:
+        items = music.top_tracks(request.GET.get("q", ""))
+    except music.MusicError as e:
+        return JsonResponse({"ok": False, "error": e.message_uz})
+    return JsonResponse({"ok": True, "items": [{k: t[k] for k in ("id", "name", "artist", "duration", "image", "stream")} | {"audio": t["stream"] or t["audio"]} for t in items]})
+
+
 @login_required
 @require_permission("stories.create")
 def stories_new(request):
@@ -222,6 +251,19 @@ def stories_new(request):
         else:
             errors.append("Rasm yoki video tanlang (kompyuterdan yoki kontent bazadan).")
         when = _parse_when(request, errors)
+        track, m_start, m_len = None, 0, 0
+        if P.get("music_id") and music.enabled():
+            track = _find_track(P.get("music_id"), P.get("music_q", ""))
+            if not track:
+                errors.append("Tanlangan qo'shiq topilmadi. Musiqa ro'yxatini yangilab, qayta tanlang.")
+            else:
+                m_len = music.clamp_len(P.get("music_len"))
+                m_start = max(0, min(int(float(P.get("music_start") or 0)) if (P.get("music_start") or "0").replace(".", "", 1).isdigit() else 0, max(0, track["duration"] - m_len)))
+                if bool(get_setting("music.jamendo.credit", True)):
+                    credit = music.credit_line(track["name"], track["artist"])
+                    caption = (caption + "\n\n" + credit).strip() if caption else credit
+                    if services.plain_len(caption) > services.CAPTION_PREMIUM:
+                        errors.append("Sarlavha + musiqa muallifi qatori juda uzun.")
         if not errors:
             story = Story(title=title or (caption[:60] if caption else f"Story {timezone.localtime(timezone.now(), tz()):%d.%m %H:%M}"), caption=caption, kind=services.kind_of(src_name),
                           fit_mode=fit, period=period, privacy=privacy, pinned=P.get("pinned") == "1", noforwards=P.get("noforwards") == "1", link_url=link, reaction=reaction,
@@ -232,6 +274,17 @@ def stories_new(request):
                 with open(asset.file.path, "rb") as fh:
                     story.media.save(src_name.rsplit("/", 1)[-1], File(fh), save=False)
             story.save()
+            if track:
+                try:
+                    services.attach_music(story, track, m_start, m_len)
+                    story.save()
+                except music.MusicError as e:
+                    story.delete()
+                    errors.append(e.message_uz)
+                    story = None
+            if story is None:
+                return render(request, "stories_new.html", _ctx(request, "stories_new", title="Yangi story", accs=accs, periods=PERIODS, privacy=PRIVACY, reactions=REACTIONS[1:], assets=_assets(),
+                                                               errors=errors, P=P, sel=set(request.POST.getlist("accounts")), default_when="", lo_hi=services.gap_seconds(), **_music_ctx()))
             services.schedule(story, chosen, when)
             audit("stories.created", user=request.user, target=story.title, detail={"accounts": len(chosen)})
             messages.success(request, f"Story navbatga qo'yildi: {len(chosen)} ta akkaunt. Akkauntlar orasida avtomatik 1–3 daqiqa oraliq bor.")
@@ -239,7 +292,7 @@ def stories_new(request):
     pre = request.GET.get("date", "")
     default_when = f"{pre}T12:00" if len(pre) == 10 else ""
     return render(request, "stories_new.html", _ctx(request, "stories_new", title="Yangi story", accs=accs, periods=PERIODS, privacy=PRIVACY, reactions=REACTIONS[1:], assets=_assets(),
-                                                   errors=errors, P=P, sel=set(request.POST.getlist("accounts")), default_when=default_when, lo_hi=services.gap_seconds()))
+                                                   errors=errors, P=P, sel=set(request.POST.getlist("accounts")), default_when=default_when, lo_hi=services.gap_seconds(), **_music_ctx()))
 
 
 # ───────────────────────── tafsilot ─────────────────────────

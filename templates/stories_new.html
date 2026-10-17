@@ -48,6 +48,19 @@
   <label>Havola stikeri (bosiladigan havola)</label><input name="link_url" value="{{ P.link_url }}" placeholder="https://t.me/..." maxlength="300">
   <label>Reaksiya stikeri</label><select name="reaction"><option value="">—</option>{% for r in reactions %}<option value="{{ r }}" {% if P.reaction == r %}selected{% endif %}>{{ r }}</option>{% endfor %}</select>
   <div class="row"><div style="flex:1"><label>Joylashuv: kenglik</label><input name="geo_lat" value="{{ P.geo_lat }}" placeholder="41.311"></div><div style="flex:1"><label>uzunlik</label><input name="geo_lon" value="{{ P.geo_lon }}" placeholder="69.279"></div></div></div>
+{% if music_on %} <div class="card mt" id="musicCard"><h2>♫ Fon musiqasi (ixtiyoriy)</h2>
+  <input type="hidden" name="music_id" value="{{ P.music_id }}"><input type="hidden" name="music_start" value="{{ P.music_start|default:0 }}"><input type="hidden" name="music_q" value="{{ P.music_q }}">
+  {% if not music_ready %}<div class="help">Jamendo kaliti hali kiritilmagan. Sozlamalar → «Musiqa (Jamendo)» bo'limiga <b>client_id</b> ni kiriting.</div>
+  {% else %}<div class="help">Rasm yoki videoga fon musiqasi qo'shiladi: platforma uni 9:16 video qilib yig'adi. Jamendo'dagi eng mashhur qo'shiqlar ro'yxatidan tinglab tanlang.</div>
+  <div class="row" style="gap:8px"><input id="mq" placeholder="Qo'shiq yoki ijrochi qidirish (ixtiyoriy)" style="flex:1"><button type="button" class="btn" id="mLoad">Mashhur qo'shiqlarni ko'rsatish</button></div>
+  <div id="mList" class="mt"></div>
+  <div id="mSel" class="mt" style="display:none">
+   <div><b id="mSelName"></b> <button type="button" class="btn sm" id="mClear">Musiqasiz</button></div>
+   <label>Parcha uzunligi: <b id="mLenV"></b> soniya</label><input type="range" id="mLen" name="music_len" min="10" max="30" step="1" value="{{ P.music_len|default:music_default }}">
+   <label>Boshlanish: <b id="mStartV">0</b> soniya</label><input type="range" id="mStart" min="0" max="60" step="1" value="0">
+   <button type="button" class="btn mt" id="mPrev">▶ Tanlangan parchani tinglash</button></div>
+  <audio id="mAud" preload="none"></audio>{% endif %}</div>
+{% endif %}
  <div class="card mt"><h2>3 · Sozlamalar</h2>
   <label>Ko'rinish muddati</label><select name="period">{% for v, l in periods %}<option value="{{ v }}" {% if P.period == v|stringformat:"s" or not P.period and v == 86400 %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
   <label>Kimga ko'rinadi</label><select name="privacy">{% for v, l in privacy %}<option value="{{ v }}" {% if P.privacy == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
@@ -68,7 +81,7 @@
 <aside class="sp-side">
  <div class="card"><h2>Oldindan ko'rish</h2>
   <div class="sp-phone"><div class="sp-stage" id="spStage"></div></div>
-  <div class="sp-info" id="spInfo"></div><div class="sp-warn" id="spWarn"></div>
+  <div class="sp-info" id="spInfo"></div><div class="sp-info" id="spMusic" style="display:none"></div><div class="sp-warn" id="spWarn"></div>
   <div class="help mt">Taxminiy ko'rinish: Telegram ilovasida shrift va joylashuv ozgina farq qilishi mumkin. Barcha o'zgarishlar shu yerda darhol ko'rinadi.</div></div>
 </aside></form>
 {% endblock %}
@@ -130,5 +143,36 @@
   document.addEventListener('input',function(e){if(e.target.closest('form'))render()});
   document.addEventListener('change',function(e){if(e.target.closest('form')&&e.target!==file&&e.target!==asset)render()});
   render();
+})();
+
+(function(){
+  var Q=function(s){return document.querySelector(s)};if(!Q('#mLoad'))return;
+  var aud=Q('#mAud'),list=Q('#mList'),sel=null,stopT=null,URL_='{% url "stories_music_list" %}';
+  function esc(t){return String(t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+  function fmt(d){return Math.floor(d/60)+':'+('0'+(d%60)).slice(-2)}
+  function stop(){aud.pause();clearTimeout(stopT);QA_('.mPlay').forEach(function(b){b.textContent='▶'})}
+  function QA_(s){return [].slice.call(document.querySelectorAll(s))}
+  function load(){list.innerHTML='<div class="muted">Yuklanmoqda…</div>';
+    fetch(URL_+'?q='+encodeURIComponent(Q('#mq').value),{credentials:'same-origin'}).then(function(r){return r.json()}).then(function(d){
+      if(!d.ok){list.innerHTML='<div class="sp-warn">'+esc(d.error)+'</div>';return}
+      if(!d.items.length){list.innerHTML='<div class="muted">Hech narsa topilmadi.</div>';return}
+      list.innerHTML=d.items.map(function(t,i){return '<div class="row" style="gap:8px;align-items:center;padding:4px 0;border-bottom:1px solid var(--border,#eee)"><button type="button" class="btn sm mPlay" data-i="'+i+'">▶</button><div style="flex:1"><b>'+esc(t.name)+'</b><div class="muted sm">'+esc(t.artist)+' · '+fmt(t.duration)+'</div></div><button type="button" class="btn sm primary mPick" data-i="'+i+'">Tanlash</button></div>'}).join('');
+      list._items=d.items;Q('input[name=music_q]').value=Q('#mq').value;
+    }).catch(function(){list.innerHTML='<div class="sp-warn">Ro\'yxatni yuklab bo\'lmadi.</div>'})}
+  function upd(){if(!sel)return;var len=+Q('#mLen').value,max=Math.max(0,sel.duration-len),st=Q('#mStart');st.max=max;if(+st.value>max)st.value=max;
+    Q('#mLenV').textContent=len;Q('#mStartV').textContent=st.value;Q('input[name=music_start]').value=st.value;
+    var m=Q('#spMusic');m.style.display='';m.innerHTML='♫ <b>'+esc(sel.name)+'</b> — '+esc(sel.artist)+' · '+len+' s'}
+  function pick(t){sel=t;Q('input[name=music_id]').value=t.id;Q('#mSel').style.display='';Q('#mSelName').textContent='♫ '+t.name+' — '+t.artist;upd()}
+  function clip(){if(!sel)return;stop();aud.src=sel.audio;var st=+Q('#mStart').value,len=+Q('#mLen').value;
+    aud.addEventListener('loadedmetadata',function f(){aud.removeEventListener('loadedmetadata',f);aud.currentTime=st},{once:true});
+    aud.play().then(function(){try{aud.currentTime=st}catch(e){}stopT=setTimeout(stop,len*1000)}).catch(function(){})}
+  Q('#mLoad').addEventListener('click',load);
+  Q('#mq').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();load()}});
+  list.addEventListener('click',function(e){var b=e.target.closest('button');if(!b||!list._items)return;var t=list._items[+b.dataset.i];
+    if(b.classList.contains('mPlay')){var was=b.textContent==='■';stop();if(!was){aud.src=t.audio;aud.play().catch(function(){});b.textContent='■';stopT=setTimeout(stop,30000)}}
+    else if(b.classList.contains('mPick')){stop();pick(t)}});
+  Q('#mLen').addEventListener('input',upd);Q('#mStart').addEventListener('input',upd);Q('#mPrev').addEventListener('click',clip);
+  Q('#mClear').addEventListener('click',function(){stop();sel=null;Q('input[name=music_id]').value='';Q('#mSel').style.display='none';Q('#spMusic').style.display='none'});
+  aud.addEventListener('ended',stop);
 })();
 </script>{% endblock %}

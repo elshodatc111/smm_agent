@@ -72,6 +72,8 @@ def finalize(story: Story) -> str:
 
 def prepare_media(story: Story) -> str:
     """9:16 ga moslangan fayl yo'li (asl fayl o'zgarmaydi)."""
+    if story.music_video:
+        return story.music_video.path   # musiqa bilan tayyor 9:16 mp4
     path = story.media.path
     if story.fit_mode == "orig":
         return path
@@ -83,7 +85,7 @@ def prepare_media(story: Story) -> str:
 
 
 def _spec(story: Story, path: str, acc: StoryAccount) -> dict:
-    return {"path": path, "kind": story.kind, "caption": story.caption, "period": story.period, "privacy": story.privacy, "pinned": story.pinned,
+    return {"path": path, "kind": "video" if story.music_video else story.kind, "caption": story.caption, "period": story.period, "privacy": story.privacy, "pinned": story.pinned,
             "noforwards": story.noforwards, "link_url": story.link_url, "reaction": story.reaction, "lat": story.geo_lat, "lon": story.geo_lon,
             "account_pk": acc.pk}
 
@@ -188,3 +190,28 @@ def sync_account(acc: StoryAccount) -> None:
         acc.status = "active"
     acc.last_error = ""
     acc.save(update_fields=["tg_user_id", "username", "is_premium", "status", "last_error"])
+
+
+def attach_music(story: Story, track: dict, start: int, length: int) -> None:
+    """Tanlangan Jamendo qo'shig'ini story mediasi bilan birlashtirib, music_video ga saqlaydi. MusicError ko'taradi."""
+    import os
+    import tempfile
+
+    from django.core.files import File as DjFile
+
+    from apps.content.mediafit import MediaFitError, fit_path
+
+    from . import music
+    length = music.clamp_len(length)
+    src = story.media.path
+    try:
+        fitted = fit_path(src, story.kind, "v_9x16", story.fit_mode if story.fit_mode in ("pad", "crop") else "pad") if story.fit_mode != "orig" else src
+    except MediaFitError as e:
+        raise music.MusicError(str(e)) from e
+    with tempfile.TemporaryDirectory() as tmp:
+        out = os.path.join(tmp, "story_music.mp4")
+        music.build_video(fitted, story.kind, track["audio"], start, length, out)
+        with open(out, "rb") as fh:
+            story.music_video.save("story_music.mp4", DjFile(fh), save=False)
+    story.music_track, story.music_title, story.music_artist = track["id"][:40], track["name"][:200], track["artist"][:200]
+    story.music_license, story.music_start, story.music_len = track.get("license", "")[:300], max(0, int(start or 0)), length

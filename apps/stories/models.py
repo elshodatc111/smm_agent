@@ -49,6 +49,13 @@ class Story(models.Model):
     reaction = models.CharField(max_length=8, blank=True)            # «reaksiya» stikeri (emoji)
     geo_lat = models.FloatField(null=True, blank=True)               # joylashuv stikeri
     geo_lon = models.FloatField(null=True, blank=True)
+    music_track = models.CharField(max_length=40, blank=True)         # Jamendo track id
+    music_title = models.CharField(max_length=200, blank=True)
+    music_artist = models.CharField(max_length=200, blank=True)
+    music_license = models.CharField(max_length=300, blank=True)
+    music_start = models.PositiveIntegerField(default=0)              # audio boshlanish soniyasi
+    music_len = models.PositiveIntegerField(default=0)                # parcha uzunligi (10–30 s)
+    music_video = models.FileField(upload_to="stories/music/%Y/%m/", blank=True)   # rasm/video + musiqa yig'ilgan mp4
     status = models.CharField(max_length=10, choices=STATUS, default="draft")
     scheduled_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")

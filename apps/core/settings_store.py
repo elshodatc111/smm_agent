@@ -95,12 +95,15 @@ DEFAULTS: dict[str, Any] = {
     "cloudflare.worker_name": "smm-links", "cloudflare.kv_namespace_id": "",
     "r2.account_id": "", "r2.access_key_id": "", "r2.secret_access_key": "", "r2.bucket": "",
     "oauth.callback_url": "",
+    "music.jamendo.enabled": True, "music.jamendo.client_id": "", "music.jamendo.order": "popularity_week",
+    "music.jamendo.count": 10, "music.jamendo.commercial_only": True, "music.jamendo.cache_min": 120,
+    "music.jamendo.credit": True, "music.clip_default": 15,
 }
 
 SECRET_KEYS = {
     "meta.app_secret", "google.client_secret", "telegram.api_hash", "telegram.agency_bot_token",
     "youtube.api_key", "scrapecreators.api_key", "cloudflare.api_token",
-    "r2.secret_access_key", "r2.access_key_id", "worker.admin_token",
+    "r2.secret_access_key", "r2.access_key_id", "worker.admin_token", "music.jamendo.client_id",
 }
 SECRET_PREFIXES = ("ai.keys.",)
 
