@@ -47,7 +47,6 @@ NAV = [
     ("Nashr", [("publish", "Nashr jurnali", "publish_log", "publish", "send"),
                ("stories", "Telegram Stories", "stories_home", "stories", "film"),
                ("publish", "Cloudflare", "cloud_home", "publish", "cloud")]),
-    ("Onlayn kanal", [("online", "Onlayn kanal", "online_home", "online", "tag")]),
     ("Tahlil", [("analytics", "Tahlil", "analytics", "analytics", "chart"),
                 ("analytics", "Kunlik statistika", "daily_stats", "analytics", "pulse"),
                 ("competitors", "Raqobatchilar", "competitor_list", "competitors", "users"),

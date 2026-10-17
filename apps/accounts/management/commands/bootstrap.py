@@ -11,6 +11,7 @@ class Command(BaseCommand):
 
     def handle(self, *a, **o):
         self._purge_stale_codes()
+        self._drop_removed_modules()
         from apps.jobs.models import Job
         Job.objects.filter(type__startswith="facts_").delete()   # olib tashlangan modul vazifalari
         admin, _ = Role.objects.get_or_create(name="Admin", defaults={"is_system": True, "description": "To'liq huquq"})
@@ -28,6 +29,29 @@ class Command(BaseCommand):
         from apps.accounts.models import RolePermission, UserPermissionOverride
         RolePermission.objects.exclude(code__in=ALL_CODES).delete()
         UserPermissionOverride.objects.exclude(code__in=ALL_CODES).delete()
+
+    def _drop_removed_modules(self):
+        """Olib tashlangan «Onlayn kanal» moduli jadvallari, migratsiya yozuvlari va ruxsatlarini bazadan tozalaydi (qayta ishga tushirsa xavfsiz)."""
+        from django.db import connection
+        from django.db.migrations.recorder import MigrationRecorder
+        tables = [t for t in connection.introspection.table_names() if t.startswith("online_")]
+        if tables:
+            q = connection.ops.quote_name
+            with connection.cursor() as c:
+                if connection.vendor == "mysql":
+                    c.execute("SET FOREIGN_KEY_CHECKS=0")
+                elif connection.vendor == "sqlite":
+                    c.execute("PRAGMA foreign_keys=OFF")
+                for t in tables:
+                    c.execute(f"DROP TABLE IF EXISTS {q(t)}")
+                if connection.vendor == "mysql":
+                    c.execute("SET FOREIGN_KEY_CHECKS=1")
+                elif connection.vendor == "sqlite":
+                    c.execute("PRAGMA foreign_keys=ON")
+            self.stdout.write(f"Olib tashlangan modul jadvallari tozalandi: {len(tables)} ta")
+        MigrationRecorder.Migration.objects.filter(app="online").delete()
+        from django.contrib.contenttypes.models import ContentType
+        ContentType.objects.filter(app_label="online").delete()
 
     def _grant_late_modules(self):
         """Keyin qo'shilgan modullar (maqsadlar) uchun mavjud rollarga standart ruxsat — faqat bir marta."""

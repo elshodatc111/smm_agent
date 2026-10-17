@@ -4,7 +4,7 @@ Kod ko'rinishi: <modul>.<amal>. Admin barcha narsani qila oladi. «Faqat admin»
 umuman berilmaydi (rol, individual ruxsat bo'lsa ham ishlamaydi)."""
 
 # guruh -> menyudagi tartib ham shu
-GROUPS = [("main", "Bosh"), ("clients", "Mijozlar"), ("content", "Kontent"), ("publish", "Nashr"), ("online", "Onlayn kanal"), ("analysis", "Tahlil"), ("system", "Tizim")]
+GROUPS = [("main", "Bosh"), ("clients", "Mijozlar"), ("content", "Kontent"), ("publish", "Nashr"), ("analysis", "Tahlil"), ("system", "Tizim")]
 
 # modul: (nomi, guruh, global?, {amal: (nomi, tavsifi, faqat_admin?)})
 _C = {
@@ -45,16 +45,6 @@ _C = {
         "create": ("Story yuklash", "Yangi story yaratish va rejalashtirish", False),
         "edit": ("Boshqarish", "Kutilayotganlarni to'xtatish, xatolarni qayta urinish", False),
         "configure": ("Akkaunt ulash va o'chirish", "Faqat admin", True)}),
-    "online": ("Onlayn kanal", "online", True, {
-        "view": ("Ko'rish", "Loyihalar, statistika, obunachilar va to'lovlar ro'yxati", False),
-        "leads_view": ("Leadlarni ko'rish", "Leadlar ro'yxati va kartochkasi (telefon raqamlari bilan)", False),
-        "leads_edit": ("Leadlar bilan ishlash", "Holat, izoh, biriktirish, qora ro'yxat", False),
-        "export": ("Excelga yuklab olish", "Leadlar va to'lovlar eksporti", False),
-        "payments": ("To'lovlarni tasdiqlash", "Paneldan to'lovni tasdiqlash yoki rad etish", False),
-        "members": ("Obunani boshqarish", "Qo'lda obuna berish, uzaytirish, bekor qilish, guruhdan chiqarish", False),
-        "edit": ("Bot, tarif va AI mentorni tahrirlash", "Bot oqimi (tugma/javoblar), tariflar, bilim bazasi, AI sozlamasi", False),
-        "publish": ("Botni joriy qilish", "Qoralamani joriy qilish, botni Telegramda sozlash", False),
-        "configure": ("Loyiha, token, karta va guruhlar", "Faqat admin", True)}),
     "analytics": ("Tahlil", "analysis", False, {"view": ("Ko'rish", "Tahlil, kunlik statistika, post natijalari", False)}),
     "competitors": ("Raqobatchilar", "analysis", False, {
         "view": ("Ko'rish", "Raqobatchilar ro'yxati va tahlili", False), "create": ("Qo'shish", "Yangi raqobatchi", False),
@@ -123,7 +113,7 @@ def _all_view(skip=()):
     return {m: "view" for m, c in CATALOG.items() if "view" in c["actions"] and f"{m}.view" not in ADMIN_ONLY and m not in skip}
 
 
-VIEW_ALL = _all_view(skip=("stories", "inbox", "online"))
+VIEW_ALL = _all_view(skip=("stories", "inbox"))
 
 # Tayyor andozalar (admin xohlagancha o'zgartiradi yoki har xodimga alohida ruxsat beradi)
 PRESET_ROLES = {
