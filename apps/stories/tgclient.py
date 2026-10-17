@@ -97,12 +97,12 @@ def _areas(spec: dict):
         return T.MediaAreaCoordinates(x=50.0, y=y, w=70.0, h=9.0, rotation=0.0)
     out = []
     if spec.get("link_url"):
-        out.append(T.MediaAreaUrl(coordinates=box(86.0), url=spec["link_url"]))
+        out.append(T.MediaAreaUrl(coordinates=box(64.0), url=spec["link_url"]))
     if spec.get("reaction"):
-        out.append(T.MediaAreaSuggestedReaction(coordinates=T.MediaAreaCoordinates(x=50.0, y=60.0, w=22.0, h=12.0, rotation=0.0),
+        out.append(T.MediaAreaSuggestedReaction(coordinates=T.MediaAreaCoordinates(x=50.0, y=46.0, w=22.0, h=12.0, rotation=0.0),
                                                 reaction=T.ReactionEmoji(emoticon=spec["reaction"])))
     if spec.get("lat") is not None and spec.get("lon") is not None:
-        out.append(T.MediaAreaGeoPoint(coordinates=box(12.0), geo=T.GeoPoint(lat=float(spec["lat"]), long=float(spec["lon"]), access_hash=0)))
+        out.append(T.MediaAreaGeoPoint(coordinates=box(14.0), geo=T.GeoPoint(lat=float(spec["lat"]), long=float(spec["lon"]), access_hash=0)))
     return out
 
 

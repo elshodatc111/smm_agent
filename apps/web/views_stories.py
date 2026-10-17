@@ -269,6 +269,22 @@ def stories_media(request, pk):
 
 
 @login_required
+def stories_asset(request, pk):
+    """Kontent bazadagi faylni oldindan ko'rish uchun (nusxa olinmaydi)."""
+    from apps.accounts.services import perms
+    from apps.content.models import ContentAsset
+    if not perms.can(request.user, "stories.create", None):
+        raise Http404
+    a = ContentAsset.objects.filter(pk=pk, kind__in=["image", "video"]).exclude(file="").first()
+    if not a:
+        raise Http404
+    try:
+        return FileResponse(a.file.open("rb"), content_type=mimetypes.guess_type(a.file.name)[0] or "application/octet-stream")
+    except (FileNotFoundError, ValueError):
+        raise Http404 from None
+
+
+@login_required
 @require_POST
 @require_permission("stories.edit")
 def stories_action(request, pk):

@@ -1,5 +1,33 @@
 {% extends "base.html" %}{% block title %}{{ title }}{% endblock %}
 {% block content %}
+<style>
+.sp-wrap{position:sticky;top:12px}
+.sp-phone{width:260px;margin:0 auto;border-radius:30px;background:#000;padding:8px;box-shadow:0 10px 30px rgba(0,0,0,.28)}
+.sp-stage{position:relative;width:100%;aspect-ratio:9/16;border-radius:22px;overflow:hidden;background:#111;color:#fff;font-size:12px}
+.sp-stage img,.sp-stage video{position:absolute;inset:0;width:100%;height:100%}
+.sp-bg{object-fit:cover;filter:blur(22px) brightness(.7);transform:scale(1.25)}
+.sp-fg.contain{object-fit:contain}.sp-fg.cover{object-fit:cover}
+.sp-shade{position:absolute;inset:0;background:linear-gradient(rgba(0,0,0,.45),transparent 22%,transparent 60%,rgba(0,0,0,.6))}
+.sp-bars{position:absolute;top:8px;left:8px;right:8px;height:3px;border-radius:3px;background:rgba(255,255,255,.35);overflow:hidden}
+.sp-bars i{display:block;height:100%;width:0;background:#fff;animation:spfill 6s linear infinite}
+@keyframes spfill{to{width:100%}}
+.sp-head{position:absolute;top:18px;left:10px;right:10px;display:flex;align-items:center;gap:7px}
+.sp-av{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#e11d2e,#7c3aed);display:grid;place-items:center;font-weight:700;border:2px solid transparent;box-sizing:content-box}
+.sp-av.close{border-color:#33c759}
+.sp-name{font-weight:700;line-height:1.1}.sp-sub{opacity:.8;font-size:10px}
+.sp-tools{margin-left:auto;opacity:.9;font-size:13px;letter-spacing:2px}
+.sp-cap{position:absolute;left:12px;right:12px;bottom:46px;line-height:1.35;text-shadow:0 1px 3px rgba(0,0,0,.8);display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
+.sp-cap a{color:#8ec5ff;text-decoration:underline}
+.sp-foot{position:absolute;left:10px;right:10px;bottom:9px;display:flex;gap:8px;align-items:center}
+.sp-foot span{flex:1;border:1px solid rgba(255,255,255,.55);border-radius:99px;padding:6px 11px;opacity:.9}
+.sp-st{position:absolute;left:50%;transform:translateX(-50%);background:#fff;color:#111;border-radius:99px;padding:5px 11px;font-weight:700;white-space:nowrap;max-width:88%;overflow:hidden;text-overflow:ellipsis;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.sp-st.link{top:62%;color:#2a7de1}.sp-st.geo{top:12%}.sp-st.re{top:40%;font-size:22px;padding:6px 12px}
+.sp-empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:20px;opacity:.7}
+.sp-badges{position:absolute;right:10px;top:50px;display:flex;flex-direction:column;gap:4px;align-items:flex-end}
+.sp-badges b{background:rgba(0,0,0,.55);border-radius:8px;padding:2px 7px;font-size:10px}
+.sp-info{margin-top:10px;font-size:12px}.sp-warn{color:var(--bad);margin-top:6px;font-size:12px}.sp-ok{color:var(--ok)}
+</style>
+
 <div class="pg-head row sb"><div><h1 style="margin:2px 0">Yangi story</h1><div class="muted">Bir marta yuklang — tanlangan akkauntlarga avtomatik oraliq bilan joylanadi.</div></div></div>
 {% include "partials/stories_tabs.html" %}
 {% if errors %}<div class="callout bad"><b>!</b><div>{% for e in errors %}{{ e }}<br>{% endfor %}</div></div>{% endif %}
@@ -8,7 +36,7 @@
  <div class="card"><h2>1 · Fayl</h2>
   <label>Rasm yoki video (kompyuterdan)</label><input type="file" name="media" accept="image/*,video/mp4,video/quicktime">
   <div class="help">Story 9:16 (1080×1920) bo'ladi. Video: mp4, 60 soniyagacha tavsiya etiladi. Eng ko'pi {{ 200 }} MB.</div>
-  {% if assets %}<label>yoki kontent bazadagi fayldan</label><select name="asset"><option value="">—</option>{% for a in assets %}<option value="{{ a.pk }}" {% if P.asset == a.pk|stringformat:"s" %}selected{% endif %}>{{ a.original_name|default:a.file.name }} · {{ a.item.title|truncatechars:40 }}</option>{% endfor %}</select>{% endif %}
+  {% if assets %}<label>yoki kontent bazadagi fayldan</label><select name="asset"><option value="">—</option>{% for a in assets %}<option value="{{ a.pk }}" data-url="{% url 'stories_asset' a.pk %}" data-kind="{{ a.kind }}" {% if P.asset == a.pk|stringformat:"s" %}selected{% endif %}>{{ a.original_name|default:a.file.name }} · {{ a.item.title|truncatechars:40 }}</option>{% endfor %}</select>{% endif %}
   <label>Moslash usuli</label><select name="fit_mode"><option value="pad">Butun kadr saqlansin (chetlari xira fon)</option><option value="crop" {% if P.fit_mode == 'crop' %}selected{% endif %}>Markazdan qirqilsin (to'liq to'ldiradi)</option><option value="orig" {% if P.fit_mode == 'orig' %}selected{% endif %}>Asl holicha</option></select></div>
  <div class="card mt"><h2>2 · Matn va stikerlar</h2>
   <label>Ichki nom (ixtiyoriy)</label><input name="title" value="{{ P.title }}" maxlength="160">
@@ -24,9 +52,13 @@
   <label class="row" style="gap:8px;font-weight:500"><input type="checkbox" name="noforwards" value="1" style="width:auto" {% if P.noforwards %}checked{% endif %}> Ulashish va saqlashni taqiqlash</label></div>
 </div>
 <div>
- <div class="card"><h2>4 · Akkauntlar</h2>
+ <div class="card sp-wrap"><h2>Oldindan ko'rish</h2>
+  <div class="sp-phone"><div class="sp-stage" id="spStage"></div></div>
+  <div class="sp-info" id="spInfo"></div><div class="sp-warn" id="spWarn"></div>
+  <div class="help mt">Taxminiy ko'rinish: Telegram ilovasida shrift va joylashuv ozgina farq qilishi mumkin. Barcha o'zgarishlar shu yerda darhol ko'rinadi.</div></div>
+ <div class="card mt"><h2>4 · Akkauntlar</h2>
   {% if accs %}<label class="row" style="gap:8px;font-weight:600"><input type="checkbox" id="allAcc" style="width:auto" onclick="document.querySelectorAll('.accChk').forEach(c=>{if(!c.disabled)c.checked=this.checked})"> Hammasini tanlash</label>
-  {% for a in accs %}<label class="row" style="gap:8px;font-weight:500"><input type="checkbox" class="accChk" name="accounts" value="{{ a.pk }}" style="width:auto" {% if a.status != 'active' %}disabled{% endif %} {% if a.pk|stringformat:"s" in sel %}checked{% endif %}> {{ a.name }} <span class="muted sm">{{ a.phone }}</span>
+  {% for a in accs %}<label class="row" style="gap:8px;font-weight:500"><input type="checkbox" class="accChk" name="accounts" value="{{ a.pk }}" data-name="{{ a.name }}" data-premium="{% if a.is_premium %}1{% else %}0{% endif %}" style="width:auto" {% if a.status != 'active' %}disabled{% endif %} {% if a.pk|stringformat:"s" in sel %}checked{% endif %}> {{ a.name }} <span class="muted sm">{{ a.phone }}</span>
    <span class="badge {% if a.is_premium %}violet{% endif %}">{% if a.is_premium %}Premium{% else %}Premium emas{% endif %}</span>{% if a.status != 'active' %}<span class="badge bad">{{ a.get_status_display }}</span>{% endif %}</label>{% endfor %}
   {% else %}<div class="empty">Akkaunt yo'q. Avval <a href="{% url 'stories_accounts' %}">akkaunt ulang</a>.</div>{% endif %}</div>
  <div class="card mt"><h2>5 · Qachon?</h2>
@@ -37,3 +69,63 @@
  <div class="mt"><button class="btn primary">Joylash / rejalashtirish</button></div>
 </div></form>
 {% endblock %}
+{% block scripts %}<script>
+(function(){
+  var Q=function(s){return document.querySelector(s)},QA=function(s){return [].slice.call(document.querySelectorAll(s))};
+  var file=Q('input[name=media]'),asset=Q('select[name=asset]'),stage=Q('#spStage'),info=Q('#spInfo'),warn=Q('#spWarn');
+  var media={url:'',kind:'',obj:false,w:0,h:0,dur:0};
+  function esc(t){return String(t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+  function clean(html){
+    var d=new DOMParser().parseFromString('<div>'+html+'</div>','text/html').body.firstChild,ok={B:1,STRONG:1,I:1,EM:1,U:1,S:1,CODE:1,A:1};
+    function walk(n){var o='';n.childNodes.forEach(function(c){
+      if(c.nodeType===3)o+=esc(c.nodeValue).replace(/\n/g,'<br>');
+      else if(c.nodeType===1){var inner=walk(c),t=c.tagName;
+        if(t==='BR')o+='<br>';
+        else if(ok[t]){if(t==='A'){var h=c.getAttribute('href')||'';o+=/^https?:\/\//i.test(h)?'<a href="'+esc(h)+'" target="_blank" rel="noopener">'+inner+'</a>':inner}else o+='<'+t.toLowerCase()+'>'+inner+'</'+t.toLowerCase()+'>'}
+        else o+=inner}});return o}
+    return walk(d)}
+  function plainLen(html){return new DOMParser().parseFromString('<div>'+html+'</div>','text/html').body.textContent.length}
+  function setMedia(url,kind,obj){if(media.obj&&media.url)URL.revokeObjectURL(media.url);media={url:url,kind:kind,obj:!!obj,w:0,h:0,dur:0};render()}
+  file.addEventListener('change',function(){var f=file.files[0];if(!f){setMedia('','');return}
+    if(asset)asset.value='';setMedia(URL.createObjectURL(f),/^video\//.test(f.type)||/\.(mp4|mov|m4v)$/i.test(f.name)?'video':'photo',true)});
+  if(asset)asset.addEventListener('change',function(){var o=asset.options[asset.selectedIndex];
+    if(!o||!o.value){setMedia('','');return}file.value='';setMedia(o.dataset.url,o.dataset.kind==='video'?'video':'photo',false)});
+  function val(n){var e=Q('[name='+n+']');return e?e.value:''}
+  function chk(n){var e=Q('[name='+n+']');return !!(e&&e.checked)}
+  function sel(){return QA('input[name=accounts]:checked')}
+  function render(){
+    var mode=val('fit_mode')||'pad',cap=val('caption').trim(),capH=clean(cap),link=val('link_url').trim(),re=val('reaction'),lat=val('geo_lat').trim(),lon=val('geo_lon').trim();
+    var priv=val('privacy'),per=Q('select[name=period]'),perT=per?per.options[per.selectedIndex].text:'24 soat';
+    var accs=sel(),name=accs.length?accs[0].dataset.name:'Akkaunt nomi',more=accs.length>1?' +'+(accs.length-1):'';
+    var h='';
+    if(media.url){
+      var T=media.kind==='video'?function(c,x){return '<video class="'+c+'" src="'+media.url+'" muted loop autoplay playsinline '+(x||'')+'></video>'}:function(c,x){return '<img class="'+c+'" src="'+media.url+'" '+(x||'')+'>'};
+      if(mode==='pad')h+=T('sp-bg');
+      h+=T('sp-fg '+(mode==='crop'?'cover':'contain'),'id="spFg"');
+    }else h+='<div class="sp-empty">Rasm yoki video tanlang —<br>story shu yerda ko\'rinadi</div>';
+    h+='<div class="sp-shade"></div><div class="sp-bars"><i></i></div>';
+    h+='<div class="sp-head"><div class="sp-av '+(priv==='close'?'close':'')+'">'+esc(name.charAt(0).toUpperCase())+'</div><div><div class="sp-name">'+esc(name)+more+'</div><div class="sp-sub">hozir'+(priv==='contacts'?' · kontaktlar':priv==='close'?' · yaqin do\'stlar':'')+'</div></div><div class="sp-tools">• • •</div></div>';
+    var b='';if(chk('pinned'))b+='<b>📌 Profilda</b>';if(chk('noforwards'))b+='<b>🔒 Ulashib bo\'lmaydi</b>';if(b)h+='<div class="sp-badges">'+b+'</div>';
+    if(lat&&lon&&!isNaN(parseFloat(lat))&&!isNaN(parseFloat(lon)))h+='<div class="sp-st geo">📍 '+esc(parseFloat(lat).toFixed(3))+', '+esc(parseFloat(lon).toFixed(3))+'</div>';
+    if(re)h+='<div class="sp-st re">'+esc(re)+'</div>';
+    if(link){var t=link.replace(/^https?:\/\//i,'').replace(/\/$/,'');h+='<div class="sp-st link">🔗 '+esc(t.length>26?t.slice(0,25)+'…':t)+'</div>'}
+    if(capH)h+='<div class="sp-cap">'+capH+'</div>';
+    h+='<div class="sp-foot"><span>Xabar yuborish</span><div>♡</div></div>';
+    stage.innerHTML=h;
+    var fg=Q('#spFg');if(fg){if(media.kind==='video')fg.addEventListener('loadedmetadata',function(){media.w=fg.videoWidth;media.h=fg.videoHeight;media.dur=fg.duration;check()});else fg.addEventListener('load',function(){media.w=fg.naturalWidth;media.h=fg.naturalHeight;check()})}
+    var n=plainLen(capH),np=accs.filter(function(a){return a.dataset.premium!=='1'}).map(function(a){return a.dataset.name});
+    info.innerHTML='<b>'+(accs.length?accs.length+' ta akkaunt':'Akkaunt tanlanmagan')+'</b> · muddat: '+esc(perT)+' · sarlavha: <span class="'+(n>200?'sp-warn':'')+'">'+n+'</span> / 200 (Premium: 2048)';
+    var w=[];if(n>200&&np.length)w.push('Sarlavha 200 belgidan uzun: Premium emas akkauntlarda joylanmaydi ('+np.join(', ')+').');
+    if(n>2048)w.push('Sarlavha 2048 belgidan oshib ketdi.');
+    if(link&&np.length&&accs.length)w.push('Havola stikeri ba\'zi akkauntlarda Premium talab qilishi mumkin.');
+    warn.dataset.base=w.join('\n');check()}
+  function check(){var w=(warn.dataset.base?warn.dataset.base.split('\n'):[]);
+    if(media.w&&media.h){var r=media.w/media.h,mode=val('fit_mode')||'pad';
+      if(Math.abs(r-9/16)>0.03)w.push(mode==='orig'?'Fayl 9:16 emas ('+media.w+'×'+media.h+'): story chetlari bo\'sh qoladi. «Moslash usuli»ni o\'zgartiring.':'Fayl 9:16 emas ('+media.w+'×'+media.h+'): tanlangan usul bilan moslanadi.')}
+    if(media.kind==='video'&&media.dur>60)w.push('Video '+Math.round(media.dur)+' soniya: 60 soniyadan uzun bo\'lsa Telegram rad etishi mumkin.');
+    warn.innerHTML=w.map(esc).join('<br>')}
+  document.addEventListener('input',function(e){if(e.target.closest('form'))render()});
+  document.addEventListener('change',function(e){if(e.target.closest('form')&&e.target!==file&&e.target!==asset)render()});
+  render();
+})();
+</script>{% endblock %}

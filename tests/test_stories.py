@@ -229,3 +229,15 @@ def test_independent_from_content_tables(cl):
     create(cl, [a.pk])
     assert not ContentItem.objects.exists()
     assert set(J.objects.values_list("type", flat=True)) == {"story_publish"}
+
+
+def test_live_preview_present_and_asset_preview(cl, biz):
+    from apps.content.models import ContentAsset, ContentItem
+    item = ContentItem.objects.create(business=biz, title="T", text="x", media_type="image")
+    asset = ContentAsset.objects.create(item=item, file=png("k.png"), kind="image", original_name="k.png")
+    html = cl.get("/stories/yangi/").content.decode()
+    assert 'id="spStage"' in html and "Oldindan ko'rish" in html and f"/stories/fayl/{asset.pk}/" in html
+    r = cl.get(f"/stories/fayl/{asset.pk}/")
+    assert r.status_code == 200 and b"".join(r.streaming_content)[:4] == b"\x89PNG"
+    c2 = Client()
+    assert c2.get(f"/stories/fayl/{asset.pk}/").status_code in (302, 403, 404)

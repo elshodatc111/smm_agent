@@ -144,6 +144,7 @@ urlpatterns = [
     path("stories/<int:pk>/", st.stories_detail, name="stories_detail"),
     path("stories/<int:pk>/amal/", st.stories_action, name="stories_action"),
     path("stories/<int:pk>/media/", st.stories_media, name="stories_media"),
+    path("stories/fayl/<int:pk>/", st.stories_asset, name="stories_asset"),
     path("karusel/", rj.carousel_home, name="carousel_home"),
     path("karusel/yaratish/", rj.carousel_create, name="carousel_create"),
     path("karusel/<int:pk>/", rj.carousel_view, name="carousel_view"),
