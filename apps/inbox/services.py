@@ -20,7 +20,14 @@ DISCLOSURE = "Assalomu alaykum! Men AI yordamchiman (operator emasman): operator
 HANDOFF_TEXT = "Savolingiz operatorga uzatildi, u tez orada o'zi javob beradi. Iltimos, biroz kuting."
 BUILTIN_HANDOFF = ("shikoyat", "pulni qaytar", "pul qaytar", "aldadi", "aldov", "sudga", "prokuratura", "advokat", "operator", "odam bilan",
                    "jonli odam", "menejer bilan", "оператор", "жалоб", "верните деньги", "обман")
-MAX_AI_STREAK = 6          # operator yozmaguncha ketma-ket AI javoblari chegarasi
+MAX_AI_STREAK = 10         # operator yozmaguncha ketma-ket AI javoblari chegarasi
+SOFT = "Yumshoq: "         # yumshoq uzatish: operatorga xabar beriladi, lekin AI keyingi savollarga javob berishda DAVOM etadi
+_PHONE = re.compile(r"(?<!\d)(\+?998[\s\-()]*\d{2}[\s\-()]*\d{3}[\s\-]*\d{2}[\s\-]*\d{2}|\d{2}[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2})(?!\d)")
+
+
+def is_hard(conv: Conversation) -> bool:
+    """Qattiq uzatish (shikoyat, operator so'radi, pul): AI to'xtaydi. Yumshoq uzatishda AI javob berishda davom etadi."""
+    return bool(conv.needs_human and not (conv.human_reason or "").startswith(SOFT))
 
 
 # ------------------------------------------------------------------ yordamchilar
@@ -182,7 +189,9 @@ def due_conversations(account: InboxAccount, now=None):
     if account.cooldown_until and account.cooldown_until > now:
         return []
     out = []
-    for conv in account.conversations.filter(status="open", ai_enabled=True, needs_human=False, last_inbound_at__isnull=False):
+    for conv in account.conversations.filter(status="open", ai_enabled=True, last_inbound_at__isnull=False):
+        if is_hard(conv):
+            continue
         at = ai_join_at(conv, now)
         if at and at <= now:
             out.append(conv)
@@ -207,7 +216,7 @@ def script_for(business) -> list[ScriptEntry]:
     return list(ScriptEntry.objects.filter(business=business, active=True))
 
 
-def _rank(entries: list[ScriptEntry], text: str, limit: int = 12) -> list[ScriptEntry]:
+def _rank(entries: list[ScriptEntry], text: str, limit: int = 24) -> list[ScriptEntry]:
     qa = [e for e in entries if e.kind == "qa"]
     w = _words(text)
     scored = sorted(qa, key=lambda e: -len(w & _words(f"{e.title} {e.questions} {e.answer}")))
@@ -228,21 +237,61 @@ def _history(conv: Conversation, n: int = 10) -> str:
     return "\n".join(f"{who.get(m.sender, m.sender)}: {m.text[:400]}" for m in rows)
 
 
-def _prompt(conv: Conversation, entries: list[ScriptEntry], question: str) -> str:
+def _special_hits(entries: list[ScriptEntry], text: str) -> list[ScriptEntry]:
+    low = (text or "").lower()
+    hits = []
+    for e in entries:
+        if e.kind != "handoff":
+            continue
+        kws = [x.strip().lower() for x in (e.questions or "").splitlines() if x.strip()]
+        if any(k in low for k in kws):
+            hits.append(e)
+    return hits
+
+
+def _facts_text(business) -> str:
+    try:
+        from apps.businesses import passport
+        txt = passport.brief(business, 3500)
+    except Exception:  # noqa: BLE001
+        txt = ""
+    f = business.facts if isinstance(getattr(business, "facts", None), dict) else {}
+    if f:
+        txt += "\nAniq faktlar: " + "; ".join(f"{k}: {v}" for k, v in f.items())[:600]
+    return txt
+
+
+def _prompt(conv: Conversation, entries: list[ScriptEntry], question: str, special: list[ScriptEntry] | None = None, extra: str = "") -> str:
     rules = [e for e in entries if e.kind == "rule"]
     qa = _rank(entries, question + " " + _history(conv, 4))
-    parts = ["Sen biznesning mijozlar bilan yozishuvchi AI yordamchisisan. Quyidagi SKRIPTDAN tashqariga CHIQMA.",
-             "QOIDALAR: 1) Faqat skriptdagi ma'lumot bilan javob ber; narx, sana, telefon, manzil yoki va'dani skriptda yo'q bo'lsa O'YLAB TOPMA. "
-             "2) Skriptdan javob topa olmasang yoki mijoz shikoyat/pul qaytarish/operator so'rasa — handoff=true qil. "
-             "3) Mijoz qaysi tilda (o'zbek yoki rus) yozsa, shu tilda yoz. Qisqa, iliq, 600 belgidan oshmasin. 4) O'zingni inson deb tanishtirma."
-             + (f" Sening isming: AI {conv.account.ai_name}. Ismingni so'rashsa shuni ayt; javob matniga salomlashish va o'zingni tanishtirishni qo'shma (u avtomatik qo'shiladi)." if conv.account.ai_name else ""),
-             "Javob FAQAT JSON: {\"answer\": \"...\", \"handoff\": false, \"reason\": \"\", \"used\": [skript_id,...], \"missing_question\": \"\"}"]
+    name = conv.account.ai_name
+    parts = [
+        "Sen biznesning mijozlar bilan Telegramda yozishuvchi AI yordamchisisan. Maqsading: mijozga HAR DOIM foydali, aniq va iliq javob berish; suhbatni to'xtatib qo'ymaslik; "
+        "mijozni keyingi qadamga (ro'yxatdan o'tish, aloqa qoldirish) yumshoq yo'naltirish.",
+        "MA'LUMOT MANBALARI (tartib bilan): 1) SKRIPT, 2) BIZNES PASPORTI. Narx, sana, telefon, manzil, natija va va'dani faqat shu manbalardan ol; ularda yo'q raqam va faktni O'YLAB TOPMA.",
+        "QANDAY JAVOB BERASAN:\n"
+        "• Biznesga oid savol: manbalardagi ma'lumot bilan to'liq javob ber (3-6 gap), oxirida bitta aniqlovchi savol ber (maqsad, daraja, shahar yoki qulay vaqt).\n"
+        "• Salomlashish, minnatdorchilik, «qalaysan», «ismingiz nima», «yoshing nechta», «sen robotmisan» kabi oddiy suhbat: samimiy, qisqa javob ber (AI ekaningni halol ayt, yoshing yo'q de), so'ng biznes mavzusiga yengil qayt. Bunday savollarda handoff QILMA.\n"
+        "• Ma'lumotning bir qismi manbada yo'q: bilganingni ayt, yo'qini «aniq … ni menejerimiz tasdiqlaydi» deb ayt va mijozdan ismi va telefon raqamini so'ra (agar hali bermagan bo'lsa). needs_operator=true qo'y, missing_question ga yetishmagan savolni yoz. handoff QILMA.\n"
+        "• Mijoz shoshiltirsa («tezroq javob bering», «uzoq kutdim»): uzr so'ra, operator xabardor ekanini ayt va hozir qo'lingdan kelganicha yordam ber; needs_operator=true.\n"
+        "• Mijoz ism yoki telefon qoldirsa: minnatdorchilik bildir, menejer bog'lanishini ayt; lead_name va lead_phone ni to'ldir.\n"
+        "• handoff=true FAQAT: mijoz operator/odam so'rasa, shikoyat, pulni qaytarish, to'lov nizosi, yuridik tahdid bo'lsa.\n"
+        "• Oldingi javobingni takrorlama; suhbat tarixini hisobga ol. Mijoz qaysi tilda (o'zbek yoki rus) yozsa, shu tilda yoz; o'zbekchani lotinda yoz. "
+        "Javob 700 belgidan oshmasin. O'zingni inson deb tanishtirma. Kafolat va'dasi berma."
+        + (f" Sening isming: AI {name}. Ismingni so'rashsa shuni ayt." if name else "")
+        + " Javobga salomlashish va o'zingni tanishtirishni qo'shma (u avtomatik qo'shiladi).",
+        "Javob FAQAT JSON: {\"answer\": \"...\", \"handoff\": false, \"needs_operator\": false, \"reason\": \"\", \"used\": [skript_id,...], \"missing_question\": \"\", \"lead_name\": \"\", \"lead_phone\": \"\"}",
+        "BIZNES PASPORTI:\n" + _facts_text(conv.business)]
     if rules:
-        parts.append("UMUMIY QOIDALAR:\n" + "\n".join(f"- {r.title}: {r.answer}" for r in rules))
+        parts.append("UMUMIY QOIDALAR (albatta amal qil):\n" + "\n".join(f"- {r.title}: {r.answer}" for r in rules))
+    if special:
+        parts.append("MAXSUS HOLATLAR (egasi belgilagan; shu savolga mos bo'lsa ko'rsatmaga amal qil va needs_operator=true qo'y):\n" + "\n".join(f"- {e.title}: {e.answer}" for e in special))
     if qa:
         parts.append("SKRIPT:\n" + "\n".join(f"[id={e.pk}] {e.title}\n  Savollar: {' | '.join(x.strip() for x in e.questions.splitlines() if x.strip())[:300]}\n  Javob: {e.answer}" for e in qa))
     else:
-        parts.append("SKRIPT: (bo'sh)")
+        parts.append("SKRIPT: (bo'sh; faqat pasportdan foydalan)")
+    if extra:
+        parts.append(extra)
     parts.append(f"SUHBAT:\n{_history(conv)}\n\nMijozning oxirgi xabari: {question}")
     return "\n\n".join(parts)
 
@@ -266,6 +315,16 @@ def _log(conv, decision, question="", answer="", reason="", script_ids=None, res
                                      tokens_in=getattr(res, "tokens_in", 0) or 0, tokens_out=getattr(res, "tokens_out", 0) or 0)
 
 
+def _soft_flag(conv: Conversation, question: str, reason: str, missing: str = "", res=None) -> None:
+    """Yumshoq belgi: operatorga xabar + skript bo'shlig'i yoziladi, lekin AI javob berishda davom etadi."""
+    if not conv.needs_human:
+        conv.needs_human, conv.human_reason = True, (SOFT + reason)[:200]
+        conv.save(update_fields=["needs_human", "human_reason"])
+    record_gap(conv.business, missing or question, conv)
+    notify("inbox.handoff", f"Operator tasdig'i kerak: {conv}", f"{reason}: {question[:120]}", business_id=conv.business_id, severity="info",
+           link=f"/murojaatlar/{conv.pk}/", dedupe_key=f"inbox-soft:{conv.pk}", dedupe_minutes=60)
+
+
 def _handoff(conv: Conversation, question: str, reason: str, res=None, missing: str = "") -> dict:
     conv.needs_human, conv.human_reason = True, reason[:200]
     fields = ["needs_human", "human_reason"]
@@ -285,16 +344,26 @@ def _handoff(conv: Conversation, question: str, reason: str, res=None, missing: 
 
 def _grounded(answer: str, entries: list[ScriptEntry], conv: Conversation) -> bool:
     """Javobdagi raqamlar (narx, telefon, sana) skriptda yoki mijoz yozganlarida bo'lishi shart."""
-    allowed = {_norm_num(n) for n in _nums(" ".join(f"{e.title} {e.questions} {e.answer}" for e in entries))}
+    allowed = {_norm_num(n) for n in _nums(" ".join(f"{e.title} {e.questions} {e.answer}" for e in entries) + " " + _facts_text(conv.business))}
     allowed |= {_norm_num(n) for n in _nums(" ".join(m.text for m in conv.messages.filter(direction="in")[:30]))}
     return all(_norm_num(n) in allowed for n in _nums(answer) if len(_norm_num(n)) >= 2)
 
 
+def _ungrounded(answer: str, entries: list[ScriptEntry], conv: Conversation) -> list[str]:
+    allowed = {_norm_num(n) for n in _nums(" ".join(f"{e.title} {e.questions} {e.answer}" for e in entries) + " " + _facts_text(conv.business))}
+    allowed |= {_norm_num(n) for n in _nums(" ".join(m.text for m in conv.messages.filter(direction="in")[:30]))}
+    return [n for n in _nums(answer) if len(_norm_num(n)) >= 2 and _norm_num(n) not in allowed]
+
+
+SAFE_FALLBACK = "Savolingiz uchun rahmat! Aniq ma'lumotni menejerimiz tasdiqlab, tez orada javob beradi. Shu orada ismingiz va telefon raqamingizni yozib qoldirsangiz, u siz bilan bog'lanadi."
+
+
 def auto_reply(conv: Conversation, *, now=None, router=None) -> dict:
-    """Bitta suhbat uchun AI qarori. Qaytaradi: {'decision': answered|handoff|skipped|failed, ...}."""
+    """Bitta suhbat uchun AI qarori. Qaytaradi: {'decision': answered|handoff|skipped|failed, ...}.
+    AI deyarli har doim javob beradi; faqat shikoyat/pul/operator so'rovi (qattiq uzatish) AI ni to'xtatadi."""
     now = now or timezone.now()
     acc = conv.account
-    if not (acc.active and acc.auto_reply and conv.ai_enabled and conv.status == "open") or conv.needs_human:
+    if not (acc.active and acc.auto_reply and conv.ai_enabled and conv.status == "open") or is_hard(conv):
         return {"decision": "skipped", "reason": "o'chiq yoki operator kerak"}
     wait = awaiting_message(conv)
     if wait is None:
@@ -309,24 +378,47 @@ def auto_reply(conv: Conversation, *, now=None, router=None) -> dict:
     entries = script_for(conv.business)
     question = "\n".join(m.text for m in conv.messages.filter(direction="in", created_at__gte=wait.created_at).order_by("created_at")[:6])[:1500]
     low = question.lower()
-    if any(w in low for w in _handoff_words(entries)):
-        return _handoff(conv, question, "mijoz operator so'radi" if "operator" in low or "оператор" in low or "odam" in low else "ehtiyotkor mavzu (shikoyat/pul)")
-    if not any(e.kind == "qa" for e in entries):
-        return _handoff(conv, question, "skript bo'sh")
+    if any(w in low for w in BUILTIN_HANDOFF):
+        return _handoff(conv, question, "mijoz operator so'radi" if "operator" in low or "оператор" in low or "odam" in low or "menejer bilan" in low else "ehtiyotkor mavzu (shikoyat/pul)")
+    facts = _facts_text(conv.business)
+    if not any(e.kind == "qa" for e in entries) and len(facts) < 80:
+        return _handoff(conv, question, "skript va pasport bo'sh")
+    special = _special_hits(entries, question)
+    m = _PHONE.search(question)
+    if m:
+        notify("inbox.lead", f"Yangi aloqa: {conv}", f"Mijoz raqam qoldirdi: {m.group(0).strip()}", business_id=conv.business_id, severity="info",
+               link=f"/murojaatlar/{conv.pk}/", dedupe_key=f"inbox-lead:{conv.pk}", dedupe_minutes=120)
     from apps.ai_router.router import AIUnavailable, generate
     from apps.ai_router.types import TaskType
+
+    def ask(extra=""):
+        return generate(TaskType.COMMENT_REPLY, _prompt(conv, entries, question, special, extra), business=conv.business, kind="inbox_reply", schema={"json": True}, router=router, require_lang=None)
     try:
-        res, _gen = generate(TaskType.COMMENT_REPLY, _prompt(conv, entries, question), business=conv.business, kind="inbox_reply", schema={"json": True}, router=router, require_lang=None)
+        res, _gen = ask()
     except AIUnavailable as e:
         _log(conv, "failed", question, "", str(e)[:200])
+        fails = AIReplyLog.objects.filter(conversation=conv, decision="failed", created_at__gte=wait.created_at).count()
+        if fails >= 3:
+            return _handoff(conv, question, "AI vaqtincha ishlamayapti")
         return {"decision": "failed", "reason": str(e)[:200]}
     d = res.data if isinstance(res.data, dict) else {}
     answer = str(d.get("answer") or "").strip()
     used = [i for i in (d.get("used") or []) if isinstance(i, int)]
-    if d.get("handoff") or not answer:
-        return _handoff(conv, question, str(d.get("reason") or "skriptda javob yo'q")[:150], res, str(d.get("missing_question") or ""))
-    if not _grounded(answer, entries, conv):
-        return _handoff(conv, question, "javobdagi raqam skriptda yo'q (o'ylab topilgan bo'lishi mumkin)", res, question)
+    if d.get("handoff"):
+        return _handoff(conv, question, str(d.get("reason") or "AI operator kerak deb topdi")[:150], res, str(d.get("missing_question") or ""))
+    bad = _ungrounded(answer, entries, conv) if answer else []
+    if bad:  # o'ylab topilgan raqam: bir marta raqamsiz qayta yozdiramiz
+        try:
+            res, _gen = ask(f"DIQQAT: oldingi javobingda manbalarda yo'q raqamlar bor edi ({', '.join(sorted(bad))[:80]}). Ularni ishlatma; aniq raqamni «menejerimiz tasdiqlaydi» de.")
+            d = res.data if isinstance(res.data, dict) else {}
+            answer = str(d.get("answer") or "").strip()
+            used = [i for i in (d.get("used") or []) if isinstance(i, int)]
+        except AIUnavailable:
+            answer = ""
+        if not answer or _ungrounded(answer, entries, conv):
+            answer, d = SAFE_FALLBACK, {"needs_operator": True, "missing_question": question}
+    if not answer:
+        answer, d = SAFE_FALLBACK, {"needs_operator": True, "missing_question": question}
     answer = answer[:900]
     text = answer if conv.ai_disclosed else disclosure(acc) + strip_greeting(answer)
     queue_outbound(conv, text, sender="ai", when=now)
@@ -335,6 +427,12 @@ def auto_reply(conv: Conversation, *, now=None, router=None) -> dict:
         conv.save(update_fields=["ai_disclosed"])
     valid = [i for i in used if any(e.pk == i for e in entries)]
     ScriptEntry.objects.filter(pk__in=valid).update(uses=F("uses") + 1)
+    if d.get("needs_operator") or special:
+        _soft_flag(conv, question, str(d.get("reason") or "aniq ma'lumot yoki tasdiq kerak")[:120], str(d.get("missing_question") or ""), res)
+    lp = str(d.get("lead_phone") or "").strip()
+    if lp and not m:
+        notify("inbox.lead", f"Yangi aloqa: {conv}", f"{d.get('lead_name') or 'Mijoz'}: {lp}", business_id=conv.business_id, severity="info",
+               link=f"/murojaatlar/{conv.pk}/", dedupe_key=f"inbox-lead:{conv.pk}", dedupe_minutes=120)
     _log(conv, "answered", question, text, "", valid, res)
     return {"decision": "answered", "text": text}
 

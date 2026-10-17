@@ -7,7 +7,7 @@
     <form method="post" action="{% url 'inbox_conv_action' c.pk 'ai' %}">{% csrf_token %}<button class="btn sm">{% if c.ai_enabled %}Bu suhbatda AI ni o'chirish{% else %}AI ni yoqish{% endif %}</button></form>
     {% if c.needs_human %}<form method="post" action="{% url 'inbox_conv_action' c.pk 'human' %}">{% csrf_token %}<button class="btn sm">AI ga qaytarish</button></form>{% endif %}
     <form method="post" action="{% url 'inbox_conv_action' c.pk 'close' %}">{% csrf_token %}<button class="btn sm">Yopish</button></form></div>{% endif %}</div>
-<div data-live="wait"><span data-now="{{ now_ms }}" hidden></span>{% if waiting and join and c.ai_enabled and c.account.auto_reply and not c.needs_human %}<div class="callout"><b>⏱</b><div>Javob kutilmoqda. Operator javob bermasa, AI yordamchi skript asosida <span data-join="{{ join_ms }}" data-pre="" data-post=" dan keyin javob beradi">{{ join|time:"H:i:s" }} dan keyin javob beradi</span>.</div></div>{% endif %}</div>
+<div data-live="wait"><span data-now="{{ now_ms }}" hidden></span>{% if waiting and join and c.ai_enabled and c.account.auto_reply and not hard %}<div class="callout"><b>⏱</b><div>Javob kutilmoqda. Operator javob bermasa, AI yordamchi skript asosida <span data-join="{{ join_ms }}" data-pre="" data-post=" dan keyin javob beradi">{{ join|time:"H:i:s" }} dan keyin javob beradi</span>.</div></div>{% endif %}</div>
 <div class="g2-1">
 <div class="card chat" data-live="chat">
   {% for m in msgs %}<div class="bub {{ m.sender }}"><div class="bub-in">{{ m.text|linebreaksbr }}</div>

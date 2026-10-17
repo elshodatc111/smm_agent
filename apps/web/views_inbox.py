@@ -52,7 +52,7 @@ def inbox_home(request):
         secs = max(0, int((join - now).total_seconds())) if join and join > now else 0
         mins = secs // 60 if secs >= 60 else 0
         join_ms = int(join.timestamp() * 1000) if join and join > now else 0
-        rows.append({"c": c, "last": last, "state": state, "join_in": mins, "join_secs": secs, "join_ms": join_ms, "ai_active": bool(join and join <= now and c.ai_enabled and c.account.auto_reply and not c.needs_human)})
+        rows.append({"c": c, "last": last, "state": state, "join_in": mins, "join_secs": secs, "join_ms": join_ms, "ai_active": bool(join and join <= now and c.ai_enabled and c.account.auto_reply and not svc.is_hard(c))})
     return render(request, "inbox_home.html", {"title": "Murojaatlar", "rows": rows, "now_ms": int(now.timestamp() * 1000), "tab": tab, "stat": svc.stats(ids),
                                                "can_manage": perms.can(request.user, "inbox.configure", request.business) if request.business else request.user.is_admin,
                                                "no_accounts": not InboxAccount.objects.filter(business_id__in=ids).exists()})
@@ -68,7 +68,7 @@ def inbox_conv(request, pk):
     join = svc.ai_join_at(c) if wait else None
     return render(request, "inbox_conv.html", {
         "title": str(c), "c": c, "msgs": msgs, "join": join, "now_ms": int(timezone.now().timestamp() * 1000),
-        "join_ms": int(join.timestamp() * 1000) if join else 0, "waiting": bool(wait), "suggestions": request.session.pop(f"sug{c.pk}", None),
+        "join_ms": int(join.timestamp() * 1000) if join else 0, "hard": svc.is_hard(c), "waiting": bool(wait), "suggestions": request.session.pop(f"sug{c.pk}", None),
         "can_reply": perms.can(request.user, "inbox.create", c.business), "can_script": perms.can(request.user, "inbox.edit", c.business),
         "logs": c.ai_logs.all()[:5]})
 

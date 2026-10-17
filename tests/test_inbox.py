@@ -18,8 +18,8 @@ def router(*script):
     return AIRouter(providers={n: FakeAIProvider(n, list(script) if n == "openai" else []) for n in ("openai", "claude")}, use_fakes=True)
 
 
-def ai(answer="", handoff=False, reason="", used=None, missing=""):
-    return json.dumps({"answer": answer, "handoff": handoff, "reason": reason, "used": used or [], "missing_question": missing})
+def ai(answer="", handoff=False, reason="", used=None, missing="", needs_operator=False):
+    return json.dumps({"answer": answer, "handoff": handoff, "reason": reason, "used": used or [], "missing_question": missing, "needs_operator": needs_operator})
 
 
 @pytest.fixture
@@ -104,16 +104,37 @@ def test_new_inbound_after_ai_answers_in_30s_not_15min(acc, script):
 
 
 # ------------------------------------------------------------------ himoyalar
-def test_handoff_when_script_empty_creates_gap_and_polite_message(acc):
+def test_missing_info_is_soft_flag_and_ai_keeps_answering(acc):
     inbound(acc, "Sizda ingliz tili kursi bormi?")
     c = Conversation.objects.get()
-    r = svc.auto_reply(c, router=router(ai("x")))
-    assert r["decision"] == "handoff"
+    r = svc.auto_reply(c, router=router(ai("Ha, kurslarimiz bor. Aniq jadvalni menejerimiz tasdiqlaydi. Ismingizni yozing.", needs_operator=True, missing="kurs jadvali")))
+    assert r["decision"] == "answered"
     c.refresh_from_db()
-    assert c.needs_human and Message.objects.filter(sender="ai").count() == 1
-    assert "operatorga uzatildi" in Message.objects.get(sender="ai").text
+    assert c.needs_human and not svc.is_hard(c) and c.human_reason.startswith(svc.SOFT)
     assert ScriptGap.objects.filter(business=acc.business, status="new").exists()
-    assert svc.auto_reply(c, router=router(ai("x")))["decision"] == "skipped"        # qayta urinmaydi
+    # yumshoq belgidan keyin ham AI keyingi savolga javob beradi (to'xtab qolmaydi)
+    Message.objects.filter(sender="ai").update(created_at=timezone.now() - timedelta(minutes=35))
+    inbound(acc, "Narxi qancha?", mid=77, when=timezone.now() - timedelta(minutes=2))
+    assert [x.pk for x in svc.due_conversations(acc)] == [c.pk]
+    assert svc.auto_reply(c, router=router(ai("Narx 500000 so'mdan.")))["decision"] == "answered"
+
+
+def test_smalltalk_is_answered_not_handed_off(acc, script):
+    inbound(acc, "Sani yoshing nechi")
+    c = Conversation.objects.get()
+    r = svc.auto_reply(c, router=router(ai("Men AI yordamchiman, yoshim yo'q. Kurslar haqida savolingiz bormi?")))
+    assert r["decision"] == "answered"
+    c.refresh_from_db()
+    assert not c.needs_human
+
+
+def test_ai_unavailable_three_times_hands_off(acc, script):
+    from apps.ai_router.router import AIUnavailable
+    inbound(acc)
+    c = Conversation.objects.get()
+    for _ in range(3):
+        r = svc.auto_reply(c, router=AIRouter(providers={}, use_fakes=False))
+    assert r["decision"] == "handoff" and svc.is_hard(Conversation.objects.get())
 
 
 def test_handoff_keywords_never_reach_ai(acc, script):
@@ -136,8 +157,9 @@ def test_invented_price_is_blocked(acc, script):
     inbound(acc, "Narxi qancha?")
     c = Conversation.objects.get()
     r = svc.auto_reply(c, router=router(ai("Kurs narxi 350000 so'm.", used=[script.pk])))
-    assert r["decision"] == "handoff" and "raqam" in r["reason"]
+    assert r["decision"] == "answered"
     assert not any("350000" in m.text for m in Message.objects.filter(direction="out"))
+    assert Conversation.objects.get().needs_human and not svc.is_hard(Conversation.objects.get())
 
 
 def test_hourly_limit_and_streak(acc, script):
