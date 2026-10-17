@@ -1,7 +1,10 @@
 {% extends "base.html" %}{% block title %}{{ title }}{% endblock %}
 {% block content %}
 <style>
-.sp-wrap{position:sticky;top:12px}
+.sp-layout{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;align-items:start}.sp-main,.sp-side{min-width:0}
+.sp-side{position:sticky;top:84px;align-self:start;max-height:calc(100vh - 96px);overflow:auto}
+@media (max-width:1000px){.sp-layout{grid-template-columns:1fr}.sp-side{position:static;max-height:none;order:-1}}
+@media (max-height:780px){.sp-phone{width:200px}}
 .sp-phone{width:260px;margin:0 auto;border-radius:30px;background:#000;padding:8px;box-shadow:0 10px 30px rgba(0,0,0,.28)}
 .sp-stage{position:relative;width:100%;aspect-ratio:9/16;border-radius:22px;overflow:hidden;background:#111;color:#fff;font-size:12px}
 .sp-stage img,.sp-stage video{position:absolute;inset:0;width:100%;height:100%}
@@ -31,8 +34,8 @@
 <div class="pg-head row sb"><div><h1 style="margin:2px 0">Yangi story</h1><div class="muted">Bir marta yuklang — tanlangan akkauntlarga avtomatik oraliq bilan joylanadi.</div></div></div>
 {% include "partials/stories_tabs.html" %}
 {% if errors %}<div class="callout bad"><b>!</b><div>{% for e in errors %}{{ e }}<br>{% endfor %}</div></div>{% endif %}
-<form method="post" enctype="multipart/form-data" class="grid g2" style="align-items:start">{% csrf_token %}
-<div>
+<form method="post" enctype="multipart/form-data" class="sp-layout">{% csrf_token %}
+<div class="sp-main">
  <div class="card"><h2>1 · Fayl</h2>
   <label>Rasm yoki video (kompyuterdan)</label><input type="file" name="media" accept="image/*,video/mp4,video/quicktime">
   <div class="help">Story 9:16 (1080×1920) bo'ladi. Video: mp4, 60 soniyagacha tavsiya etiladi. Eng ko'pi {{ 200 }} MB.</div>
@@ -50,12 +53,6 @@
   <label>Kimga ko'rinadi</label><select name="privacy">{% for v, l in privacy %}<option value="{{ v }}" {% if P.privacy == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
   <label class="row" style="gap:8px;font-weight:500"><input type="checkbox" name="pinned" value="1" style="width:auto" {% if P.pinned %}checked{% endif %}> Profilda doimiy qoldirish (pin)</label>
   <label class="row" style="gap:8px;font-weight:500"><input type="checkbox" name="noforwards" value="1" style="width:auto" {% if P.noforwards %}checked{% endif %}> Ulashish va saqlashni taqiqlash</label></div>
-</div>
-<div>
- <div class="card sp-wrap"><h2>Oldindan ko'rish</h2>
-  <div class="sp-phone"><div class="sp-stage" id="spStage"></div></div>
-  <div class="sp-info" id="spInfo"></div><div class="sp-warn" id="spWarn"></div>
-  <div class="help mt">Taxminiy ko'rinish: Telegram ilovasida shrift va joylashuv ozgina farq qilishi mumkin. Barcha o'zgarishlar shu yerda darhol ko'rinadi.</div></div>
  <div class="card mt"><h2>4 · Akkauntlar</h2>
   {% if accs %}<label class="row" style="gap:8px;font-weight:600"><input type="checkbox" id="allAcc" style="width:auto" onclick="document.querySelectorAll('.accChk').forEach(c=>{if(!c.disabled)c.checked=this.checked})"> Hammasini tanlash</label>
   {% for a in accs %}<label class="row" style="gap:8px;font-weight:500"><input type="checkbox" class="accChk" name="accounts" value="{{ a.pk }}" data-name="{{ a.name }}" data-premium="{% if a.is_premium %}1{% else %}0{% endif %}" style="width:auto" {% if a.status != 'active' %}disabled{% endif %} {% if a.pk|stringformat:"s" in sel %}checked{% endif %}> {{ a.name }} <span class="muted sm">{{ a.phone }}</span>
@@ -67,7 +64,13 @@
   <input type="datetime-local" name="scheduled_at" value="{{ P.scheduled_at|default:default_when }}">
   <div class="help">Akkauntlar orasida tizim {{ lo_hi.0 }}–{{ lo_hi.1 }} soniya tasodifiy oraliq qo'yadi, shuning uchun ro'yxatdagi oxirgi akkaunt bir necha daqiqa kechroq joylanadi.</div></div>
  <div class="mt"><button class="btn primary">Joylash / rejalashtirish</button></div>
-</div></form>
+</div>
+<aside class="sp-side">
+ <div class="card"><h2>Oldindan ko'rish</h2>
+  <div class="sp-phone"><div class="sp-stage" id="spStage"></div></div>
+  <div class="sp-info" id="spInfo"></div><div class="sp-warn" id="spWarn"></div>
+  <div class="help mt">Taxminiy ko'rinish: Telegram ilovasida shrift va joylashuv ozgina farq qilishi mumkin. Barcha o'zgarishlar shu yerda darhol ko'rinadi.</div></div>
+</aside></form>
 {% endblock %}
 {% block scripts %}<script>
 (function(){
