@@ -7,6 +7,7 @@ from .models import Notification, NotificationPref
 from .settings_store import get_setting
 
 TYPES = {
+    "stories.result": "Story natijasi", "stories.account": "Story akkaunti",
     "inbox.new": "Yangi murojaat", "inbox.handoff": "Operator kerak",
     "task.assigned": "Yangi vazifa", "approval.requested": "Tasdiqlash so'rovi",
     "content.status_changed": "Kontent holati o'zgardi", "publish.success": "Nashr muvaffaqiyatli",

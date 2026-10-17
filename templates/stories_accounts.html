@@ -5,9 +5,11 @@
 <div class="callout warn"><b>!</b><div><b>Xavfsizlik:</b> bir xil story ko'p akkauntga ketma-ket qo'yilsa, Telegram buni spam deb cheklashi mumkin. Shuning uchun tizim akkauntlar orasida tasodifiy 1–3 daqiqa oraliq qo'yadi. Imkon bo'lsa, akkauntlarni o'z egasi bilan kelishib ulang. Sessiya shifrlangan holda saqlanadi. Telegram API ID/Hash Sozlamalarda kiritilgan bo'lishi kerak.</div></div>
 <div class="grid g2 mt">
 {% for a in accs %}<div class="card"><div class="row sb"><div><b>{{ a.name }}</b>{% if a.username %} · @{{ a.username }}{% endif %}<div class="muted sm">{{ a.phone }}{% if a.note %} · {{ a.note }}{% endif %}</div></div>
-  <div class="row" style="gap:4px"><span class="badge {% if a.is_premium %}violet{% endif %}">{% if a.is_premium %}Premium{% else %}Premium emas{% endif %}</span><span class="badge {% if a.status == 'active' %}ok{% elif a.status == 'error' %}bad{% else %}warn{% endif %}">{{ a.get_status_display }}</span></div></div>
+  <div class="row" style="gap:4px"><span class="badge {% if a.is_premium %}violet{% endif %}">{% if a.is_premium %}Premium{% else %}Premium emas{% endif %}</span><span class="badge {{ a.state.level }}">{{ a.state.label }}</span></div></div>
+  <div class="muted sm" style="margin-top:6px">Oxirgi 24 soatda joylangan: <b>{{ a.state.sent24 }}</b>{% if a.checked_at %} · Telegram tekshiruvi: {{ a.state.checked }}{% endif %}</div>
   {% if a.last_error %}<div class="sm" style="color:var(--bad);margin-top:6px">{{ a.last_error }}</div>{% endif %}
   {% if can_manage %}<div class="row mt">
+    <form method="post" action="{% url 'stories_account_action' a.pk %}">{% csrf_token %}<input type="hidden" name="action" value="check"><button class="btn sm">Imkoniyatni tekshirish</button></form>
     <form method="post" action="{% url 'stories_account_action' a.pk %}">{% csrf_token %}<input type="hidden" name="action" value="sync"><button class="btn sm">Holatni yangilash</button></form>
     <form method="post" action="{% url 'stories_account_action' a.pk %}">{% csrf_token %}<input type="hidden" name="action" value="toggle"><button class="btn sm">{% if a.status == 'active' %}To'xtatish{% else %}Yoqish{% endif %}</button></form>
     <form method="post" action="{% url 'stories_account_action' a.pk %}" onsubmit="return confirm('Akkaunt va uning story natijalari o\'chiriladi. Davom etasizmi?')">{% csrf_token %}<input type="hidden" name="action" value="delete"><button class="btn sm danger">O'chirish</button></form></div>{% endif %}</div>

@@ -19,6 +19,13 @@ def _media(tmp_path, settings):
     tgclient.FAKE_FAIL.clear()
 
 
+def run_prepare():
+    from apps.jobs.models import Job
+    from apps.stories import services
+    for j in Job.objects.filter(type="story_prepare", status="pending"):
+        services.prepare_story(j.payload["story_id"], j.payload["accounts"], j.payload.get("when"))
+
+
 def probe(path):
     out = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=codec_type,width,height:format=duration", "-of", "json", path], capture_output=True, text=True).stdout
     return json.loads(out)
@@ -40,6 +47,10 @@ def test_story_with_music_builds_video_and_credit(cl):
     r = create(cl, [a.pk], music_id="9002", music_start="5", music_len="12")
     assert r.status_code == 302, getattr(r, "content", b"")[:300]
     s = Story.objects.get()
+    assert s.status == "preparing" and not s.music_video and s.targets.count() == 0
+    run_prepare()
+    s.refresh_from_db()
+    assert s.status == "sending" and s.targets.count() == 1
     assert s.music_title == "Test qo'shiq 3" and s.music_len == 12 and s.music_start == 5 and s.music_video
     assert "Jamendo" in s.caption and s.caption.startswith("Salom")
     info = probe(s.music_video.path)
@@ -52,6 +63,7 @@ def test_story_with_music_builds_video_and_credit(cl):
 def test_publish_uses_music_video_as_video(cl, monkeypatch):
     a = mk_accs(1)[0]
     create(cl, [a.pk], music_id="9001", music_len="10")
+    run_prepare()
     seen = {}
     orig = tgclient.post_story
 

@@ -28,7 +28,7 @@ from apps.stories.models import PERIODS, PRIVACY, Story, StoryAccount, StoryStat
 EXT_OK = ("jpg", "jpeg", "png", "webp", "mp4", "mov", "m4v")
 MAX_MB = 200
 REACTIONS = ["", "❤", "🔥", "👍", "🎉", "😍", "👏", "😮"]
-BADGE = {"draft": "", "scheduled": "blue", "sending": "blue", "done": "ok", "partial": "warn", "failed": "bad", "cancelled": "",
+BADGE = {"draft": "", "preparing": "blue", "scheduled": "blue", "sending": "blue", "done": "ok", "partial": "warn", "failed": "bad", "cancelled": "",
          "pending": "", "sent": "ok", "error": "bad", "skipped": ""}
 ERR_UZ = {"premium": "Premium kerak", "limit": "Limit", "flood": "FloodWait", "media": "Fayl xatosi", "auth": "Qayta ulash kerak", "other": "Xato"}
 
@@ -71,7 +71,7 @@ def stories_home(request):
 @require_permission("stories.view")
 def stories_accounts(request):
     from apps.accounts.services import perms
-    return render(request, "stories_accounts.html", _ctx(request, "stories_accounts", title="Stories: akkauntlar", accs=StoryAccount.objects.all(), tl=request.session.get("stories_tl"),
+    return render(request, "stories_accounts.html", _ctx(request, "stories_accounts", title="Stories: akkauntlar", accs=_decorate(list(StoryAccount.objects.all())), tl=request.session.get("stories_tl"),
                                                        can_manage=perms.can(request.user, "stories.configure", None), max_acc=services.MAX_ACCOUNTS))
 
 
@@ -137,6 +137,9 @@ def stories_account_action(request, pk):
         if a.status == "active":
             a.last_error, a.cooldown_until = "", None
         a.save(update_fields=["status", "last_error", "cooldown_until"])
+    elif act == "check":
+        st = services.check_account(a)
+        messages.info(request, f"{a.name}: {st['label']}")
     elif act == "sync":
         services.sync_account(a)
         messages.info(request, "Holat yangilandi.")
@@ -172,6 +175,12 @@ def _parse_when(request, errors):
     return dt
 
 
+def _decorate(accs):
+    for a, st in zip(accs, services.states(accs)):
+        a.state = st
+    return accs
+
+
 def _music_ctx():
     on = music.enabled()
     return {"music_on": on, "music_ready": on and music.configured(), "music_default": music.clamp_len(None)}
@@ -202,8 +211,60 @@ def stories_music_list(request):
 
 @login_required
 @require_permission("stories.create")
-def stories_new(request):
+def stories_preflight(request):
+    """Forma uchun: tanlangan akkauntlar va vaqt bo'yicha tayyorlik, to'qnashuv va vaqt tavsiyasi."""
+    ids = [int(x) for x in request.GET.getlist("accounts") if x.isdigit()]
+    accs = list(StoryAccount.objects.filter(pk__in=ids, status="active"))
+    at = None
+    raw = request.GET.get("when", "").strip()
+    if raw:
+        try:
+            at = datetime.strptime(raw, "%Y-%m-%dT%H:%M").replace(tzinfo=tz())
+        except ValueError:
+            at = None
+    return JsonResponse(services.preflight(accs, at))
+
+
+@login_required
+@require_POST
+@require_permission("stories.create")
+def stories_check(request):
+    """Akkaunt(lar) imkoniyatini Telegramdan tekshirish: bitta — darhol, hammasi — orqa fonda."""
+    pk = request.POST.get("pk")
+    if pk and pk.isdigit():
+        acc = get_object_or_404(StoryAccount, pk=pk)
+        return JsonResponse({"ok": True, "state": {k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in services.check_account(acc).items()}})
+    enqueue("story_check_accounts", {}, queue="publish", max_attempts=1, dedupe_key=f"stchk:manual:{int(timezone.now().timestamp() // 60)}")
+    return JsonResponse({"ok": True, "queued": True})
+
+
+@login_required
+@require_permission("stories.view")
+def stories_status(request):
+    """Bosh sahifadagi jonli panel: worker holati, akkaunt holatlari, jarayondagi storylar."""
+    from apps.jobs.models import Job, WorkerHeartbeat
+    now = timezone.now()
+    beat = WorkerHeartbeat.objects.order_by("-beat_at").values_list("beat_at", flat=True).first()
+    alive = bool(beat and beat > now - timedelta(seconds=60))
+    live = Story.objects.filter(Q(status__in=["preparing", "sending"]) | Q(status__in=["done", "partial", "failed"], created_at__gte=now - timedelta(hours=6))).prefetch_related("targets__account").order_by("-id")[:8]
+    out = []
+    for s in live:
+        t = list(s.targets.all())
+        nxt = min([x.run_at for x in t if x.status == "pending" and x.run_at], default=None)
+        out.append({"id": s.pk, "title": s.title, "status": s.status, "label": s.get_status_display(), "badge": BADGE.get(s.status, ""), "total": len(t), "sent": sum(1 for x in t if x.status == "sent"),
+                    "errors": sum(1 for x in t if x.status == "error"), "next": local(nxt).strftime("%H:%M") if nxt else "", "prep_error": s.prepare_error, "music": s.music_title,
+                    "targets": [{"account": x.account.name, "status": x.status, "label": x.get_status_display(), "badge": BADGE.get(x.status, ""), "at": local(x.run_at).strftime("%H:%M") if x.run_at else "",
+                                 "error": ERR_UZ.get(x.error_code, "") if x.status == "error" else ""} for x in t]})
+    overdue = Job.objects.filter(type__in=["story_publish", "story_prepare"], status="pending", run_at__lt=now - timedelta(minutes=3)).count()
     accs = list(StoryAccount.objects.all())
+    return JsonResponse({"worker": {"alive": alive, "ago": int((now - beat).total_seconds()) if beat else None, "overdue": overdue},
+                         "accounts": [{k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in x.items()} for x in services.states(accs)], "stories": out})
+
+
+@login_required
+@require_permission("stories.create")
+def stories_new(request):
+    accs = _decorate(list(StoryAccount.objects.all()))
     errors: list[str] = []
     P = request.POST if request.method == "POST" else {}
     if request.method == "POST":
@@ -251,6 +312,11 @@ def stories_new(request):
         else:
             errors.append("Rasm yoki video tanlang (kompyuterdan yoki kontent bazadan).")
         when = _parse_when(request, errors)
+        if P.get("preflight") == "skip" and chosen and not errors:
+            bad = {x["id"] for x in services.states(chosen, when) if x["problem"]}
+            chosen = [a for a in chosen if a.pk not in bad]
+            if not chosen:
+                errors.append("Tayyor akkaunt qolmadi. Vaqtni o'zgartiring yoki akkauntlarni tekshiring.")
         track, m_start, m_len = None, 0, 0
         if P.get("music_id") and music.enabled():
             track = _find_track(P.get("music_id"), P.get("music_q", ""))
@@ -274,17 +340,17 @@ def stories_new(request):
                 with open(asset.file.path, "rb") as fh:
                     story.media.save(src_name.rsplit("/", 1)[-1], File(fh), save=False)
             story.save()
-            if track:
-                try:
-                    services.attach_music(story, track, m_start, m_len)
-                    story.save()
-                except music.MusicError as e:
-                    story.delete()
-                    errors.append(e.message_uz)
-                    story = None
-            if story is None:
-                return render(request, "stories_new.html", _ctx(request, "stories_new", title="Yangi story", accs=accs, periods=PERIODS, privacy=PRIVACY, reactions=REACTIONS[1:], assets=_assets(),
-                                                               errors=errors, P=P, sel=set(request.POST.getlist("accounts")), default_when="", lo_hi=services.gap_seconds(), **_music_ctx()))
+            if track:   # musiqali video orqa fonda (worker) tayyorlanadi, keyin akkauntlarga navbat qo'yiladi
+                story.music_track, story.music_title, story.music_artist = track["id"][:40], track["name"][:200], track["artist"][:200]
+                story.music_license, story.music_start, story.music_len = track.get("license", "")[:300], m_start, m_len
+                story.music_src = track["audio"][:600] if str(track["audio"]).startswith(("https://", "fake://")) else ""
+                story.status = "preparing"
+                story.save()
+                enqueue("story_prepare", {"story_id": story.pk, "accounts": [a.pk for a in chosen], "when": when.isoformat() if when else None},
+                        queue="publish", max_attempts=1, dedupe_key=f"story_prep:{story.pk}")
+                audit("stories.created", user=request.user, target=story.title, detail={"accounts": len(chosen), "music": True})
+                messages.success(request, "Story qabul qilindi. Musiqali video orqa fonda tayyorlanmoqda, tayyor bo'lgach akkauntlarga navbat qo'yiladi. Holatni shu sahifada kuzating.")
+                return redirect("stories_detail", pk=story.pk)
             services.schedule(story, chosen, when)
             audit("stories.created", user=request.user, target=story.title, detail={"accounts": len(chosen)})
             messages.success(request, f"Story navbatga qo'yildi: {len(chosen)} ta akkaunt. Akkauntlar orasida avtomatik 1–3 daqiqa oraliq bor.")

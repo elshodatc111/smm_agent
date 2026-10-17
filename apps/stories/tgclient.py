@@ -12,6 +12,7 @@ from django.conf import settings
 from apps.connections import telethon_login as tl
 
 FAKE_FAIL: dict[int, str] = {}
+FAKE_REMAINS: dict[int, int] = {}
 _FAKE_SEQ = {"n": 100}
 
 MSG = {
@@ -84,6 +85,29 @@ def account_info(session: str) -> dict:
                 "name": " ".join(x for x in (me.first_name, me.last_name) if x)}
     except StoryError:
         raise
+    except Exception as e:  # noqa: BLE001
+        raise classify(e) from e
+    finally:
+        tl._close(client, loop)
+
+
+def can_send(session: str, account_pk: int | None = None) -> dict:
+    """{'ok': bool, 'remains': int|None} — Telegram hozir story qo'yishga ruxsat beradimi (story yubormaydi)."""
+    if _fake():
+        code = FAKE_FAIL.get(account_pk)
+        if code == "auth":
+            raise StoryError("auth", "fake")
+        if code in ("limit", "premium"):
+            return {"ok": False, "remains": 0}
+        return {"ok": True, "remains": FAKE_REMAINS.get(account_pk, 5)}
+    from telethon.tl import functions as F
+    from telethon.tl import types as T
+    client, loop = tl._mk(session)
+    try:
+        loop.run_until_complete(client.connect())
+        can = loop.run_until_complete(client(F.stories.CanSendStoryRequest(peer=T.InputPeerSelf())))
+        rem = getattr(can, "count_remains", None)
+        return {"ok": not (can is False or rem == 0), "remains": int(rem) if rem is not None else None}
     except Exception as e:  # noqa: BLE001
         raise classify(e) from e
     finally:

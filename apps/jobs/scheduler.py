@@ -93,6 +93,10 @@ def tick(now: datetime | None = None) -> dict:
             continue
         item.targets.filter(status__in=["pending", "publishing", "failed_retry"]).update(status="failed", error="Nashr qotib qoldi (30 daqiqa)")
         ContentItem.objects.filter(pk=item.pk, status="publishing").update(status="failed")
+    # Telegram Stories: akkaunt imkoniyatini har 30 daqiqada tekshirish (faqat faol akkaunt bo'lsa)
+    from apps.stories.models import StoryAccount
+    if StoryAccount.objects.filter(status="active").exists():
+        enqueue("story_check_accounts", {}, queue="publish", dedupe_key=f"stchk:{int(now.timestamp() // 1800)}", dedupe_any_status=True, max_attempts=1)
     # tizim ishlari
     hour_key = nl.strftime("%Y%m%d%H")
     enqueue("r2_cleanup", {}, dedupe_key=f"r2c:{hour_key}", dedupe_any_status=True)

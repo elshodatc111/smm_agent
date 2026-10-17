@@ -66,17 +66,19 @@
   <label>Kimga ko'rinadi</label><select name="privacy">{% for v, l in privacy %}<option value="{{ v }}" {% if P.privacy == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
   <label class="row" style="gap:8px;font-weight:500"><input type="checkbox" name="pinned" value="1" style="width:auto" {% if P.pinned %}checked{% endif %}> Profilda doimiy qoldirish (pin)</label>
   <label class="row" style="gap:8px;font-weight:500"><input type="checkbox" name="noforwards" value="1" style="width:auto" {% if P.noforwards %}checked{% endif %}> Ulashish va saqlashni taqiqlash</label></div>
- <div class="card mt"><h2>4 · Akkauntlar</h2>
+ <div class="card mt"><div class="row sb"><h2 style="margin:0">4 · Akkauntlar</h2><button type="button" class="btn sm" id="stCheckAll">Imkoniyatni tekshirish</button></div><div class="help">Har akkaunt yonida hozirgi holat (tayyor / limit / FloodWait) ko'rsatiladi. «Tekshirish» Telegramdan jonli so'raydi.</div>
   {% if accs %}<label class="row" style="gap:8px;font-weight:600"><input type="checkbox" id="allAcc" style="width:auto" onclick="document.querySelectorAll('.accChk').forEach(c=>{if(!c.disabled)c.checked=this.checked})"> Hammasini tanlash</label>
   {% for a in accs %}<label class="row" style="gap:8px;font-weight:500"><input type="checkbox" class="accChk" name="accounts" value="{{ a.pk }}" data-name="{{ a.name }}" data-premium="{% if a.is_premium %}1{% else %}0{% endif %}" style="width:auto" {% if a.status != 'active' %}disabled{% endif %} {% if a.pk|stringformat:"s" in sel %}checked{% endif %}> {{ a.name }} <span class="muted sm">{{ a.phone }}</span>
-   <span class="badge {% if a.is_premium %}violet{% endif %}">{% if a.is_premium %}Premium{% else %}Premium emas{% endif %}</span>{% if a.status != 'active' %}<span class="badge bad">{{ a.get_status_display }}</span>{% endif %}</label>{% endfor %}
+   <span class="badge {% if a.is_premium %}violet{% endif %}">{% if a.is_premium %}Premium{% else %}Premium emas{% endif %}</span><span class="badge {{ a.state.level }} stState" data-id="{{ a.pk }}">{{ a.state.label }}</span><span class="muted sm">24 s: {{ a.state.sent24 }}</span></label>{% endfor %}
   {% else %}<div class="empty">Akkaunt yo'q. Avval <a href="{% url 'stories_accounts' %}">akkaunt ulang</a>.</div>{% endif %}</div>
  <div class="card mt"><h2>5 · Qachon?</h2>
   <label class="row" style="gap:8px;font-weight:500"><input type="radio" name="when" value="now" style="width:auto" {% if P.when != 'later' and not default_when %}checked{% endif %}> Hozir joylansin</label>
   <label class="row" style="gap:8px;font-weight:500"><input type="radio" name="when" value="later" style="width:auto" {% if P.when == 'later' or default_when %}checked{% endif %}> Rejalashtirish (Toshkent vaqti)</label>
   <input type="datetime-local" name="scheduled_at" value="{{ P.scheduled_at|default:default_when }}">
+  <div id="pfLive" class="mt"></div>
   <div class="help">Akkauntlar orasida tizim {{ lo_hi.0 }}–{{ lo_hi.1 }} soniya tasodifiy oraliq qo'yadi, shuning uchun ro'yxatdagi oxirgi akkaunt bir necha daqiqa kechroq joylanadi.</div></div>
- <div class="mt"><button class="btn primary">Joylash / rejalashtirish</button></div>
+ <div id="pfBox" class="callout warn mt" style="display:none"></div><input type="hidden" name="preflight" value="">
+ <div class="mt"><button class="btn primary" id="stSubmit">Joylash / rejalashtirish</button></div>
 </div>
 <aside class="sp-side">
  <div class="card"><h2>Oldindan ko'rish</h2>
@@ -174,5 +176,45 @@
   Q('#mLen').addEventListener('input',upd);Q('#mStart').addEventListener('input',upd);Q('#mPrev').addEventListener('click',clip);
   Q('#mClear').addEventListener('click',function(){stop();sel=null;Q('input[name=music_id]').value='';Q('#mSel').style.display='none';Q('#spMusic').style.display='none'});
   aud.addEventListener('ended',stop);
+})();
+
+(function(){
+  var Q=function(s){return document.querySelector(s)},QA=function(s){return [].slice.call(document.querySelectorAll(s))};
+  var form=Q('form.sp-layout'),PF='{% url "stories_preflight" %}',CHK='{% url "stories_check" %}',csrf=(Q('input[name=csrfmiddlewaretoken]')||{}).value,tm=null,last=null;
+  function esc(t){return String(t==null?'':t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+  function params(){var u=new URLSearchParams();QA('input[name=accounts]:checked').forEach(function(c){u.append('accounts',c.value)});
+    var w=Q('input[name=when]:checked'),at=Q('[name=scheduled_at]').value;if(w&&w.value==='later'&&at)u.set('when',at);return u}
+  function pf(){return fetch(PF+'?'+params(),{credentials:'same-origin'}).then(function(r){return r.json()})}
+  function setState(a){QA('.stState[data-id="'+a.id+'"]').forEach(function(b){b.className='badge '+a.level+' stState';b.textContent=a.label})}
+  function show(d){last=d;d.accounts.forEach(setState);var h='';
+    if(d.accounts.length){h+='<div class="sm"><b>'+d.ready+' ta tayyor</b>'+(d.problems?', <span style="color:var(--bad)">'+d.problems+' ta muammoli</span>':'')+' · birinchisi '+esc(d.start)+' da, oxirgisi taxminan <b>'+esc(d.finish)+'</b> da joylanadi.</div>';
+      d.accounts.filter(function(a){return a.problem}).forEach(function(a){h+='<div class="sm" style="color:var(--bad)">• '+esc(a.name)+': '+esc(a.label)+'</div>'});
+      d.conflicts.forEach(function(c){h+='<div class="sm" style="color:var(--bad)">• '+esc(c.account)+' da '+esc(c.at)+' atrofida boshqa story bor: '+esc(c.story)+'</div>'});
+      if(d.suggestions.length)h+='<div class="sm mt">Tavsiya etilgan vaqtlar: '+d.suggestions.map(function(x){return '<button type="button" class="btn sm sugg" data-v="'+esc(x.value)+'">'+esc(x.label)+'</button>'}).join(' ')+'</div>'}
+    Q('#pfLive').innerHTML=h}
+  function refresh(){clearTimeout(tm);tm=setTimeout(function(){pf().then(show).catch(function(){})},300)}
+  document.addEventListener('change',function(e){var n=e.target.name;if(n==='accounts'||n==='when'||n==='scheduled_at'||e.target.id==='allAcc')refresh()});
+  document.addEventListener('click',function(e){var b=e.target.closest('.sugg');if(!b)return;var r=Q('input[name=when][value=later]');if(r)r.checked=true;Q('[name=scheduled_at]').value=b.dataset.v;refresh()});
+  Q('#stCheckAll').addEventListener('click',function(){var b=this;b.disabled=true;b.textContent='Tekshirilmoqda…';
+    var ids=QA('input[name=accounts]:checked').map(function(c){return c.value});if(!ids.length)ids=QA('input[name=accounts]').filter(function(c){return !c.disabled}).map(function(c){return c.value});
+    Promise.all(ids.map(function(id){return fetch(CHK,{method:'POST',credentials:'same-origin',headers:{'X-CSRFToken':csrf,'Content-Type':'application/x-www-form-urlencoded'},body:'pk='+id}).then(function(r){return r.json()}).then(function(d){if(d.state)setState(d.state)})}))
+      .then(function(){b.disabled=false;b.textContent='Imkoniyatni tekshirish';refresh()})});
+  var box=Q('#pfBox'),ok=false;
+  function go(v){Q('input[name=preflight]').value=v;ok=true;form.submit()}
+  form.addEventListener('submit',function(e){if(ok)return;
+    if(!QA('input[name=accounts]:checked').length){return}   // server xabar beradi
+    e.preventDefault();var btn=Q('#stSubmit');btn.disabled=true;
+    pf().then(function(d){
+      if(!d.problems&&!d.conflicts.length){go('all');return}
+      var h='<b>!</b><div><b>Joylashdan oldin tekshiruv:</b><br>';
+      d.accounts.filter(function(a){return a.problem}).forEach(function(a){h+='• '+esc(a.name)+': '+esc(a.label)+'<br>'});
+      d.conflicts.forEach(function(c){h+='• '+esc(c.account)+' da '+esc(c.at)+' atrofida boshqa story bor ('+esc(c.story)+')<br>'});
+      h+='<div class="muted sm">FloodWait akkauntlar vaqti kelgach avtomatik joylanadi; limit tugagan akkauntlarda xato chiqishi mumkin.</div><div class="row mt">';
+      if(d.ready)h+='<button type="button" class="btn primary" id="pfSkip">Faqat tayyorlariga joylash ('+d.ready+')</button>';
+      h+='<button type="button" class="btn" id="pfAll">Baribir hammasiga</button><button type="button" class="btn" id="pfNo">Bekor qilish</button></div></div>';
+      box.innerHTML=h;box.style.display='';box.scrollIntoView({block:'center'});
+      var s=Q('#pfSkip');if(s)s.onclick=function(){go('skip')};Q('#pfAll').onclick=function(){go('all')};Q('#pfNo').onclick=function(){box.style.display='none';btn.disabled=false}
+    }).catch(function(){go('all')})});
+  refresh();
 })();
 </script>{% endblock %}

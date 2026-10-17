@@ -5,9 +5,42 @@
 {% include "partials/stories_tabs.html" %}
 <div class="grid g3" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">{% for k, v in cards %}<div class="card"><div class="muted sm">{{ k }}</div><div style="font-size:26px;font-weight:700">{{ v }}</div></div>{% endfor %}</div>
 {% if not n_acc %}<div class="callout warn mt"><b>!</b><div>Hali akkaunt ulanmagan. <a href="{% url 'stories_accounts' %}">Akkauntlar</a> bo'limida Telegram akkauntlarni ulang (30 tagacha).</div></div>{% endif %}
+<div class="card mt" id="stLiveCard"><div class="row sb"><h2 style="margin:0">Hozir jarayonda</h2><span id="stWorker" class="badge">…</span></div>
+ <div id="stWarn"></div><div id="stLive" class="mt"><div class="muted">Yuklanmoqda…</div></div></div>
+<div class="card mt"><div class="row sb"><h2 style="margin:0">Akkauntlar holati</h2><button class="btn sm" id="stCheckAll">Hammasini tekshirish</button></div>
+ <div class="help">Holat bazadan va Telegram tekshiruvidan olinadi (har 30 daqiqada avtomatik yangilanadi).</div><div id="stAccs" class="mt row" style="flex-wrap:wrap;gap:8px"></div></div>
 {% if upcoming %}<div class="card mt"><h2>Rejalashtirilganlar</h2><div class="tbl"><table><tr><th>Story</th><th>Vaqt</th><th>Akkauntlar</th></tr>
 {% for r in upcoming %}<tr><td><a href="{% url 'stories_detail' r.s.pk %}">{{ r.s.title }}</a></td><td>{{ r.when }}</td><td>{{ r.total }} ta</td></tr>{% endfor %}</table></div></div>{% endif %}
 <div class="card mt"><h2>So'nggi storylar</h2><div class="tbl"><table><tr><th>Story</th><th>Holat</th><th>Vaqt</th><th>Joylandi</th><th>Xato</th><th>Ko'rishlar</th></tr>
 {% for r in recent %}<tr><td><a href="{% url 'stories_detail' r.s.pk %}">{{ r.s.title }}</a></td><td><span class="badge {{ r.badge }}">{{ r.s.get_status_display }}</span></td><td>{{ r.when }}</td><td>{{ r.sent }} / {{ r.total }}</td><td>{{ r.errs }}</td><td>{{ r.views }}</td></tr>
 {% empty %}<tr><td colspan="6" class="empty">Hali story yo'q.</td></tr>{% endfor %}</table></div></div>
 {% endblock %}
+{% block scripts %}<script>
+(function(){
+  var URL_='{% url "stories_status" %}',CHK='{% url "stories_check" %}',csrf='{{ csrf_token }}',timer=null;
+  function esc(t){return String(t==null?'':t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+  function draw(d){
+    var w=document.getElementById('stWorker'),busy=d.stories.some(function(s){return s.status==='preparing'||s.status==='sending'});
+    w.className='badge '+(d.worker.alive?'ok':'bad');w.textContent=d.worker.alive?'Worker ishlayapti':'Worker javob bermayapti';
+    var warn='';
+    if(!d.worker.alive&&(busy||d.worker.overdue))warn='<div class="callout bad"><b>!</b><div>Worker javob bermayapti — navbatdagi storylar joylanmaydi. Serverda <code>docker compose restart smm-worker</code> bajaring.</div></div>';
+    else if(d.worker.overdue)warn='<div class="callout warn"><b>!</b><div>'+d.worker.overdue+' ta vazifa vaqtidan kechikdi. Worker band bo\'lishi mumkin.</div></div>';
+    document.getElementById('stWarn').innerHTML=warn;
+    var h='';d.stories.forEach(function(s){
+      var pct=s.total?Math.round(s.sent*100/s.total):0;
+      h+='<div style="padding:8px 0;border-bottom:1px solid var(--border,#eee)"><div class="row sb"><a href="/stories/'+s.id+'/"><b>'+esc(s.title)+'</b></a><span class="badge '+s.badge+'">'+esc(s.label)+'</span></div>';
+      if(s.status==='preparing')h+='<div class="muted sm">♫ Musiqali video tayyorlanmoqda'+(s.music?': '+esc(s.music):'')+'…</div>';
+      else h+='<div style="height:6px;background:var(--border,#eee);border-radius:4px;margin:6px 0"><div style="height:6px;width:'+pct+'%;background:var(--ok,#16a34a);border-radius:4px"></div></div><div class="muted sm">'+s.sent+' / '+s.total+' joylandi'+(s.errors?' · <span style="color:var(--bad)">'+s.errors+' xato</span>':'')+(s.next?' · keyingisi '+esc(s.next)+' da':'')+'</div>';
+      if(s.prep_error)h+='<div class="sm" style="color:var(--bad)">'+esc(s.prep_error)+'</div>';
+      if(s.targets.length){h+='<div class="row" style="flex-wrap:wrap;gap:4px;margin-top:4px">';s.targets.forEach(function(t){h+='<span class="badge '+t.badge+'" title="'+esc(t.error)+'">'+esc(t.account)+': '+esc(t.label)+(t.status==='pending'&&t.at?' '+esc(t.at):'')+'</span>'});h+='</div>'}
+      h+='</div>'});
+    document.getElementById('stLive').innerHTML=h||'<div class="muted">Hozir jarayonda story yo\'q.</div>';
+    document.getElementById('stAccs').innerHTML=d.accounts.map(function(a){return '<div class="card" style="padding:8px 12px;min-width:200px"><b>'+esc(a.name)+'</b><div><span class="badge '+a.level+'">'+esc(a.label)+'</span></div><div class="muted sm">24 soatda: '+a.sent24+' ta</div></div>'}).join('')||'<div class="muted">Akkaunt yo\'q.</div>';
+  }
+  function load(){fetch(URL_,{credentials:'same-origin'}).then(function(r){return r.json()}).then(draw).catch(function(){})}
+  function loop(){if(!document.hidden)load();timer=setTimeout(loop,8000)}
+  document.getElementById('stCheckAll').addEventListener('click',function(){var b=this;b.disabled=true;b.textContent='Tekshirilmoqda…';
+    fetch(CHK,{method:'POST',credentials:'same-origin',headers:{'X-CSRFToken':csrf}}).then(function(){setTimeout(function(){load();b.disabled=false;b.textContent='Hammasini tekshirish'},6000)})});
+  loop();
+})();
+</script>{% endblock %}

@@ -20,6 +20,9 @@ class StoryAccount(models.Model):
     last_error = models.CharField(max_length=300, blank=True)
     cooldown_until = models.DateTimeField(null=True, blank=True)
     connected_at = models.DateTimeField(null=True, blank=True)
+    can_post = models.BooleanField(null=True, blank=True)            # Telegram: hozir story qo'ya oladimi (oxirgi tekshiruv)
+    remains = models.PositiveIntegerField(null=True, blank=True)     # Telegram aytgan qolgan story soni (bilinsa)
+    checked_at = models.DateTimeField(null=True, blank=True)
     note = models.CharField(max_length=160, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -34,7 +37,7 @@ class StoryAccount(models.Model):
 
 
 class Story(models.Model):
-    STATUS = [("draft", "Qoralama"), ("scheduled", "Rejalashtirilgan"), ("sending", "Yuborilmoqda"), ("done", "Hammasi joylandi"),
+    STATUS = [("draft", "Qoralama"), ("preparing", "Tayyorlanmoqda"), ("scheduled", "Rejalashtirilgan"), ("sending", "Yuborilmoqda"), ("done", "Hammasi joylandi"),
               ("partial", "Qisman joylandi"), ("failed", "Xato"), ("cancelled", "To'xtatilgan")]
     title = models.CharField(max_length=160)
     caption = models.TextField(blank=True)
@@ -55,6 +58,8 @@ class Story(models.Model):
     music_license = models.CharField(max_length=300, blank=True)
     music_start = models.PositiveIntegerField(default=0)              # audio boshlanish soniyasi
     music_len = models.PositiveIntegerField(default=0)                # parcha uzunligi (10–30 s)
+    music_src = models.URLField(max_length=600, blank=True)           # audio manzili (worker yuklab oladi)
+    prepare_error = models.CharField(max_length=300, blank=True)
     music_video = models.FileField(upload_to="stories/music/%Y/%m/", blank=True)   # rasm/video + musiqa yig'ilgan mp4
     status = models.CharField(max_length=10, choices=STATUS, default="draft")
     scheduled_at = models.DateTimeField(null=True, blank=True)
