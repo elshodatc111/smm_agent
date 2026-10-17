@@ -79,7 +79,9 @@ details.more summary{cursor:pointer;font-weight:600;margin-top:16px}
       <label for="id_yt_privacy">{{ form.yt_privacy.label }}</label>{{ form.yt_privacy }}
       <div class="row" style="margin-top:8px"><button type="button" class="btn blue" id="ytAiBtn">✨ AI to'ldirsin (sarlavha + teglar)</button><span class="hint" id="ytAiMsg">Biznes tahlili va matn asosida avtomatik yoziladi.</span></div></div>
     <div id="tgBox" style="display:none" class="box"><b>Telegram</b>
-      <label for="id_tg_buttons">{{ form.tg_buttons.label }}</label>{{ form.tg_buttons }}{{ form.tg_buttons.errors }}</div>
+      <label for="id_tg_buttons">{{ form.tg_buttons.label }}</label>{{ form.tg_buttons }}{{ form.tg_buttons.errors }}
+      <label for="id_tg_cols">{{ form.tg_cols.label }}</label>{{ form.tg_cols }}
+      <div class="hint">Oddiy qatorlar tanlangan sondagi tugma bo'lib bir qatorga joylanadi. Aniq qator kerak bo'lsa, tugmalarni bitta satrda <b>||</b> bilan ajrating: <code>Kurs | https://... || Aloqa | https://...</code></div></div>
 
     <div class="stp">4 · Qachon?</div>
     <label for="id_scheduled_at">{{ form.scheduled_at.label }}</label>{{ form.scheduled_at }}{{ form.scheduled_at.errors }}
@@ -126,16 +128,23 @@ details.more summary{cursor:pointer;font-weight:600;margin-top:16px}
   function cropUI(){var box=$('cropBox');if(!box)return;var on=!!RATIO[$('id_media_size').value]&&(localMedia.length+cloudSel.length+existing.length)>0;
     box.style.display=on?'block':'none';$('cropZoom').parentNode.style.display=$('id_fit_mode').value==='pad'?'none':'flex';$('cropZoom').value=cv('id_crop_zoom',1)}
   function setDefaults(){if($('id_crop_zoom')&&!$('id_crop_zoom').value){$('id_crop_x').value=.5;$('id_crop_y').value=.5;$('id_crop_zoom').value=1}}
+  function tgRows(){var n=parseInt(($('id_tg_cols')||{}).value||'2',10)||2,rows=[],pack=[];
+    (($('id_tg_buttons')||{}).value||'').split('\n').forEach(function(l){if(!l.trim())return;
+      var ps=l.split('||').filter(function(x){return x.trim()}).map(function(x){return x.split('|')[0].trim()}).filter(Boolean);
+      if(ps.length>1){if(pack.length){rows.push(pack);pack=[]}rows.push(ps);return}
+      if(ps.length){pack.push(ps[0]);if(pack.length>=n){rows.push(pack);pack=[]}}});
+    if(pack.length)rows.push(pack);return rows}
   var PV=PostPreview({get:function(){
     var s={};document.querySelectorAll('input[name=targets]:checked').forEach(function(c){var a=acc[c.value];if(a)(s[a.platform]=s[a.platform]||[]).push(a)});
     if(FIXED&&!s[FIXED]){Object.keys(acc).some(function(k){if(acc[k].platform===FIXED){s[FIXED]=[acc[k]];return true}})}
     var all=localMedia.concat(cloudSel),sz=$('id_media_size').value,fit=$('id_fit_mode').value;
     return {text:($('id_text')||{}).value||'',mt:sel.value,sel:s,media:all.length?all:existing,ytTitle:($('id_yt_title')||{}).value||'',
       ratio:RATIO[sz]||0,fit:fit,crop:{x:cv('id_crop_x',.5),y:cv('id_crop_y',.5),z:cv('id_crop_zoom',1)},
-      buttons:(($('id_tg_buttons')||{}).value||'').split('\n').map(function(l){return l.split('|')[0].trim()}).filter(Boolean)}},
+      buttons:tgRows()}},
     setCrop:function(x,y,z){if(x!==null&&x!==undefined)$('id_crop_x').value=x.toFixed(4);if(y!==null&&y!==undefined)$('id_crop_y').value=y.toFixed(4);
       if(z!==null&&z!==undefined){$('id_crop_zoom').value=z.toFixed(3);$('cropZoom').value=z}}});
   if($('id_tg_buttons'))$('id_tg_buttons').addEventListener('input',function(){PV.render()});
+  if($('id_tg_cols'))$('id_tg_cols').addEventListener('change',function(){PV.render()});
   $('exactBtn').addEventListener('click',function(){var pl=plats();ExactPreview.open({files:[].slice.call($('files').files),cloud:cloudSel.map(function(c){return c.id}),
     existing:(localMedia.length||cloudSel.length)?[]:existing.filter(function(e){return e.kind==='image'}).map(function(e){return e.id}),
     size:$('id_media_size').value,fit:$('id_fit_mode').value,crop:{x:cv('id_crop_x',.5),y:cv('id_crop_y',.5),z:cv('id_crop_zoom',1)},plats:pl})});

@@ -243,3 +243,11 @@ def test_analysis_mode_web_and_logo(biz, admin, tmp_path, settings):
     r = c.get(f"/bizneslar/{biz.pk}/logo/")
     assert r.status_code == 200 and r["Content-Type"] == "image/png"
     assert f"/bizneslar/{biz.pk}/logo/" in c.get(f"/bizneslar/{biz.pk}/").content.decode()
+
+
+def test_parse_buttons_rows():
+    from apps.web.forms import parse_buttons
+    raw = "A | https://a.uz\nB | https://b.uz\nC | https://c.uz\nD | https://d.uz || E | https://e.uz"
+    assert [len(r) for r in parse_buttons(raw, 2)] == [2, 1, 2]
+    assert [len(r) for r in parse_buttons(raw, 3)] == [3, 2]
+    assert [len(r) for r in parse_buttons("A | https://a.uz\nB | https://b.uz", 1)] == [1, 1]

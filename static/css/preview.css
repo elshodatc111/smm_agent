@@ -49,5 +49,5 @@
 .pv-safe i.t{top:0;height:14%;border-bottom-width:2px}.pv-safe i.b{bottom:0;height:20%;border-top-width:2px}
 .pv-safe span{position:absolute;left:8px;font-size:10px;color:#fff;background:rgba(220,38,38,.9);padding:1px 6px;border-radius:99px}
 .pv-dots{position:absolute;left:0;right:0;bottom:8px;display:flex;gap:4px;justify-content:center;z-index:3}.pv-dots b{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.55)}.pv-dots b.on{background:#3b82f6}
-.tg-btns{display:grid;gap:3px;padding:0 8px 8px}.tg-btns span{display:block;text-align:center;background:rgba(51,144,236,.12);color:#3390ec;border-radius:6px;padding:6px;font-size:13px;font-weight:600}
+.tg-btns{display:grid;gap:3px;padding:0 8px 8px}.tg-row{display:flex;gap:3px}.tg-btns span{display:block;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;background:rgba(51,144,236,.12);color:#3390ec;border-radius:6px;padding:6px;font-size:13px;font-weight:600}
 .pv-opts{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;margin-top:10px;align-items:center}.pv-opts label{display:flex;gap:5px;align-items:center;margin:0;cursor:pointer;font-weight:500}.pv-opts input{width:auto;margin:0}

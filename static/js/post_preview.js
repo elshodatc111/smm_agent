@@ -101,7 +101,7 @@ window.PostPreview = function (cfg) {
     setMedia($('igMedia'), mt === 'text' ? 'Media kerak' : lbl, media, 'instagram', mt, d);
     var gr = $('igGrid'); if (gr) { gr.style.display = media.length && mt !== 'story' ? 'block' : 'none'; if (media.length) setMedia(gr, '', media, 'instagram', mt, d, 3 / 4); gr.style.width = '96px'; gr.style.margin = '0'; }
     overlays($('igMedia'), mt, media, 'instagram'); overlays($('tgMedia'), mt, media, 'telegram');
-    var tb = $('tgBtns'); if (tb) tb.innerHTML = (d.buttons || []).map(function (b) { return '<span>' + esc(b) + '</span>'; }).join('');
+    var tb = $('tgBtns'); if (tb) tb.innerHTML = (d.buttons || []).map(function (r) { r = [].concat(r); return '<div class="tg-row">' + r.map(function (b) { return '<span>' + esc(b) + '</span>'; }).join('') + '</div>'; }).join('');
     var cut = text.length > 125 ? text.slice(0, 125) : text;
     $('igText').innerHTML = text ? (text.length > 125 ? tags(cut) + '… <span class="muted">ko\'proq</span>' : tags(text)) : '<span class="muted">Caption shu yerda…</span>';
     count('igCount', text.length, 2200); $('igNote').textContent = 'Birinchi 125 belgi ko\'rinadi';
